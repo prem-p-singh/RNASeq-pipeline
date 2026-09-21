@@ -36,9 +36,10 @@ jobs:
       - name: Install base R (preflight's estimability check shells out to it)
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq r-base-core
-          Rscript -e 'install.packages("jsonlite", repos="https://cloud.r-project.org")'
-          Rscript -e 'stopifnot(requireNamespace("jsonlite", quietly=TRUE)); cat("jsonlite ok\n")' 
+          # r-cran-jsonlite rather than install.packages(): the runner cannot
+          # write to R's site-library, and the prebuilt package skips compiling.
+          sudo apt-get install -y -qq r-base-core r-cran-jsonlite
+          Rscript -e 'stopifnot(requireNamespace("jsonlite", quietly = TRUE)); cat("jsonlite ok\n")' 
 
       - name: Shell syntax
         run: |
