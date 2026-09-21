@@ -37,11 +37,15 @@ $EDITOR "$PROJ/setup_inputs.yaml"     # project name, taxID, fastq source, metad
 #    NCBI annotation table into the project, and resolves the OrgDb
 python3 scripts/setup.py --project-dir "$PROJ" "$PROJ/setup_inputs.yaml"
 
-# 3. Launch. The submitter counts samples, picks the SLURM tier, and caps
+# 3. Check the project before spending any compute on it (optional: submit.sh
+#    runs this itself and refuses to submit if it finds errors)
+python3 scripts/preflight.py -d "$PROJ"
+
+# 4. Launch. The submitter counts samples, picks the SLURM tier, and caps
 #    concurrency to stay inside the storage budget
 ./submit.sh -d "$PROJ"
 
-# 4. Resume after any interruption: same command
+# 5. Resume after any interruption: same command
 ./submit.sh -d "$PROJ"
 ```
 
@@ -81,8 +85,14 @@ RNASeq_pipeline/
 ├── Snakefile                ← Snakemake entry point
 ├── submit.sh                ← launcher (counts samples, picks tier)
 │
+├── scripts/
+│   ├── preflight.py         ← validates a project before any compute
+│   ├── setup.py             ← generates a project's config from 7 inputs
+│   └── new_project.sh       ← guided setup on FARM
+│
 ├── config/
-│   ├── config.template.yaml
+│   ├── spec.yaml            ← supported assays/designs/backends + issue codes
+│   ├── config.template.yaml ← also the schema: preflight rejects unknown keys
 │   ├── thresholds.yaml
 │   └── samples.tsv.template
 │
@@ -115,7 +125,10 @@ Each run writes into its own project directory, not here:
 ~/rnaseq_projects/<name>/
 ├── config/                  ← config.yaml, samples.tsv, thresholds.yaml
 ├── results/                 ← counts, DE_Results, Enrichment, WGCNA
-├── gates/decisions.log      ← every automatic decision this run made
+├── gates/
+│   ├── preflight_issues.tsv ← codes, severity, remedy
+│   ├── preflight_plan.json  ← counts, design facts, planned stages
+│   └── decisions.log        ← every automatic decision this run made
 ├── metrics/                 ← per-stage *.json (drives the next stage)
 └── logs/                    ← per-rule logs
 
@@ -142,6 +155,26 @@ module does not provide tximport, variancePartition, clusterProfiler or WGCNA, s
 they need the conda environment in `environment.yml`. Creating that environment is
 the next step before trusting any downstream output.
 
+## Preflight
+
+`submit.sh` runs `scripts/preflight.py` first and refuses to submit if it reports
+an error. It checks, in seconds and before any data is fetched:
+
+- configuration keys against `config/config.template.yaml`, so a typo is rejected
+  rather than silently ignored
+- the assay, design family and DE backend against `config/spec.yaml`, which is
+  the machine-readable record of what this pipeline claims to support
+- the sample sheet: duplicate ids, blank ids, model columns that do not exist,
+  model variables with only one level
+- **model estimability**: rank deficiency, residual degrees of freedom, and
+  independent biological replicates. This previously only surfaced in Stage 3,
+  after the whole cohort had been quantified.
+
+It writes `gates/preflight_issues.tsv` (stable issue codes, severity, remedy) and
+`gates/preflight_plan.json` (counts, design facts, and which stages will run and
+why not). The estimability check calls the same `workflow/scripts/_design.R` that
+Stage 3 uses, so preflight and the DE stage cannot reach different verdicts.
+
 ## Self-checks
 
 No test framework; each file is a script that exits non-zero on failure.
@@ -151,6 +184,8 @@ Rscript tests/check_de.R                # contrasts, design estimability, sample
 Rscript tests/check_wgcna.R             # block sizing, recorded parameters
 python3 tests/check_setup_helpers.py    # URL resolution, mate detection, sample matching
 python3 tests/check_qc_report.py        # missing-vs-zero metrics, stale sample dirs
+python3 tests/check_preflight.py        # issue codes, scope matrix, estimability gate
 bash    tests/check_storage_policy.sh   # intermediate cleanup, source FASTQs preserved
 bash    tests/check_project_isolation.sh  # two projects cannot touch each other's state
+bash    tests/run_all.sh                # all of the above, one line each
 ```

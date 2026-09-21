@@ -24,15 +24,28 @@ trap 'rm -rf "$TMP"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
 mkproject() {  # $1 = dir, $2 = seq_type, $3 = n samples
+    # A complete, preflight-clean project: submit.sh runs preflight before it
+    # submits anything, so a half-filled config would be rejected there and this
+    # check would never reach the isolation behaviour it is testing.
     mkdir -p "$1/config"
     cat > "$1/config/config.yaml" <<EOF
-project: {name: $(basename "$1"), output_dir: results}
+project: {name: $(basename "$1"), description: isolation fixture, output_dir: "results/"}
+organism: {common_name: grape, scientific_name: Vitis vinifera, tax_id: 29760,
+  kegg_code: vvi, orgdb_package: org.Vvinifera.eg.db}
+reference: {accession: GCF_1.1, assembly_name: ASM1}
 samples: {sheet: config/samples.tsv, seq_type: $2}
+model: {fixed_effects: "~ treatment", random_effects: null, primary_factor: treatment}
+downstream: {run_go: false, run_kegg: false, run_wgcna: false}
+orgdb: {strategy: skip}
 hpc: {storage_budget_gb: 20, delete_fastq_after_quant: true, samples_in_flight: null}
 EOF
     cp "$REPO/config/thresholds.yaml" "$1/config/thresholds.yaml"
-    { echo -e "sample_id\tgroup"
-      for i in $(seq 1 "$3"); do echo -e "$(basename "$1")_S$i\ta"; done
+    # Two levels with >=2 replicates each, so the design is estimable.
+    { echo -e "sample_id\ttreatment"
+      for i in $(seq 1 "$3"); do
+          if [ $((i % 2)) -eq 0 ]; then lvl=treated; else lvl=control; fi
+          echo -e "$(basename "$1")_S$i\t$lvl"
+      done
     } > "$1/config/samples.tsv"
 }
 

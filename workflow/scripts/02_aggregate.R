@@ -172,28 +172,7 @@ has_random <- !is.null(cfg$model$random_effects) &&
 # Independent biological replicates, not rows. With a random-effects grouping
 # variable (e.g. "(1|vine)") one subject contributes several rows, and those
 # rows are not independent evidence about the primary factor.
-biological_replicates <- function(sheet, primary, random_effects) {
-  unit <- NA_character_
-  if (!is.null(random_effects) && nzchar(random_effects)) {
-    m <- regmatches(random_effects,
-                    regexpr("\\|[[:space:]]*[A-Za-z._][A-Za-z0-9._]*",
-                            random_effects))
-    if (length(m) == 1) unit <- trimws(sub("\\|", "", m))
-  }
-  rows_per_group <- if (primary %in% names(sheet)) {
-    min(table(sheet[[primary]]))
-  } else NA_integer_
-  n <- if (!is.na(unit) && unit %in% names(sheet) && primary %in% names(sheet)) {
-    min(tapply(sheet[[unit]], sheet[[primary]],
-               function(x) length(unique(x))))
-  } else {
-    rows_per_group
-  }
-  list(n = n,
-       unit = if (is.na(unit)) "sample" else unit,
-       rows_per_group = rows_per_group)
-}
-
+source(snakemake@params$design_lib)   # biological_replicates()
 reps <- biological_replicates(kept, primary, cfg$model$random_effects)
 de_backend <- if (has_random) "dream" else "limma_voom"
 

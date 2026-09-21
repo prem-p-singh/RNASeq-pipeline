@@ -111,6 +111,19 @@ if [ ! -f "$THRESH" ]; then
     exit 1
 fi
 
+# --- Preflight ---------------------------------------------------------
+# Validates config keys, the sample sheet, the assay/design/backend combination
+# and model estimability before a single FASTQ is fetched. An unestimable design
+# used to surface only in Stage 3, i.e. after the whole cohort was quantified.
+echo "--- preflight ---"
+if ! python3 "$REPO/scripts/preflight.py" -d "$PROJDIR" -c "$CONFIG"; then
+    echo
+    echo "Preflight found blocking problems; nothing was submitted." >&2
+    echo "Full issue table: $PROJDIR/gates/preflight_issues.tsv" >&2
+    exit 1
+fi
+echo "-----------------"
+
 SHEET=$(python3 -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['samples']['sheet'])")
 
 # --- Count samples (strip comments + header) --------------------------

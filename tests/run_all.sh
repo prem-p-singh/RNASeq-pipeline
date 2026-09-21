@@ -69,6 +69,14 @@ else
 fi
 
 run check_qc_report.py       "python3 tests/check_qc_report.py"
+
+if have_py_mods yaml && command -v Rscript >/dev/null 2>&1 \
+   && have_r_pkgs jsonlite; then
+    run check_preflight.py "python3 tests/check_preflight.py"
+else
+    skip check_preflight.py "needs pyyaml, Rscript and jsonlite"
+fi
+
 run check_storage_policy.sh  "bash tests/check_storage_policy.sh"
 
 if have_py_mods yaml; then

@@ -1,0 +1,142 @@
+# =============================================================================
+# spec.yaml — what this pipeline claims to support, and how it fails.
+#
+# Upgrade plan Phase 1 (specification). Read by scripts/preflight.py, which
+# refuses a run that this file does not cover. The point is that an unsupported
+# combination is rejected by name before anything expensive starts, instead of
+# half-working and producing a plausible-looking wrong answer.
+#
+# Deliberately NOT a copy of the config key list: config/config.template.yaml is
+# the single source of known keys, and preflight walks it to find unknown ones.
+# This file carries only what the template cannot express.
+# =============================================================================
+spec_version: 1
+
+# -----------------------------------------------------------------------------
+# Supported capability matrix (upgrade plan, Part III)
+# -----------------------------------------------------------------------------
+scope:
+
+  assays:
+    rnaseq_paired:
+      supported: true
+      layout: paired
+      count_treatment: lengthScaledTPM
+      notes: "Both mates required for every library."
+    rnaseq_single:
+      supported: true
+      layout: single
+      count_treatment: lengthScaledTPM
+      notes: "Effective-length correction assumes salmon's fragment-length prior."
+    tagseq:
+      supported: true
+      layout: single
+      count_treatment: "no"
+      notes: >
+        3'-tag counts do not scale with transcript length, so abundance is not
+        length-corrected. Verified against no kit yet: treat as provisional.
+      validated_kits: []
+    srnaseq:
+      supported: false
+      reason: "Separate preprocessing and reference logic; not implemented."
+
+  # Which DE backend a design requires. Never rescue an unsupported design by
+  # silently simplifying it: that answers a different question.
+  designs:
+    independent_groups:
+      supported: true
+      backends: [limma_voom]
+      requires_min_bio_replicates: 2
+    factorial:
+      supported: true
+      backends: [limma_voom]
+      requires_min_bio_replicates: 2
+      notes: "Interaction contrasts must be estimable; checked at preflight."
+    repeated_measures:
+      supported: true
+      backends: [dream]
+      requires_min_bio_replicates: 2
+      notes: >
+        Requires a random-effects term naming the subject/unit column. The
+        replicate count is the number of distinct units, not rows.
+
+  backends:
+    limma_voom:
+      handles_random_effects: false
+    dream:
+      handles_random_effects: true
+
+  modules:
+    enrichment:
+      optional: true
+      requires: "an OrgDb, or a versioned gene-to-GO/pathway table"
+      on_missing: unavailable        # never 'succeeded'
+    wgcna:
+      optional: true
+      requires: "thresholds.wgcna.min_samples samples after filtering"
+      on_missing: skipped
+
+  # Rejected by name rather than attempted.
+  unsupported:
+    umi_protocols: "No validated extraction/deduplication step exists."
+    single_cell: "Different data model and methods."
+    splicing_fusions_variants: "Needs additional upstream outputs."
+    generic_count_matrix_import: "Count origin and normalization history unknown."
+    external_quant_import: "No reference/provenance validation implemented yet."
+    multi_lane_merge: >
+      One read pair per sample. Lanes must be merged before the pipeline runs;
+      merging them here would need an explicit, recorded policy.
+
+# -----------------------------------------------------------------------------
+# Metadata contract (upgrade plan, Part IV)
+# -----------------------------------------------------------------------------
+# The current implementation has one table, samples.tsv. The plan's four-table
+# model (samples / libraries / reads / sample_policy) is a later phase; this
+# records what today's single table must satisfy so the gap is explicit.
+metadata:
+  samples_tsv:
+    required_columns: [sample_id]
+    unique_columns: [sample_id]
+    # Columns named by the model formula must exist and must vary.
+    model_columns_must_exist: true
+    forbid_blank_in: [sample_id]
+    notes: >
+      A row is one biological measurement. Lanes and library preparations are
+      not biological replicates.
+
+# -----------------------------------------------------------------------------
+# Issue codes: stable, so logs and reports can be compared across runs
+# -----------------------------------------------------------------------------
+# severity: error   -> blocks the run
+#           warning -> run proceeds, recorded in the issue table
+issues:
+  CFG001: {severity: error,   message: "Unknown configuration key",
+           remedy: "Remove it, or add it to config/config.template.yaml if it is real."}
+  CFG002: {severity: error,   message: "Required configuration key missing"}
+  CFG003: {severity: error,   message: "Configuration value has the wrong type"}
+  CFG004: {severity: warning, message: "Configuration key present but has no effect for this assay"}
+
+  SCP001: {severity: error,   message: "Unsupported assay",
+           remedy: "See scope.assays in config/spec.yaml."}
+  SCP002: {severity: error,   message: "Design and DE backend are incompatible"}
+  SCP003: {severity: error,   message: "Requested capability is explicitly unsupported"}
+  SCP004: {severity: warning, message: "Assay supported but no kit has been validated"}
+
+  MET001: {severity: error,   message: "Sample sheet missing a required column"}
+  MET002: {severity: error,   message: "Duplicate sample_id"}
+  MET003: {severity: error,   message: "Blank value in a column that forbids it"}
+  MET004: {severity: error,   message: "Model formula names a column absent from the sample sheet"}
+  MET005: {severity: error,   message: "Model variable has only one level; nothing to compare"}
+  MET006: {severity: warning, message: "Column present in the sheet but used by nothing"}
+
+  DSN001: {severity: error,   message: "Design is rank-deficient; terms are confounded"}
+  DSN002: {severity: error,   message: "No residual degrees of freedom"}
+  DSN003: {severity: error,   message: "Fewer than 2 independent biological replicates"}
+  DSN004: {severity: error,   message: "Requested contrast is not estimable"}
+  DSN005: {severity: error,   message: "Random-effects term names a column absent from the sheet"}
+
+  RES001: {severity: error,   message: "Storage budget cannot hold one sample's working set"}
+  RES002: {severity: error,   message: "Storage budget cannot hold the cohort with retention on"}
+
+  ENV001: {severity: error,   message: "Required executable not found"}
+  ENV002: {severity: warning, message: "Optional dependency missing; dependent stage unavailable"}

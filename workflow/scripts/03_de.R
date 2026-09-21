@@ -113,29 +113,7 @@ mm <- model.matrix(form_fixed, data = as.data.frame(sheet))
 # model is a study-design problem; quietly falling back to a simpler test
 # would answer a different question and drop the interactions, blocking and
 # random effects the plan asked for.
-validate_design <- function(mm, n_bio_rep, primary, unit = "sample") {
-  mm_qr <- qr(mm)
-  if (mm_qr$rank < ncol(mm)) {
-    aliased <- colnames(mm)[mm_qr$pivot[(mm_qr$rank + 1L):ncol(mm)]]
-    stop("Design is rank-deficient: ", ncol(mm), " coefficients but rank ",
-         mm_qr$rank, ". Confounded/aliased term(s): ",
-         paste(aliased, collapse = ", "),
-         ". Drop the confounded term or supply a design that can estimate it.")
-  }
-  residual_df <- nrow(mm) - mm_qr$rank
-  if (residual_df < 1L) {
-    stop("No residual degrees of freedom (", nrow(mm), " samples, ",
-         mm_qr$rank, " coefficients): variance cannot be estimated. ",
-         "Reduce model terms or add replicates.")
-  }
-  if (!is.null(n_bio_rep) && !is.na(n_bio_rep) && n_bio_rep < 2L) {
-    stop("Fewer than 2 independent biological replicates in the smallest '",
-         primary, "' group (n = ", n_bio_rep, ", unit = ", unit,
-         "). Differential expression is not supported for this design.")
-  }
-  list(rank = mm_qr$rank, residual_df = residual_df)
-}
-
+source(snakemake@params$design_lib)   # validate_design()
 design <- validate_design(
   mm, agg$n_bio_replicates_min, primary,
   if (is.null(agg$biological_unit)) "sample" else agg$biological_unit)
