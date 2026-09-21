@@ -4,8 +4,20 @@
 #
 # Counts samples in config/samples.tsv, picks the SMALL / MEDIUM / LARGE
 # SLURM profile, logs the decision, and kicks off Snakemake.
+#
+# Runs IN a project directory and reads the workflow FROM this repo, so several
+# projects can share one checkout without overwriting each other. Everything the
+# run writes (results/, reference/, metrics/, gates/, logs/, .snakemake/) is
+# relative to the project directory; the Snakefile, rules and profiles are read
+# from the repo.
+#
+#   cd ~/rnaseq_projects/my_study && ~/RNASeq_pipeline/submit.sh
+#   ~/RNASeq_pipeline/submit.sh -d ~/rnaseq_projects/my_study
 # =============================================================================
 set -euo pipefail
+
+# Where this script, and therefore the workflow, lives.
+REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 
 # --- Activate pipeline conda env (FARM) -------------------------------
 # Auto-activate if available; no-op on systems without it.
@@ -29,19 +41,24 @@ set -u
 # parsed explicitly and only genuine pass-through arguments reach snakemake.
 usage() {
     cat <<'USAGE'
-Usage: ./submit.sh [options] [-- snakemake args...]
+Usage: submit.sh [options] [-- snakemake args...]
 
-  -c, --configfile PATH   config file (default: config/config.yaml)
+  -d, --directory PATH    project directory to run in (default: current dir).
+                          All run output lands here; the workflow is read from
+                          the repo this script lives in.
+  -c, --configfile PATH   config file, relative to the project directory
+                          (default: config/config.yaml)
   -p, --profile NAME      force a tier profile (small|medium|large),
                           overriding the sample-count choice
   -n, --dry-run           show the plan without running anything
   -h, --help              this message
 
 Anything after `--` is passed straight to snakemake, e.g.
-  ./submit.sh -- --forcerun differential_expression
+  submit.sh -- --forcerun differential_expression
 USAGE
 }
 
+PROJDIR="."
 CONFIG="config/config.yaml"
 FORCE_PROFILE=""
 DRY_RUN=""
@@ -49,6 +66,7 @@ PASSTHRU=()
 
 while [ $# -gt 0 ]; do
     case "$1" in
+        -d|--directory)  PROJDIR="$2";       shift 2 ;;
         -c|--configfile) CONFIG="$2";        shift 2 ;;
         -p|--profile)    FORCE_PROFILE="$2"; shift 2 ;;
         -n|--dry-run)    DRY_RUN="--dry-run"; shift ;;
@@ -61,12 +79,38 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-if [ ! -f "$CONFIG" ]; then
-    echo "Config not found: $CONFIG" >&2
+# Everything below reads and writes relative paths, so move into the project
+# first. This is what keeps two projects out of each other's state.
+if [ ! -d "$PROJDIR" ]; then
+    echo "Project directory not found: $PROJDIR" >&2
+    exit 1
+fi
+cd "$PROJDIR"
+PROJDIR=$(pwd)
+
+if [ "$PROJDIR" = "$REPO" ]; then
+    echo "Refusing to run inside the pipeline repo itself ($REPO)." >&2
+    echo "Give the project its own directory, e.g." >&2
+    echo "  $REPO/submit.sh -d ~/rnaseq_projects/<name>" >&2
     exit 1
 fi
 
+if [ ! -f "$CONFIG" ]; then
+    echo "Config not found: $PROJDIR/$CONFIG" >&2
+    echo "Run scripts/new_project.sh, or setup.py, to create it." >&2
+    exit 1
+fi
+
+# Thresholds must live in the project, not the repo: the Snakefile opens this
+# same relative path, so a fallback here would let the launcher and the workflow
+# disagree about tier sizes and QC gates. setup.py copies the defaults in.
 THRESH="config/thresholds.yaml"
+if [ ! -f "$THRESH" ]; then
+    echo "Missing $PROJDIR/$THRESH" >&2
+    echo "Copy the defaults in:  cp $REPO/config/thresholds.yaml $PROJDIR/config/" >&2
+    exit 1
+fi
+
 SHEET=$(python3 -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['samples']['sheet'])")
 
 # --- Count samples (strip comments + header) --------------------------
@@ -104,9 +148,10 @@ if [ -n "$FORCE_PROFILE" ]; then
     TIER="$FORCE_PROFILE"
     echo "NOTE: tier overridden to '$TIER' by --profile"
 fi
-PROFILE="profiles/$TIER"
+# Profiles ship with the workflow, so they come from the repo, not the project.
+PROFILE="$REPO/profiles/$TIER"
 if [ ! -d "$PROFILE" ]; then
-    echo "No such profile: $PROFILE (expected small|medium|large)" >&2
+    echo "No such profile: profiles/$TIER (expected small|medium|large)" >&2
     exit 1
 fi
 
@@ -174,6 +219,8 @@ mkdir -p gates
 
 echo "==================================================="
 echo " Submitting RNA-Seq pipeline"
+echo "   project dir:   $PROJDIR"
+echo "   workflow:      $REPO"
 echo "   samples:       $N"
 echo "   seq_type:      $SEQ_TYPE"
 echo "   tier:          $TIER"
@@ -182,12 +229,18 @@ echo "   max concurrent: $MAX_CONC"
 echo "==================================================="
 
 # --- Launch -----------------------------------------------------------
+# Already chdir'd into the project, so snakemake's working directory is the
+# project and every relative path in the workflow lands there. -s points at the
+# repo's Snakefile; its `include:` paths resolve relative to that Snakefile.
+#
 # ${PASSTHRU[@]+"${PASSTHRU[@]}"} expands to nothing when the array is empty,
 # which plain "${PASSTHRU[@]}" does not do safely under `set -u` on bash 3.2
 # (the version macOS ships).
 exec snakemake \
+    --snakefile "$REPO/Snakefile" \
     --profile "$PROFILE" \
     --configfile "$CONFIG" \
+    --config repo_dir="$REPO" \
     $JOBS_FLAG \
     $DRY_RUN \
     ${PASSTHRU[@]+"${PASSTHRU[@]}"}

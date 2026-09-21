@@ -41,7 +41,7 @@ rule salmon_index:
     shell:
         """
         set -euo pipefail
-        source workflow/scripts/_tools.sh
+        source {REPO_DIR}/workflow/scripts/_tools.sh
         ensure_tools salmon
         salmon --version
         salmon index -t {input.fa} -i {output.idx} -k 31 --threads {threads}

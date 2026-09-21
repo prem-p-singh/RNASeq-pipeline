@@ -41,7 +41,7 @@ rule qc_report:
         echo "[qc_report] MultiQC over {params.quantdir}" > {log}
         multiqc {params.quantdir} -o {params.outdir}/multiqc -n multiqc_report -f >> {log} 2>&1
         echo "[qc_report] comparative charts" >> {log}
-        python workflow/scripts/qc_report.py \
+        python {REPO_DIR}/workflow/scripts/qc_report.py \
             --quant {params.quantdir} \
             --out {params.outdir} \
             --samples {input.sheet} \
