@@ -29,3 +29,12 @@ setup_inputs.yaml
 .RData
 __pycache__/
 *.pyc
+
+# --- Internal working documents ---------------------------------------
+# Audit and upgrade-planning notes. Kept on disk, deliberately not published:
+# they are candid internal assessments naming specific defects, and one of them
+# was supplied rather than authored here. Removed from git history before the
+# repo was made public.
+AUDIT.md
+REPAIR_UPGRADE_REAUDIT.md
+PIPELINE_AUDIT_REPAIRS_AND_UPGRADE_PLAN.md
