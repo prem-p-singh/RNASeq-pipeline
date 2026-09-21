@@ -18,6 +18,12 @@
 #   conda activate rnaseq-pipeline
 #   conda env export --no-builds > environment.lock.yml
 #
+# environment.lock.yml does NOT exist in this repo yet, because this environment
+# has not been built. Until it is, the versions below are the only pins: the
+# unpinned packages resolve to whatever the channels serve on the day, so two
+# builds of this file are not guaranteed to be the same environment. Produce the
+# lock with the command above on the first successful build, and commit it.
+#
 # SIZE: R + Bioconductor makes this a multi-GB environment. On a 20 GB home
 # quota that is affordable but not free -- check `df -h ~` before building.
 # =============================================================================

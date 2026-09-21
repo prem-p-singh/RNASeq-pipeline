@@ -117,17 +117,24 @@ def write_readme_tab(workbook):
 
     # Write each line into rows. Plain text, one line per row.
     lines = [
-        ("How to use this intake template", "title"),
+        ("This workbook is a PLANNING AID, not an input file", "title"),
         ("", "blank"),
-        ("1. Pick the tab that matches your assay (Bulk RNA-seq, TAGseq, or sRNA-seq).", "body"),
-        ("2. Fill in the YELLOW cells (required). Optional cells are light gray.", "body"),
-        ("3. For any question you're not sure about, choose 'don't know' from the dropdown.", "body"),
-        ("   The pipeline can run a small probe job to figure it out for you.", "body"),
-        ("4. Save the file as 'intake.xlsx' inside your project folder on FARM:", "body"),
-        ("       ~/new_project_inbox/<your_project_name>/intake.xlsx", "code"),
-        ("5. Run one command on FARM:", "body"),
-        ("       ./scripts/run_from_intake.sh <your_project_name>", "code"),
-        ("6. Read the plan it prints. Type 'y' to launch.", "body"),
+        ("Nothing reads this file. It exists so you can think through, and write", "body"),
+        ("down, every decision the pipeline will ask you about, before you start a", "body"),
+        ("run. You then type those answers into the prompts.", "body"),
+        ("", "blank"),
+        ("How to actually start a run", "section"),
+        ("1. Fill in the tab that matches your assay, for your own reference.", "body"),
+        ("2. From your Mac, upload the metadata spreadsheet and start the wizard:", "body"),
+        ("       scripts/start_new.sh <project_name> <metadata_file> [fastq_dir]", "code"),
+        ("   That drops you into an interactive session on FARM running", "body"),
+        ("       scripts/new_project.sh <project_name>", "code"),
+        ("   which auto-detects the sample-ID and factor columns from the", "body"),
+        ("   metadata file and prompts you for the rest.", "body"),
+        ("3. Read the plan it prints. Type 'y' to launch.", "body"),
+        ("", "blank"),
+        ("Note: the metadata spreadsheet in step 2 is your OWN sample table", "body"),
+        ("(.xlsx/.csv/.tsv, one row per sample). It is not this workbook.", "body"),
         ("", "blank"),
         ("Tips", "section"),
         ("- Use the Help column on the right of each question for examples.", "body"),
@@ -135,11 +142,12 @@ def write_readme_tab(workbook):
         ("- You can edit the questions themselves: see config/intake_questions.yaml.", "body"),
         ("- If you change the questions, re-run scripts/generate_intake_template.py.", "body"),
         ("", "blank"),
-        ("What 'probe' means", "section"),
-        ("Some questions (like strandedness or library type) can be answered by the", "body"),
-        ("computer instead of you. If you choose 'don't know', the system runs a tiny", "body"),
-        ("(~5 minute) Salmon job on your probe sample and figures it out automatically.", "body"),
-        ("That's the 'probe' step. You can disable it and use defaults if you prefer.", "body"),
+        ("Questions marked 'don't know'", "section"),
+        ("Strandedness and library type do not have to be answered by you: Salmon", "body"),
+        ("auto-detects the library type during quantification, and the pipeline", "body"),
+        ("records what it found and warns you if it disagrees with what you", "body"),
+        ("declared in config (samples.expected_libtype).", "body"),
+        ("There is no separate probe job; detection happens inside the normal run.", "body"),
     ]
 
     for row_idx, (text, kind) in enumerate(lines, start=1):
@@ -283,8 +291,9 @@ def main():
     # Save
     wb.save(OUTPUT_XLSX)
     print(f"\nWrote: {OUTPUT_XLSX}")
-    print(f"\nNext: open intake_template.xlsx, copy it into a project folder")
-    print(f"      as 'intake.xlsx', fill in the right tab, and save.")
+    print("\nThis workbook is a planning aid: nothing parses it.")
+    print("Fill in the tab for your assay to decide your answers, then start a run with")
+    print("  scripts/start_new.sh <project_name> <metadata_file> [fastq_dir]")
 
 
 if __name__ == "__main__":

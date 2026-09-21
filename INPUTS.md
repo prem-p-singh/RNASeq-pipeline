@@ -33,16 +33,20 @@ That's it. Total interaction: ~6 keystrokes + one `y`.
 Fill in `setup_inputs.yaml` by hand if you want full control:
 
 ```bash
-cp scripts/setup_inputs.template.yaml setup_inputs.yaml
-$EDITOR setup_inputs.yaml
-python scripts/setup.py setup_inputs.yaml
-./submit.sh
+PROJ=~/rnaseq_projects/my_study
+mkdir -p "$PROJ"
+cp scripts/setup_inputs.template.yaml "$PROJ/setup_inputs.yaml"
+$EDITOR "$PROJ/setup_inputs.yaml"
+python3 scripts/setup.py --project-dir "$PROJ" "$PROJ/setup_inputs.yaml"
+./submit.sh -d "$PROJ"
 ```
 
 ## 🔧 Full manual
 
-Write `config/config.yaml` and `config/samples.tsv` by hand, skip the wizard
-entirely.
+Write `<project>/config/config.yaml`, `<project>/config/samples.tsv` and
+`<project>/config/thresholds.yaml` by hand (copy the last from this repo's
+`config/thresholds.yaml`), skip the wizard entirely, then
+`./submit.sh -d <project>`.
 
 ---
 
@@ -70,15 +74,16 @@ Plus two optional fields: `model_fixed_effects` (default `"~ treatment"`) and `m
 
 ## What you get out
 
-Running `python scripts/setup.py setup_inputs.yaml` produces:
+Running `python3 scripts/setup.py --project-dir <project> <inputs>.yaml`
+produces, inside that project directory:
 
 ```
 config/
-  config.yaml               ← fully populated, ready for ./submit.sh
+  config.yaml               ← fully populated, ready for ./submit.sh -d <project>
   samples.tsv               ← one row per matched sample
+  thresholds.yaml           ← copied from the repo defaults; edit per project
 reference/
   annotation_info.tsv       ← pulled from NCBI gene_info
-  NCBI_to_ensembl.txt       ← pulled from Ensembl BioMart (optional)
   org.XXX.eg.db/            ← built for non-model organisms via AnnotationForge
 ```
 
@@ -93,7 +98,6 @@ And appends a line to `gates/decisions.log` for every step.
 | Resolve organism | taxID → scientific name → OrgDb package name → KEGG code | NCBI Taxonomy eutils + KEGG REST |
 | Resolve reference | taxID → latest RefSeq assembly accession → FASTA/GTF/gene_info URLs | NCBI Datasets API |
 | Fetch annotation | Download `*_gene_info.gz`, project to our 4-column schema | NCBI FTP |
-| Fetch Ensembl map | Query BioMart for `entrezgene_id ↔ ensembl_gene_id` | Ensembl BioMart |
 | Match FASTQs to metadata | Enumerate `fastq_source`, substring-match to `sample_id_column` | local / S3 / HTTP listing |
 | Install OrgDb | If Bioconductor has it → print `BiocManager::install(...)` command. Else → invoke `build_orgdb.R` → AnnotationForge builds from NCBI | Bioconductor / AnnotationForge |
 | Render config | Merge inputs into `config.template.yaml` | — |
@@ -104,9 +108,10 @@ And appends a line to `gates/decisions.log` for every step.
 
 **Declarative (recommended):**
 ```bash
-cp scripts/setup_inputs.template.yaml setup_inputs.yaml
-$EDITOR setup_inputs.yaml                 # fill in the 7 fields
-python scripts/setup.py setup_inputs.yaml
+PROJ=~/rnaseq_projects/my_study && mkdir -p "$PROJ"
+cp scripts/setup_inputs.template.yaml "$PROJ/setup_inputs.yaml"
+$EDITOR "$PROJ/setup_inputs.yaml"         # fill in the 7 fields
+python3 scripts/setup.py --project-dir "$PROJ" "$PROJ/setup_inputs.yaml"
 ```
 
 **Interactive (no YAML needed):**
@@ -125,7 +130,6 @@ Network calls (NCBI Datasets, Ensembl BioMart, KEGG) are best-effort. If one fai
 2. Writes the output file with placeholders (e.g. `"TODO"` URLs, empty annotation)
 3. Continues — downstream stages degrade gracefully:
    - Missing `annotation_info.tsv` → DE tables have no `Description` column
-   - Missing `NCBI_to_ensembl.txt` → no Ensembl IDs in outputs
    - Missing `kegg_code` → KEGG stage auto-skips
    - OrgDb not built → GO enrichment errors (only real hard-fail)
 
