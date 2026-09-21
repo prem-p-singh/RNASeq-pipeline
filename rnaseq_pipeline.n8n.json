@@ -1,0 +1,216 @@
+{
+  "id": "rnaseqpipelinemap01",
+  "name": "RNA-Seq Pipeline (visual map)",
+  "active": false,
+  "settings": { "executionOrder": "v1" },
+  "pinData": {},
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "node-trigger",
+      "name": "Start here",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 540]
+    },
+
+    {
+      "parameters": {},
+      "id": "node-intake",
+      "name": "1. Intake form (Excel / YAML)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [240, 540],
+      "notes": "User fills intake_template.xlsx (Bulk / TAGseq / sRNA tab) OR setup_inputs.yaml. Saved to ~/new_project_inbox/<project>/"
+    },
+    {
+      "parameters": {},
+      "id": "node-setup",
+      "name": "2. setup.py -> config.yaml + samples.tsv",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [480, 540],
+      "notes": "Resolves organism->taxID, reference URLs, OrgDb name, KEGG code; matches FASTQs to metadata; writes the two files the pipeline reads."
+    },
+    {
+      "parameters": {},
+      "id": "node-submit",
+      "name": "3. submit.sh (auto SLURM tier)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [720, 540],
+      "notes": "Counts samples -> picks small (<=20) / medium (21-200) / large (201+) SLURM profile, then launches Snakemake on FARM."
+    },
+
+    {
+      "parameters": {},
+      "id": "node-s0-ref",
+      "name": "Stage 0: Fetch transcriptome + GTF",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1020, 460],
+      "notes": "retrieve.smk: curl transcriptome.fa + annotation.gtf from NCBI/Ensembl."
+    },
+    {
+      "parameters": {},
+      "id": "node-s0-index",
+      "name": "Stage 0: Build Salmon index",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1260, 460],
+      "notes": "salmon index -k 31. One-time per organism."
+    },
+    {
+      "parameters": {},
+      "id": "node-s0b-orgdb",
+      "name": "Stage 0b: Build OrgDb (tiered)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1260, 700],
+      "notes": "build_orgdb.R: Bioconductor -> cache -> NCBI Gene -> eggNOG. Needed for GO enrichment. Cached per organism."
+    },
+
+    {
+      "parameters": {},
+      "id": "node-s1-quant",
+      "name": "Stage 1: Per-sample fastp + Salmon  (x N samples)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1560, 460],
+      "notes": "01_qc_quant.sh: fastp clean (SE or PE, --trim_poly_g) -> salmon quant (--gcBias [+seqBias +posBias]) -> quant.sf + metrics.json. One SLURM job per sample."
+    },
+    {
+      "parameters": {},
+      "id": "node-s1b-qc",
+      "name": "Stage 1b: QC report (MultiQC + charts)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1820, 300],
+      "notes": "qc_report.py: MultiQC report + before/after-clean comparative charts + alignment_summary.tsv + self-contained HTML."
+    },
+
+    {
+      "parameters": {},
+      "id": "node-s2-agg",
+      "name": "Stage 2: Aggregate -> counts.tsv",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2060, 560],
+      "notes": "02_aggregate.R: tximport collapses quant.sf to gene-level counts. Also picks DE backend (edgeR / voom / dream) from sample counts."
+    },
+    {
+      "parameters": {},
+      "id": "node-s3-de",
+      "name": "Stage 3: Differential expression",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2300, 560],
+      "notes": "03_de.R: edgeR exactTest / limma-voom / DREAM (auto). Writes <contrast>_DE_analysis.tsv + _DE_meaningful.tsv (FDR<0.05 & |log2FC|>=1)."
+    },
+    {
+      "parameters": {},
+      "id": "node-s4-enrich",
+      "name": "Stage 4: GO + KEGG enrichment",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2560, 440],
+      "notes": "04_enrichment.R: clusterProfiler GSEA. GO by |t|, KEGG by signed t. Auto-simplify() when >20 sig terms. Needs OrgDb (Stage 0b)."
+    },
+    {
+      "parameters": {},
+      "id": "node-s5-wgcna",
+      "name": "Stage 5: WGCNA co-expression network",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2560, 680],
+      "notes": "05_wgcna.R: signed network, auto soft-power, auto module merge. Auto-skipped if <15 samples."
+    },
+
+    {
+      "parameters": {
+        "content": "## RNA-Seq Pipeline — visual map\nRead left to right. Each box is one pipeline step. Arrows = data dependencies (what must finish before the next can start). This is a *diagram*, not an executable n8n flow — it mirrors the Snakemake DAG so you can see the whole thing at a glance.",
+        "height": 110,
+        "width": 2680,
+        "color": 7
+      },
+      "id": "note-title",
+      "name": "title",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-40, 60]
+    },
+    {
+      "parameters": {
+        "content": "### FRONT DOOR\nFill a form, run one command. Turns your answers into the two files the engine needs, then submits to FARM.",
+        "height": 360,
+        "width": 920,
+        "color": 4
+      },
+      "id": "note-front",
+      "name": "band-front",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [-40, 380]
+    },
+    {
+      "parameters": {
+        "content": "### STAGE 0 — REFERENCE\nFetched + built once per organism. Cached and reused across projects.",
+        "height": 520,
+        "width": 480,
+        "color": 5
+      },
+      "id": "note-s0",
+      "name": "band-s0",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [980, 380]
+    },
+    {
+      "parameters": {
+        "content": "### STAGE 1 — PER SAMPLE\nRuns in parallel, one SLURM job per sample. QC report fans off here.",
+        "height": 540,
+        "width": 460,
+        "color": 3
+      },
+      "id": "note-s1",
+      "name": "band-s1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [1520, 240]
+    },
+    {
+      "parameters": {
+        "content": "### STAGES 2-5 — ANALYSIS\nRuns once after all samples quantify. Counts -> DE -> enrichment + network.",
+        "height": 520,
+        "width": 760,
+        "color": 6
+      },
+      "id": "note-s25",
+      "name": "band-s25",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [2020, 360]
+    }
+  ],
+  "connections": {
+    "Start here": { "main": [[{ "node": "1. Intake form (Excel / YAML)", "type": "main", "index": 0 }]] },
+    "1. Intake form (Excel / YAML)": { "main": [[{ "node": "2. setup.py -> config.yaml + samples.tsv", "type": "main", "index": 0 }]] },
+    "2. setup.py -> config.yaml + samples.tsv": { "main": [[{ "node": "3. submit.sh (auto SLURM tier)", "type": "main", "index": 0 }]] },
+    "3. submit.sh (auto SLURM tier)": { "main": [[{ "node": "Stage 0: Fetch transcriptome + GTF", "type": "main", "index": 0 }]] },
+    "Stage 0: Fetch transcriptome + GTF": { "main": [[
+      { "node": "Stage 0: Build Salmon index", "type": "main", "index": 0 },
+      { "node": "Stage 0b: Build OrgDb (tiered)", "type": "main", "index": 0 }
+    ]] },
+    "Stage 0: Build Salmon index": { "main": [[{ "node": "Stage 1: Per-sample fastp + Salmon  (x N samples)", "type": "main", "index": 0 }]] },
+    "Stage 1: Per-sample fastp + Salmon  (x N samples)": { "main": [[
+      { "node": "Stage 1b: QC report (MultiQC + charts)", "type": "main", "index": 0 },
+      { "node": "Stage 2: Aggregate -> counts.tsv", "type": "main", "index": 0 }
+    ]] },
+    "Stage 2: Aggregate -> counts.tsv": { "main": [[{ "node": "Stage 3: Differential expression", "type": "main", "index": 0 }]] },
+    "Stage 3: Differential expression": { "main": [[
+      { "node": "Stage 4: GO + KEGG enrichment", "type": "main", "index": 0 },
+      { "node": "Stage 5: WGCNA co-expression network", "type": "main", "index": 0 }
+    ]] },
+    "Stage 0b: Build OrgDb (tiered)": { "main": [[{ "node": "Stage 4: GO + KEGG enrichment", "type": "main", "index": 0 }]] }
+  }
+}

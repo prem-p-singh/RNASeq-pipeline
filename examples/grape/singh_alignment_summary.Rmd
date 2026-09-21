@@ -1,0 +1,56 @@
+---
+title: "Singh and Block TAGseq Alignment Summary"
+output: html_document
+author: Bradley N. Jenner
+date: "`r format(Sys.time(), '%d %B %Y')`"
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+```
+
+## Alignment tp VITVvi_vMerlFPS15_v1.1 (Merlot)
+
+Roughly 50% of reads are either unmapped or multimappers, meaning the data is lost for downstream analysis.
+
+![](../Figures/star_alignment_plot_VITVvi.png)
+
+### Expression Quantification with VITVvi_vMerlFPS15_v1.1 (Merlot)
+
+The consequences for gene expression quantification are almost all of the samples having below 1M reads mapped to genes. One million reads is considered to be the minimum depth required for differential gene expression analysis. The average depth seems to be about half of that. 
+
+![](../Figures/featureCounts_assignment_plot_VITVvi.png)
+
+
+## Alignment to ASM3070453v1 (Pinot Noir Reference)
+
+Ratio of either unmapped or multimapping reads is drastically reduced.
+
+![](../Figures/star_alignment_plot_ASM3070453v1.png)
+
+### Expression Quantification with ASM3070453v1 (Pinot Noir Reference)
+
+The consequences of the improved alignment (and likely more thorough gene annotations) is that almost all of the samples have at least 1M reads mapped to genes. In this case, the sample with the least amount of read depth is about 750K reads, which is much less of a problem than the previous minimum of around 350K.
+
+![](../Figures/featureCounts_assignment_plot_ASM3070453v1.png)
+
+
+## VITVvi_vMerlFPS15_v1.1 (Merlot) vs ASM3070453v1 (Pinot Noir Reference)
+
+Dot Plot (detailing chromosome level alignment and sequence similarity between regions across the genome) shows that chromosomes/scaffolds alignments between the two genomes are highly noncontiguous.  
+
+![](../Figures/VITVvi_v_ASM3070453v1.png)
+
+## ASM3070453v1 (Pinot Noir Reference) vs V062.gap1 (Merlot Reference)
+
+In contrast, this Dot Plot between the Pinot Noir and Merlot References found on NCBI show highly contiguous alignments between the chromosomes/scaffolds of the two genomes. Considering both of these genomes used a newer sequencing platform/method of assembly and that this plot indicates the sequences are quite similar, it is likely that the assembly of the VITVvi_vMerlFPS15_v1.1 Merlot genome is the issue and is highly fragmented. 
+
+![](../Figures/ASM3070453v1_v_RefMerlot.png)
+
+
+R session info
+```{r}
+sessionInfo()
+```
+

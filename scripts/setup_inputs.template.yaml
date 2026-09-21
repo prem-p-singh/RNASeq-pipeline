@@ -1,0 +1,56 @@
+# =============================================================================
+# setup_inputs.yaml — MINIMAL inputs for the setup wizard.
+# Copy to setup_inputs.yaml (root of repo), fill in 7 fields, then run:
+#
+#     python scripts/setup.py setup_inputs.yaml
+#
+# Everything else is derived: reference URLs, OrgDb, KEGG code, annotation,
+# sample sheet, and config/config.yaml.
+# =============================================================================
+
+# 1. Free-text project name (used for output dir)
+project_name: "my_project"
+
+# 2. NCBI taxonomy ID — the single most useful identifier.
+#    From this we look up: species/genus, Bioconductor OrgDb name, KEGG code,
+#    latest RefSeq assembly URLs, and gene-info annotation.
+#    Find your taxID at: https://www.ncbi.nlm.nih.gov/taxonomy
+tax_id: 29760                              # Vitis vinifera
+
+# 3. Sequencing type: tagseq | rnaseq_single | rnaseq_paired
+seq_type: "tagseq"
+
+# 4. Where the raw FASTQ files live. One of:
+#    - a local directory path   (e.g. /data/project/fastq)
+#    - an s3:// prefix          (e.g. s3://my-bucket/project/fastq/)
+#    - an HTTP directory index  (must return an Apache/Nginx listing)
+#    The wizard enumerates files here and matches them to metadata rows.
+fastq_source: "/absolute/path/to/fastq/"
+
+# 5. Existing metadata spreadsheet (CSV or XLSX). One row per sample,
+#    columns become samples.tsv columns (joined on sample_id_column below).
+metadata_file: "/absolute/path/to/metadata.xlsx"
+
+# 6. Column in metadata_file that holds the sample ID.
+#    The wizard matches FASTQ filenames against values in this column.
+sample_id_column: "Sample"
+
+# 7. Optional: regex/pattern mapping sample_id → FASTQ filename.
+#    Use {sample_id} as placeholder. Leave null to auto-detect.
+#    Examples:
+#      "{sample_id}.fastq.gz"
+#      "{sample_id}_R1_001.fastq.gz"     (paired-end: R2 inferred)
+fastq_pattern: null
+
+# ---------------------------------------------------------------------------
+# Model (only primary_factor is required to build sane contrasts; the full
+# formula can be edited in config.yaml afterwards.)
+# ---------------------------------------------------------------------------
+primary_factor: "treatment"                # must be a column in metadata_file
+model_fixed_effects: "~ treatment"         # edit in config.yaml if needed
+model_random_effects: null                 # e.g. "(1|donor)" for paired designs
+
+# ---------------------------------------------------------------------------
+# HPC
+# ---------------------------------------------------------------------------
+storage_budget_gb: 20

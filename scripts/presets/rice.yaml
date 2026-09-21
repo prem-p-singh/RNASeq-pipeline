@@ -1,0 +1,5 @@
+tax_id: 4530
+scientific_name: "Oryza sativa"
+common_name: "rice"
+orgdb_package: "org.Osativa.eg.db"     # custom, built once via AnnotationForge
+kegg_code: "osa"

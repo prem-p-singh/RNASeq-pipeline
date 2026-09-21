@@ -1,0 +1,19 @@
+sample_id	fastq_url	fastq_url_r2	treatment	replicate
+# One row per sample. Columns after the first three are arbitrary metadata — must
+# match variable names used in config.yaml's model.fixed_effects / random_effects.
+#
+# fastq_url       = R1 (or sole) read file. Accepts: absolute local path, s3://, or http(s)://
+# fastq_url_r2    = R2 read file (paired-end only). Leave blank for single-end / TAGseq.
+#                   Column itself can be omitted entirely if the project is single-end.
+#
+# Examples:
+#
+# Single-end (TAGseq):
+#   S01	/data/fastq/S01.fastq.gz		RB+	1
+#   S02	/data/fastq/S02.fastq.gz		RB-	1
+#
+# Paired-end (NovaSeq RNA-seq):
+#   S01	/data/fastq/S01_R1.fastq.gz	/data/fastq/S01_R2.fastq.gz	control	1
+#   S02	/data/fastq/S02_R1.fastq.gz	/data/fastq/S02_R2.fastq.gz	treated	1
+#
+# Lines starting with # are ignored.

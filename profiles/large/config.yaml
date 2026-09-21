@@ -1,0 +1,30 @@
+# SLURM profile — LARGE tier (201+ samples)
+# Throttled submission to play nice with the shared queue.
+# Checkpointed per-sample; a crash only re-queues unfinished samples.
+
+executor: slurm
+jobs: 20                      # max concurrent — same as medium to stay under 20 GB
+max-jobs-per-second: 1        # throttle submissions (queue-friendly)
+max-status-checks-per-second: 2
+restart-times: 3              # be patient with transient queue failures
+latency-wait: 60
+
+default-resources:
+  - slurm_account=publicgrp
+  - slurm_partition=low
+  - slurm_qos=publicgrp-low-qos
+  - requeue=true
+  - slurm_extra="--mail-type=END,FAIL --mail-user=ppssingh@ucdavis.edu"
+  - runtime=60
+  - mem_mb=6000
+  - tmpdir="tmp"
+
+printshellcmds: true
+keep-going: true
+rerun-incomplete: true
+use-conda: false
+
+# Group small per-sample jobs into batches of 50 so we hit the queue less often.
+# Snakemake schedules batches as single SLURM submissions where possible.
+group-components:
+  - qc_quant_sample=50

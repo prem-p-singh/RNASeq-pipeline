@@ -1,0 +1,225 @@
+---
+title: "WGCNA on grape TagSeq data"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F)
+```
+
+```{r, include = F}
+library(WGCNA)
+library(edgeR)
+library(dplyr)
+library(ggplot2)
+library(kableExtra)
+library(readxl)
+library(openxlsx)
+library(clusterProfiler)
+library(ComplexHeatmap)
+```
+The WGCNA analysis was conducted using log2 counts per million reads, and included all genes included in the DE analysis.  
+
+```{r, include = FALSE}
+# Assemble annotation, read in metadata, get normalized counts for all genes included in the DE analysis
+anno <- read.delim("GCF_030704535.1_ASM3070453v1_and_GRBV_annotation_info.txt")
+colnames(anno) <- c("Gene.stable.ID", "DB.xref", "Description", "Molecule.Type")
+anno <- anno[!duplicated(anno$Gene.stable.ID),]
+colnames(anno)
+anno$NCBI <- gsub("GeneID:", "", anno$DB.xref, fixed = TRUE)
+
+#### Adding ensembl IDs
+ensembl <- read.delim("NCBI_to_ensembl_114.txt") 
+names(ensembl) <- c("Ensembl", "NCBI")
+# pick first Ensembl ID for each NCBI ID
+ensembl <- group_by(ensembl, NCBI) %>% slice_head(n = 1) %>% ungroup
+ensembl$NCBI <- as.character(ensembl$NCBI)
+anno <- left_join(anno, ensembl, by = "NCBI")
+
+anno$Description <- gsub("\t", " ", anno$Description)
+anno$Description <- gsub("\n", " ", anno$Description)
+
+#####
+
+counts <- read.delim("./2025_April_Singh_Grape_TAGseq_ASM3070453v1_counts.txt", row.names = 1, sep = "\t")
+colnames(counts) <- gsub("^X", "", colnames(counts))
+counts <- counts[,order(colnames(counts))]
+
+####
+
+mdata <- read_excel("Correct.Sample_Metadata.xlsx")
+mdata <- dplyr::rename(mdata, sample = Sample, season = `Sampling Season`, treatment = `Infection Group`, stage = `Maturity stage`, vine = `Vine ID`, ysi = `Years Since Infection`)
+mdata <- mdata[order(mdata$sample),]
+
+# Remove Dropped Samples
+mdrop <- which(!(mdata$sample %in% colnames(counts)))
+mdata <- mdata[-mdrop,]
+#mdata$sample == colnames(counts) # Ensure Order
+
+treatment <- as.factor(mdata$treatment)
+season <- as.factor(mdata$season)
+stage <- as.factor(mdata$stage)
+ysi <- as.factor(gsub("-", "Uninfected", mdata$ysi))
+vine <- as.factor(mdata$vine)
+replicate <- as.factor(mdata$replicate)
+
+group <- interaction(treatment, ysi)
+group <- gsub("(+)", "", group, fixed = TRUE)
+group <- gsub("RB(-)", "Uninfected", group, fixed = TRUE)
+group <- factor(group)
+
+metadata <- data.frame("sample" = mdata$sample,
+                        "group" = group,
+                       "stage" = stage,
+                       "vine" = vine,
+                       "season" = season,
+                       row.names = colnames(counts))
+metadata$pretty.group <- gsub("RB.", "", metadata$group)
+metadata$pretty.group <- gsub(".Uninfected", "", metadata$pretty.group)
+
+form.fixed <- " ~group*stage"
+mm <- model.matrix(as.formula(form.fixed), data = metadata)
+
+d0 <- DGEList(counts)
+d0 <- calcNormFactors(d0)
+
+keep <- filterByExpr(d0, mm)
+d <- d0[keep,]
+
+datExpr <- cpm(d, log = TRUE, prior.count = 0.5) # using 0.5 to match what voom does
+datExpr <- t(datExpr)
+```
+
+```{r, include = F}
+enableWGCNAThreads()
+```
+
+```{r, include = F}
+# Choose soft-thresholding power
+pow <- pickSoftThreshold(datExpr, networkType = "signed", powerVector = 1:60,
+		corFnc = "bicor")
+power.use0 <- pow$powerEstimate
+power.use <- min(power.use0, 30)
+```
+
+The analysis used a signed network and the robust biweight midcorrelation. A soft-thresholding power of `r power.use0` was chosen by the WGCNA function pickSoftThreshold as the smallest power for which the scale-free topology index exceeded 0.85.  However, as the module detection function allows a maximum power of 30, 30 was used as the soft thresholding power.  The scale-free topology index for a power of 30 was `r round(pow$fitIndices["30",]$SFT.R.sq, 2)`.
+
+```{r, include = F}
+net <- blockwiseModules(
+datExpr, power = power.use, corType = "bicor", networkType = "signed", blocks = rep(1, ncol(datExpr)))
+colors <- names(sort(table(net$colors)))
+nmodules <- length(colors)
+
+MEs <- net$MEs
+MEs <- tibble::rownames_to_column(MEs, var = "sample")
+MEs <- left_join(select(metadata, -pretty.group), MEs, by = "sample")
+write.csv(MEs, file = "MEs.csv", row.names = F)
+```
+
+`r nmodules` modules were identified, each of which included the following numbers of genes (note that the "grey" module represents unclustered genes):
+
+```{r}
+sort(table(net$colors))
+wb <- createWorkbook()
+tmp <- sapply(colors, function(col){
+	addWorksheet(wb, sheet = col)
+	genes.from.module <- colnames(datExpr)[which(net$colors == col)]
+	anno.from.module <- anno[which(anno$Gene.stable.ID %in% genes.from.module),]
+ 	writeData(wb, sheet = col, anno.from.module)
+})
+saveWorkbook(wb, "Module_genes.xlsx", overwrite = T)
+```
+
+#### Clustering dendrogram of genes, with dissimilarity based on topological overlap, together with assigned module colors
+
+```{r, fig.width = 6, fig.height = 6}
+# Plot the dendrogram and the module colors underneath
+plotDendroAndColors(net$dendrograms[[1]], colors = net$colors, "Module colors", 
+dendroLabels = FALSE, hang = 0.03,
+addGuide = TRUE, guideHang = 0.05)
+```
+
+
+### GO enrichment of modules
+GO enrichment analyses of module genes were conducted using clusterProfiler.
+
+```{r, results = "asis", message = F}
+# Use NCBI IDs for GO
+allgenes <- anno$NCBI[match(colnames(datExpr), anno$Gene.stable.ID)]
+allgenes <- allgenes[!is.na(allgenes)]
+colors2 <- setdiff(colors, "grey")
+GO.results <- lapply(colors2, function(col){
+  genes.from.module <- anno$NCBI[match(colnames(datExpr)[which(net$colors == col)], anno$Gene.stable.ID)]
+  genes.from.module <- genes.from.module[!is.na(genes.from.module)]
+  tmp <- enrichGO(gene = genes.from.module, universe = allgenes, ont = "all", OrgDb = "org.Vvinifera.eg.db", qvalueCutoff = 1, pvalueCutoff = 1, minGSSize = 2)
+  tab <- as.data.frame(tmp)
+  printtab <- kable(tab[tab$pvalue < 0.05,], row.names = F, caption = paste0("Enriched GO Terms for ", col, "module")) %>% kable_styling() %>% scroll_box(height = "500px")
+  return(list(fullresults = tmp, printtab = printtab))
+})
+names(GO.results) <- colors2
+```
+
+```{r, results = "asis"}
+tmp <- lapply(GO.results, function(x)print(x$printtab))
+```
+
+#### Dotplots of enriched terms
+```{r, fig.height = 6} 
+tmp <- lapply(colors2, function(col){
+	p <- dotplot(GO.results[[col]]$fullresults) + ggtitle(paste0("Top enriched GO terms for genes in ", col, " module"))
+	print(p)
+})
+```
+
+#### Heatmaps of hub genes
+```{r, fig.width = 10, fig.height = 10}
+chooseMultipleHubInEachModule <- function(datExpr, colorh, omitColors = "grey", power = 2, type = "signed", ngenes = 10,
+    ...)
+{
+    modules = names(table(colorh))
+    if (!(is.na(omitColors)[1]))
+        modules = modules[!is.element(modules, omitColors)]
+    if (is.null(colnames(datExpr))) {
+        colnames(datExpr) = 1:dim(datExpr)[2]
+        isIndex = TRUE
+    }
+    hubs = rep(list(NULL), length(modules))
+    names(hubs) = modules
+    for (m in modules) {
+        adj = adjacency(datExpr[, colorh == m], power = power,
+            type = type, ...)
+        hubs[[m]] = names(head(sort(rowSums(adj), decreasing = T), ngenes))
+    }
+    return(hubs)
+}
+topgenes <- chooseMultipleHubInEachModule(datExpr, colorh = net$colors, power = power.use)
+
+### Heatmaps of top hub genes for each module
+anno.dat <- metadata
+anno.dat$stage <- factor(anno.dat$stage, levels = c("Pre_veraison", "Veraison", "Post_veraison", "Harvest"))
+levels(anno.dat$stage) <- gsub("_", " ", levels(anno.dat$stage))
+anno.dat <- rename(anno.dat, Stage = stage, `Year of infection` = pretty.group, Season = season)
+
+tmp <- sapply(colors2, function(col){
+	genes.use <- topgenes[[col]]
+	x <- t(datExpr[,genes.use])
+	labels <- anno$Description[match(rownames(x), anno$Gene.stable.ID)]
+	labels <- ifelse(is.na(labels), rownames(x), labels)
+	labels <- stringr::str_wrap(labels, width = 20)
+	ra <- rowAnnotation(`Module hub genes` = anno_simple(rep("1", nrow(x)), col = c("1" = col)), show_annotation_name = FALSE)
+	stage_pal <- viridis::turbo(4)
+	names(stage_pal) <- levels(anno.dat$Stage)
+	year_pal <- viridis::viridis(2)
+	names(year_pal) <- as.character(2021:2022)
+	infection_pal <- viridis::magma(length(unique(anno.dat$`Year of infection`)))
+	names(infection_pal) <- levels(factor(anno.dat$`Year of infection`))
+	ha <- columnAnnotation(`Year of infection` = anno.dat$`Year of infection`, Season = anno.dat$Season, Stage = anno.dat$Stage, col = list(Stage = stage_pal, Season = year_pal, `Year of infection` = infection_pal))
+  ht <- Heatmap(x, row_labels = labels, show_column_names = FALSE, bottom_annotation = ha, left_annotation = ra, show_row_dend = FALSE, row_title = paste0(stringr::str_to_title(col), " module hub genes"), name = "log2 CPM")
+  draw(ht)
+})
+```
+
+### R session information
+```{r}
+sessionInfo()
+```

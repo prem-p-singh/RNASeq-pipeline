@@ -1,0 +1,237 @@
+# =============================================================================
+# intake_questions.yaml
+# -----------------------------------------------------------------------------
+# This file defines every question that appears in the intake Excel template.
+# Edit it to add, remove, or change questions. After editing, re-run:
+#
+#     python scripts/generate_intake_template.py
+#
+# That regenerates intake_template.xlsx with your changes.
+#
+# Each question has these fields:
+#   id        — short name used by the parser (no spaces, letters/digits/underscore)
+#   text      — the question shown to the user in plain English
+#   help      — example or short explanation shown next to the answer cell
+#   type      — "text", "number", or "dropdown"
+#   options   — list of choices (only for "dropdown" type; always include
+#               "don't know" if probing can answer it later)
+#   required  — true / false (required cells are highlighted yellow)
+#   default   — pre-filled value shown in the answer cell (optional)
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# Questions that appear on EVERY assay tab (project basics, paths, design)
+# -----------------------------------------------------------------------------
+common_questions:
+
+  - id: project_name
+    text: "Project name"
+    help: "Folder name. Letters, numbers, underscores only. Example: chickpea_drought_2026"
+    type: text
+    required: true
+
+  - id: contact_email
+    text: "Contact email"
+    help: "Where SLURM job notifications go. Example: yourname@ucdavis.edu"
+    type: text
+    required: true
+
+  - id: biological_question
+    text: "Biological question (one sentence)"
+    help: "Used in the Methods paragraph. Example: How does drought affect root transcriptome at 0/3/6 hours?"
+    type: text
+    required: true
+
+  - id: organism
+    text: "Organism"
+    help: "Common name, scientific name, or NCBI taxID. Examples: chickpea, Cicer arietinum, 3827"
+    type: text
+    required: true
+
+  - id: tissue_type
+    text: "Tissue type"
+    help: "Example: leaf, root, blood, tumor. Used in Methods paragraph + plant-vs-animal QC thresholds."
+    type: text
+    required: false
+
+  - id: platform
+    text: "Sequencing platform"
+    help: "Determines fastp poly-G trimming and read-length defaults."
+    type: dropdown
+    options: ["NovaSeq", "NextSeq", "MiSeq", "Other Illumina", "don't know"]
+    required: true
+
+  - id: primary_factor
+    text: "Primary comparison — which column in your metadata file?"
+    help: "Example: treatment, timepoint, genotype. This is what DE contrasts pivot around."
+    type: text
+    required: true
+
+  - id: min_samples_per_group
+    text: "Smallest group size (how many biological replicates in your smallest condition?)"
+    help: "Drives DE backend choice. 3 = minimum; 5+ much better; 12+ for subtle effects."
+    type: number
+    required: true
+
+  - id: repeated_measures
+    text: "Same subject measured at multiple timepoints / conditions?"
+    help: "Yes = adds random effect (DREAM). No = standard limma-voom."
+    type: dropdown
+    options: ["yes", "no"]
+    required: true
+    default: "no"
+
+  - id: batch_effect_column
+    text: "Known batch column to model? (sequencing date, library prep batch, etc.)"
+    help: "Type the column name from your metadata file, or 'none' if no known batches."
+    type: text
+    required: true
+    default: "none"
+
+  - id: fastq_path
+    text: "FASTQ folder path (on FARM)"
+    help: "Full path. Example: /group/kliebengrp/yourname/projects/myproject/fastq"
+    type: text
+    required: true
+
+  - id: metadata_file
+    text: "Metadata file (CSV or Excel) — full path on FARM"
+    help: "One row per sample. Must contain a sample-ID column and your primary_factor column."
+    type: text
+    required: true
+
+  - id: sample_id_column
+    text: "Sample-ID column name in your metadata file"
+    help: "The column that holds sample names matching the FASTQ filenames. Example: Sample"
+    type: text
+    required: true
+    default: "sample_id"
+
+  - id: probe_sample_id
+    text: "Probe sample (which sample_id should the system use for probe runs?)"
+    help: "Used for 'don't know' answers — a single clean sample to detect strandedness, library type, etc. Leave blank to auto-pick the first sample in metadata."
+    type: text
+    required: false
+
+  - id: run_probes_for_unknowns
+    text: "Run probes for any 'don't know' answers?"
+    help: "Yes = run small SLURM jobs to detect missing info (recommended). No = use conservative defaults, you can re-run later."
+    type: dropdown
+    options: ["yes", "no"]
+    required: true
+    default: "yes"
+
+  - id: run_enrichment
+    text: "Run functional enrichment (GO + KEGG)?"
+    help: "Yes adds Stage 4. Auto-skipped if OrgDb / KEGG code unavailable."
+    type: dropdown
+    options: ["yes", "no"]
+    required: true
+    default: "yes"
+
+  - id: orgdb_strategy
+    text: "How should the system get the OrgDb (for GO enrichment)?"
+    help: "auto = try Bioconductor → cache → NCBI Gene → eggNOG-mapper (in order). force_build = always rebuild from reference (slow, ~2 hr, works for any genome). use_existing = name a Bioconductor package below. skip = no enrichment."
+    type: dropdown
+    options: ["auto", "force_build", "use_existing", "skip"]
+    required: true
+    default: "auto"
+
+  - id: orgdb_cache_dir
+    text: "Where should built OrgDb packages be cached?"
+    help: "Full path on FARM. Default ~/orgdb_cache/ is fine and per-user. For a lab-shared cache, use /group/<lab>/orgdb_cache/. Leave blank for default."
+    type: text
+    required: false
+    default: "~/orgdb_cache"
+
+  - id: run_wgcna
+    text: "Run WGCNA co-expression network?"
+    help: "Yes adds Stage 5. Auto-skipped if total samples < 15 (unreliable below that)."
+    type: dropdown
+    options: ["yes", "no"]
+    required: true
+    default: "yes"
+
+
+# -----------------------------------------------------------------------------
+# Per-assay tabs. Each tab gets all common_questions PLUS its own extras.
+# -----------------------------------------------------------------------------
+tabs:
+
+  # ============================ Bulk RNA-seq ============================
+  - name: "Bulk RNA-seq"
+    description: |
+      Standard mRNA-seq for differential expression.
+      Choose this tab if your library is polyA-selected OR ribodepletion.
+      Reads can be single-end or paired-end.
+    extra_questions:
+
+      - id: library_type
+        text: "Library prep type"
+        help: "polyA = standard mRNA (default for healthy eukaryotic samples). ribodepletion = preserves all RNA classes including lncRNA, pre-mRNA, viral RNA."
+        type: dropdown
+        options: ["polyA mRNA-seq", "ribodepletion", "don't know"]
+        required: true
+
+      - id: read_config
+        text: "Read configuration"
+        help: "Look at your FASTQ files: if you have R1 and R2 per sample, it's paired-end."
+        type: dropdown
+        options: ["paired-end", "single-end", "don't know"]
+        required: true
+
+      - id: strandedness
+        text: "Strandedness"
+        help: "Modern kits (NEBNext Ultra II Directional, TruSeq Stranded) are reverse-stranded. Pre-2015 kits are usually unstranded."
+        type: dropdown
+        options: ["reverse", "forward", "unstranded", "don't know"]
+        required: true
+        default: "reverse"
+
+  # ============================ TAGseq / 3'-tag ============================
+  - name: "TAGseq"
+    description: |
+      3'-tag RNA-seq (QuantSeq, Lexogen). Single-end, short reads (~5-10M),
+      sequences only the 3' end of each polyadenylated transcript.
+      Good for large-cohort DE studies. NOT for splicing or isoforms.
+    extra_questions:
+
+      - id: kit
+        text: "Library prep kit"
+        help: "Most common is QuantSeq FWD from Lexogen."
+        type: dropdown
+        options: ["Lexogen QuantSeq FWD", "Lexogen QuantSeq REV", "other", "don't know"]
+        required: true
+        default: "Lexogen QuantSeq FWD"
+
+      - id: strandedness
+        text: "Strandedness (TAGseq is almost always reverse-stranded)"
+        help: "QuantSeq FWD = forward-stranded; QuantSeq REV = reverse. Leave as default if you don't know."
+        type: dropdown
+        options: ["reverse", "forward", "don't know"]
+        required: true
+        default: "reverse"
+
+  # ============================ sRNA-seq ============================
+  - name: "sRNA-seq"
+    description: |
+      Small RNA sequencing (miRNAs, siRNAs, viral siRNAs).
+      Single-end, very short reads (typically SE50 or SE75).
+      Special pipeline (not yet integrated — placeholder for future).
+    extra_questions:
+
+      - id: adapter_kit
+        text: "Small-RNA library kit (determines adapter sequence)"
+        help: "NEXTflex v4 is the plant sRNA standard (reduces ligation bias). NEBNext is more biased but cheaper."
+        type: dropdown
+        options: ["NEXTflex Small RNA v4", "NEBNext Multiplex Small RNA", "QIAseq miRNA", "don't know"]
+        required: true
+
+      - id: size_range
+        text: "Expected sRNA size range (nt)"
+        help: "miRNAs = 20-22 nt; plant siRNAs = 21-24 nt; full sRNA universe = 18-30 nt."
+        type: dropdown
+        options: ["18-30 (broad)", "20-22 (miRNA-focused)", "21-24 (plant siRNA)"]
+        required: true
+        default: "18-30 (broad)"

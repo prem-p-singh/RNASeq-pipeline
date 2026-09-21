@@ -1,0 +1,176 @@
+# =============================================================================
+# Generic RNA-Seq Pipeline — project configuration
+# Copy to config/config.yaml and fill in. Nothing else needs editing to swap
+# the pipeline onto a new dataset / organism.
+# =============================================================================
+
+project:
+  name: "my_rnaseq_project"
+  description: "One-line purpose — e.g. 'Heat-shock response in rice leaves'"
+  output_dir: "results/"
+
+# -----------------------------------------------------------------------------
+# Organism / reference
+# -----------------------------------------------------------------------------
+organism:
+  common_name: "grape"                          # free text, for reports
+  scientific_name: "Vitis vinifera"
+  tax_id: 29760                                 # NCBI taxID (for make_orgdb.R)
+  kegg_code: "vvi"                              # KEGG 3-letter code, or null to skip KEGG
+  orgdb_package: "org.Vvinifera.eg.db"          # Bioconductor name or local-built name
+
+# -----------------------------------------------------------------------------
+# OrgDb building (for GO enrichment in Stage 4)
+# -----------------------------------------------------------------------------
+# The pipeline can build an OrgDb on demand using a tiered fallback:
+#   Tier 1: existing Bioconductor package (e.g. org.Hs.eg.db) — instant
+#   Tier 2: previously-built package in `cache_dir` — instant
+#   Tier 3a: AnnotationForge::makeOrgPackageFromNCBI(tax_id) — ~1 min
+#   Tier 3b: eggNOG-mapper on translated proteome → makeOrgPackage() — slow but universal
+#
+# strategy choices:
+#   "auto"          try the tiers in order; first success wins (recommended)
+#   "force_build"   skip Bioconductor + cache, always run NCBI/eggNOG
+#   "use_existing"  only use the Bioconductor `orgdb_package` above, no building
+#   "skip"          don't build anything; enrichment stage will be skipped
+orgdb:
+  strategy: "auto"
+  cache_dir: "~/orgdb_cache"                    # per-user default; override per project
+  eggnog_db: null                               # path to eggNOG-mapper DB (~50 GB) if you
+                                                # want Tier 3b. null = Tier 3b disabled.
+
+reference:
+  # accession + assembly_name identify exactly which reference was used and key
+  # the OrgDb cache. setup.py fills them in; set them by hand if you write this
+  # config yourself, otherwise the cache key degrades to "unknown".
+  accession: null                               # e.g. "GCF_030704535.1"
+  assembly_name: null                           # e.g. "ASM3070453v1"
+  # URLs must be concrete filenames. A '*' here is a guaranteed Stage 0 failure:
+  # curl does not expand globs. setup.py refuses to finish if one slips through.
+  genome_fasta_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_genomic.fna.gz"
+  transcriptome_fasta_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_rna.fna.gz"
+  gtf_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_genomic.gtf.gz"
+  annotation_tsv:                               # NCBI/Ensembl-style gene-info table
+    path: "reference/annotation_info.txt"
+    columns: [Gene.stable.ID, DB.xref, Description, Molecule.Type]
+  # NOTE: an NCBI<->Ensembl map used to be generated here. It was removed: the
+  # generator queried the human mart, then the Arabidopsis mart, for every
+  # organism, so the file it produced was labelled with your species but
+  # contained another one's identifiers. Nothing in the pipeline read it.
+  # A species-correct map can be reintroduced when something actually needs it.
+
+# -----------------------------------------------------------------------------
+# Samples
+# -----------------------------------------------------------------------------
+samples:
+  sheet: "config/samples.tsv"                   # TSV: sample_id, fastq_url_or_path, + metadata cols
+  seq_type: "tagseq"                            # tagseq | rnaseq_single | rnaseq_paired
+  min_reads_on_genes: 1000000                   # per-sample threshold; below = excluded
+  expected_libtype: null                        # Salmon library type code (e.g. "ISR" for
+                                                # paired dUTP-stranded, "SR" for SE
+                                                # stranded-reverse, "U" for unstranded).
+                                                # If set, the pipeline warns when Salmon's
+                                                # auto-detect disagrees - catches the silent
+                                                # ~50% count error from wrong strandedness.
+
+# -----------------------------------------------------------------------------
+# Experimental model
+# -----------------------------------------------------------------------------
+model:
+  # R formula as a string. Variables must exist in samples sheet.
+  fixed_effects: "~ group * stage"
+  random_effects: "(1|vine)"                    # set null for no mixed model
+  primary_factor: "group"                       # the factor contrasts pivot around
+  covariates_auto_add:                          # may be added by batch-detection gate
+    - "batch"
+
+# -----------------------------------------------------------------------------
+# Contrasts — declarative records, NOT R code.
+# -----------------------------------------------------------------------------
+# Each record is built with real emmeans function calls; nothing here is ever
+# passed to eval(parse(...)). Every `factor` / `by` must be a column in the
+# sample sheet AND a term in model.fixed_effects, or the run stops in preflight.
+#
+#   id       unique name; prefixes the output filenames
+#   type     "pairwise" (the only supported type today)
+#   factor   the factor whose levels are compared
+#   by       optional: run the comparison separately within each level of this
+#            factor (use for interaction designs). null = marginal comparison.
+#   reverse  true  => "later_level - earlier_level" (e.g. treated - control)
+#            false => "earlier_level - later_level"
+#            The resolved direction of every contrast is written to
+#            DE_Results/contrast_directions.tsv.
+contrasts:
+  - id: "group_within_stage"
+    type: "pairwise"
+    factor: "group"
+    by: "stage"
+    reverse: true
+  - id: "stage_within_group"
+    type: "pairwise"
+    factor: "stage"
+    by: "group"
+    reverse: true
+
+# -----------------------------------------------------------------------------
+# Sample inclusion policy (Stage 2)
+# -----------------------------------------------------------------------------
+# Stage 1 flags samples on mapping rate and mapped-read depth, but only this
+# policy decides whether a flagged sample is actually dropped. Every decision,
+# kept or dropped, is written to results/<project>/sample_disposition.tsv with
+# its reason, and excluded samples are removed from the count matrix so DE,
+# enrichment and WGCNA all analyse the same cohort.
+#
+# Omitting this block entirely defaults to false: flag but keep everything.
+# ponytail: one switch covers both criteria (mapping rate and depth); split it
+# if you ever need to drop on one but tolerate the other.
+sample_policy:
+  exclude_failing_qc: true
+
+# -----------------------------------------------------------------------------
+# Which downstream analyses to run
+# -----------------------------------------------------------------------------
+downstream:
+  run_go: true
+  run_kegg: true                                # auto-skipped if organism.kegg_code is null
+  run_wgcna: true                               # auto-skipped if n_samples < thresholds.wgcna.min_samples
+
+# -----------------------------------------------------------------------------
+# HPC / storage
+# -----------------------------------------------------------------------------
+hpc:
+  # submit.sh enforces this: it computes the peak per-sample working set from
+  # seq_type, caps --jobs so concurrent samples stay inside the budget, and
+  # refuses to launch a run that cannot fit at all.
+  storage_budget_gb: 20
+  # Upper bound on concurrent per-sample jobs. Only lowers the figure submit.sh
+  # derives from the budget; null means "let storage decide".
+  samples_in_flight: null
+  # true: 01_qc_quant.sh removes the reads it downloaded and the trimmed reads
+  # it wrote, once quant.sf is verified. FASTQs given as absolute local paths
+  # are read in place and are never deleted either way.
+  # false: everything is retained, and submit.sh then requires the budget to
+  # hold the whole cohort at once.
+  delete_fastq_after_quant: true
+
+# Removed from this block because nothing read them: `aligner` (only salmon is
+# implemented; see workflow/rules/per_sample.smk) and `slurm_profile` (the
+# profile comes from profiles/<tier>, chosen by submit.sh).
+
+# -----------------------------------------------------------------------------
+# Decision-gate thresholds (see GENERIC_PIPELINE.md §5)
+# Override here per-project; defaults live in config/thresholds.yaml
+# -----------------------------------------------------------------------------
+thresholds:
+  mapping_rate_min: 0.60                        # < this flags sample / reference
+  batch_pc_var_fraction: 0.30                   # > this triggers auto batch covariate
+  de_sig_terms_simplify: 20                     # apply simplify() when # sig terms exceeds this
+  go_simplify_cutoff: 0.70                      # GOSemSim cutoff for simplify()
+  wgcna:
+    min_samples: 15                             # < this skips WGCNA
+    target_r2: 0.85                             # scale-free R² target
+    power_cap: 30                               # blockwiseModules hard limit
+    max_modules: 50                             # > this triggers mergeCutHeight bump
+  # The DE backend is not configurable: it follows model.random_effects
+  # (present -> dream, absent -> limma-voom). An unsupported or non-estimable
+  # design stops with a reason instead of switching to a different test.

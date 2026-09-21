@@ -1,0 +1,5 @@
+tax_id: 3702
+scientific_name: "Arabidopsis thaliana"
+common_name: "arabidopsis"
+orgdb_package: "org.At.tair.db"        # Bioconductor
+kegg_code: "ath"

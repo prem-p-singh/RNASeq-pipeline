@@ -1,0 +1,5 @@
+tax_id: 9606
+scientific_name: "Homo sapiens"
+common_name: "human"
+orgdb_package: "org.Hs.eg.db"          # Bioconductor
+kegg_code: "hsa"

@@ -1,0 +1,277 @@
+---
+title: "Singh and Block Wine Grape TAGseq Differential Gene Expression Analysis"
+author: "Bioinformatics Core"
+output:
+  html_document:
+    keep_md: true
+  pdf_document: default
+---
+
+```{r load_packages, echo=FALSE, warning=FALSE, message=FALSE, results='hide', include = FALSE}
+#if (!requireNamespace("BiocManager", quietly = TRUE)) {
+#  install.packages("BiocManager")
+#}
+
+list.of.packages <- c("edgeR", "emmeans", "kableExtra", "knitr", "stringr", "ggplot2", "dplyr", "variancePartition", "readxl")
+
+#if (!all(list.of.packages %in% rownames(installed.packages()))) {
+#  BiocManager::install(list.of.packages)
+# c}
+
+tmp <- lapply(list.of.packages, require, character.only = TRUE)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+```
+
+```{r}
+options(width = 1200)
+```
+
+
+```{r anno, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+# setwd("/home/bnjenner/Center/work/CORE/analysis/Block_D_UCD/2025_April_Singh_Grape_TAGseq/2025_April_Singh_Grape_TAGseq/") # set to your working directory
+
+anno <- read.delim("GCF_030704535.1_ASM3070453v1_and_GRBV_annotation_info.txt")
+colnames(anno) <- c("Gene.stable.ID", "DB.xref", "Description", "Molecule.Type")
+anno <- anno[!duplicated(anno$Gene.stable.ID),]
+colnames(anno)
+anno$NCBI <- gsub("GeneID:", "", anno$DB.xref, fixed = TRUE)
+
+#### Adding ensembl IDs
+ensembl <- read.delim("NCBI_to_ensembl_114.txt") 
+names(ensembl) <- c("Ensembl", "NCBI")
+# pick first Ensembl ID for each NCBI ID
+ensembl <- group_by(ensembl, NCBI) %>% slice_head(n = 1) %>% ungroup
+ensembl$NCBI <- as.character(ensembl$NCBI)
+anno <- left_join(anno, ensembl, by = "NCBI")
+anno$Description <- gsub("\t", " ", anno$Description)
+anno$Description <- gsub("\n", " ", anno$Description)
+```
+
+```{r read_count_data, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+counts <- read.delim("./2025_April_Singh_Grape_TAGseq_ASM3070453v1_counts.txt", row.names = 1, sep = "\t")
+colnames(counts) <- gsub("^X", "", colnames(counts))
+counts <- counts[,order(colnames(counts))]
+head(counts)
+```
+
+##### Project Metadata
+```{r metadata, echo=FALSE, warning=FALSE, message=FALSE}
+#mdata <- read.delim("../Sample_Metadata.csv", sep = ",")
+mdata <- read_excel("Correct.Sample_Metadata.xlsx")
+mdata <- dplyr::rename(mdata, sample = Sample, season = `Sampling Season`, treatment = `Infection Group`, stage = `Maturity stage`, vine = `Vine ID`, ysi = `Years Since Infection`)
+mdata <- mdata[order(mdata$sample),]
+
+# Remove Dropped Samples
+mdrop <- which(!(mdata$sample %in% colnames(counts)))
+mdata <- mdata[-mdrop,]
+#mdata$sample == colnames(counts) # Ensure Order
+
+# Remove 2022 Season from Metadata and Counts
+mdrop <- which(mdata$season == 2022)
+mdata <- mdata[-mdrop,]
+counts <- counts[,-mdrop]
+
+treatment <- as.factor(mdata$treatment)
+season <- as.factor(mdata$season)
+stage <- as.factor(mdata$stage)
+ysi <- as.factor(gsub("-", "Uninfected", mdata$ysi))
+vine <- as.factor(mdata$vine)
+replicate <- as.factor(mdata$replicate)
+
+group <- interaction(treatment, ysi)
+group <- gsub("(+)", "", group, fixed = TRUE)
+group <- gsub("RB(-)", "Uninfected", group, fixed = TRUE)
+group <- factor(group)
+
+metadata <- data.frame("group" = group,
+                       "stage" = stage,
+                       "vine" = vine,
+                       "season" = season,
+                       row.names = colnames(counts))
+metadata %>%
+  kbl(align = 'c', row.names = TRUE) %>%
+  add_header_above(c("Metadata" = 5), font_size = "larger", bold = T, align = "l") %>%
+  scroll_box(width = "550px", height = "500px") %>% 
+  kable_styling()
+```
+
+
+### Library Size
+```{r fig1, fig.width=9,fig.height=6, echo=FALSE, warning=FALSE, message=FALSE}
+df <- data.frame("Sample" = colnames(counts),
+                 "Group" = group,
+                 "Count" = colSums(counts))
+
+p1 <- ggplot(df, aes(fill=Group, y=Count, x=Sample)) +
+      geom_bar(stat="identity", position="dodge", ) +
+      labs(y= "Counts", x = "Sample") + ggtitle("Library Size")
+p1
+```
+
+
+```{r, include = F}
+# Specify model formula to be used in limma.
+form.fixed <- " ~group*stage"
+mm <- model.matrix(as.formula(form.fixed), data = metadata)
+colnames(mm)
+```
+
+
+```{r model_and_filter, echo=FALSE, warning=FALSE, message=FALSE, results='hide'}
+d0 <- DGEList(counts)
+
+d0 <- calcNormFactors(d0)
+nrow(d0$counts)
+
+logcpm_unfilt <- cpm(d0, prior.count=2, log=TRUE)
+colnames(logcpm_unfilt) <- colnames(logcpm_unfilt)
+
+write.table(logcpm_unfilt,"2025_April_Singh_Grape_TAGseq_ASM3070453v1_2021_normalized_counts.txt", sep="\t", quote=F)
+
+keep <- filterByExpr(d0, mm)
+d <- d0[keep,]
+
+na.omit(d)
+```
+
+
+### Number of Expressed Genes
+
+Genes were filtered according to edgeR function "filterByExpr".
+
+```{r expressed, echo=FALSE}
+nrow(d)
+```
+
+### Visualizaing your data with a Multidimensional scaling (MDS) plot. 
+
+#### Colored by Group
+```{r mds1, fig.width=6, fig.height=8, echo=FALSE, warning=FALSE, message=FALSE}
+plotMDS(d, col = as.numeric(group), cex=1, plot = T)
+```
+
+#### Colored by Stage
+```{r mds2, fig.width=6, fig.height=8, echo=FALSE, warning=FALSE, message=FALSE}
+plotMDS(d, col = as.numeric(stage), cex=1, plot = T)
+```
+
+#### Colored by Timepoint
+```{r mds3, fig.width=6, fig.height=8, echo=FALSE, warning=FALSE, message=FALSE}
+plotMDS(d, col = as.numeric(ysi), cex=1, plot = T)
+```
+
+
+```{r, include = F}
+# Specify model formula to be used in limma.
+param <- SnowParam(4, "SOCK", progressbar=TRUE)
+form <- ~group*stage + (1|vine)
+
+# estimate weights using linear mixed model of dream
+vobjDream <- voomWithDreamWeights(d, form, metadata, BPPARAM=param)
+
+# Use emmeans to get contrasts
+z <- rnorm(n = nrow(mm))
+dummy.mod <- lm(as.formula(paste0("z", form.fixed)), 
+                data = metadata)
+
+# Contrasts between Groups
+pairs <- pairs(emmeans(dummy.mod, ~group | stage), reverse = TRUE)
+contrast.matrix <- pairs@linfct
+tmp <- pairs@grid
+rownames(contrast.matrix) <- paste0(tmp$contrast, "_", pairs@grid$stage)
+contrasts.group <- rownames(contrast.matrix)
+contrast.matrix.group <- contrast.matrix
+
+
+# Contrasts between stages
+pairs <- pairs(emmeans(dummy.mod, ~stage | group), reverse = TRUE)
+contrast.matrix <- pairs@linfct
+tmp <- pairs@grid
+rownames(contrast.matrix) <- paste0(tmp$contrast, "_", pairs@grid$group)
+contrasts.stage <- rownames(contrast.matrix)
+contrast.matrix.stage <- contrast.matrix
+
+contrast.matrix <- rbind(contrast.matrix.group, contrast.matrix.stage)
+
+L <- t(contrast.matrix)
+fitmm <- dream(vobjDream, form, metadata, L)
+fitmm <- eBayes(fitmm)
+```
+
+## Differential Expression Results
+
+### Output files include the columns:
+
+* logFC: log2 fold change, with the group listed first in the comparison or file name being the numerator of the fold change
+* AveExpr: Average expression across all samples, in log2 counts per million reads
+* P.Value: Raw p-value from the test that the log fold change differs from 0
+* adj.P.Val: Benjamini-Hochberg false discovery rate adjusted p-value
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+dir.create(file.path(getwd(), "./DE_Results"))
+dir.create(file.path(getwd(), "./DE_Results/BetweenGroups/"))
+tables <- lapply(contrasts.group, function(contr) {
+  # tmp <- contrasts.fit(fitmm, contrasts = contr)
+  # tmp <- eBayes(tmp)
+  tmp2 <- topTable(fitmm, coef = contr, n = Inf, sort.by = "P")
+  tmp2$Gene.stable.ID <- rownames(tmp2)
+  tmp2 <- left_join(tmp2, anno)
+  tmp2 <- dplyr::select(tmp2, Gene.stable.ID, logFC, t, AveExpr, P.Value, adj.P.Val, DB.xref, Description, Ensembl, NCBI)
+  filename <- gsub(" - ", "_v_", contr)
+  filename <- gsub(", ", "_", filename, fixed = T)
+  filename <- gsub("+", "", filename, fixed = T)
+  filename <- gsub(" ", "_", filename, fixed = T)
+  filename <- paste0(filename, "_DE_analysis")
+  filename <- paste0(filename, ".txt")
+  
+  write.table(tmp2, file = paste0("./DE_Results/BetweenGroups/",filename), sep = "\t", quote = F, row.names = F)
+  return(list('', nump = length(which(tmp2$adj.P.Val < 0.05))))
+})
+
+sigps <- unlist(lapply(tables, function(x)x[[2]]))
+sumtab <- data.frame(Comparison = contrasts.group, `Number of genes with adjusted P < 0.05` = sigps,
+                     check.names = F)
+
+sumtab %>%
+  kbl(align = 'c') %>%
+  add_header_above(c("Overview of results" = 2), font_size = "larger", bold = T, align = "l") %>%
+  kable_styling()
+```
+
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+dir.create(file.path(getwd(), "DE_Results/BetweenStages"))
+tables <- lapply(contrasts.stage, function(contr) {
+  tmp2 <- topTable(fitmm, coef = contr, n = Inf, sort.by = "P")
+  tmp2$Gene.stable.ID <- rownames(tmp2)
+  tmp2 <- left_join(tmp2, anno)
+  tmp2 <- dplyr::select(tmp2, Gene.stable.ID, logFC, t, AveExpr, P.Value, adj.P.Val, DB.xref, Description, Ensembl, NCBI)
+  filename <- gsub(" - ", "_v_", contr)
+  filename <- gsub(", ", "_", filename, fixed = T)
+  filename <- gsub("+", "", filename, fixed = T)
+  filename <- gsub(" ", "_", filename, fixed = T)
+  filename <- paste0(filename, "_DE_analysis")
+  filename <- paste0(filename, ".txt")
+  
+  write.table(tmp2, file = paste0("./DE_Results/BetweenStages/",filename), sep = "\t", quote = F, row.names = F)
+  return(list('', nump = length(which(tmp2$adj.P.Val < 0.05))))
+})
+
+sigps <- unlist(lapply(tables, function(x)x[[2]]))
+sumtab <- data.frame(Comparison = contrasts.stage, `Number of genes with adjusted P < 0.05` = sigps,
+                     check.names = F)
+
+sumtab %>%
+  kbl(align = 'c') %>%
+  add_header_above(c("Overview of results" = 2), font_size = "larger", bold = T, align = "l") %>%
+  kable_styling()
+```
+
+
+### Session Info
+```{r session}
+sessionInfo()
+```

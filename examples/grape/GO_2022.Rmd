@@ -1,0 +1,81 @@
+---
+title: "GO Enrichment of 2022 DE Results"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F, message = F)
+```
+
+```{r, include = FALSE}
+# source("make_orgdb.R")
+# install.packages("org.Vvinifera.eg.db/", repos = NULL, type = "source")
+library(org.Vvinifera.eg.db) # Made by running make_orgdb.R, not on Bioconductor
+library(clusterProfiler)
+library(kableExtra)
+library(dplyr)
+```
+
+# Methods
+GO term enrichment was performed using the Bioconductor package clusterProfiler, version `r sessionInfo()$otherPkgs$clusterProfiler$Version` [1]. This pathway enrichment packages implements a variation of the algorithm of Subramanian et al. developed for GSEA [2].  The input to the algorithm was the absolute value of the t statistics from differential expression analysis (meaning that testing is non-directional).  Analyses were conducted using `r sessionInfo()$R.version$version.string` [3].
+
+1. T Wu, E Hu, S Xu, M Chen, P Guo, Z Dai, T Feng, L Zhou, W Tang, L Zhan, X Fu, S Liu, X Bo, and G Yu. clusterProfiler 4.0: A universal enrichment tool for interpreting omics data. The Innovation. 2021, 2(3):100141
+
+2. Subramanian, Aravind, Pablo Tamayo, Vamsi K. Mootha, Sayan Mukherjee, Benjamin L. Ebert, Michael A. Gillette, Amanda Paulovich et al. "Gene set enrichment analysis: a knowledge-based approach for interpreting genome-wide expression profiles." Proceedings of the National Academy of Sciences 102, no. 43 (2005): 15545-15550.
+
+3. R Core Team (2022). R: A language and environment for statistical computing. R Foundation for Statistical Computing, Vienna, Austria. URL https://www.R-project.org/.
+
+# Results
+
+Gene set enrichment analysis output includes the following columns:
+
+* setSize: Number of genes in pathway
+
+* enrichmentScore: [GSEA enrichment score](https://www.gsea-msigdb.org/gsea/doc/GSEAUserGuideTEXT.htm#_Enrichment_Score_(ES)), a statistic reflecting the degree to which a pathway is overrepresented at the top or bottom of the gene list (the gene list here consists of the t-statistics from the DE test).
+
+* NES: [Normalized enrichment score](https://www.gsea-msigdb.org/gsea/doc/GSEAUserGuideTEXT.htm#_Normalized_Enrichment_Score)
+
+* pvalue: Raw p-value from permutation test of enrichment score
+
+* p.adjust: Benjamini-Hochberg false discovery rate adjusted p-value
+
+* qvalue: Storey false discovery rate adjusted p-value 
+
+* rank: Position in ranked list at which maximum enrichment score occurred
+
+* leading_edge: [Statistics from leading edge analysis](https://www.gsea-msigdb.org/gsea/doc/GSEAUserGuideTEXT.htm#_Detailed_Enrichment_Results)
+
+```{r}
+DE.files <- list.files("DE_Results_2022/", recursive = TRUE, full.names = TRUE)
+```
+
+```{r, include = FALSE}
+output <- lapply(DE.files, function(filename){
+  top.table <- read.delim(filename)
+  top.table <- subset(top.table, !is.na(NCBI) & !duplicated(NCBI))
+  geneList <- abs(top.table$t)
+  names(geneList) <- top.table$NCBI
+  geneList <- sort(geneList, decreasing = TRUE)
+  tmp <- gseGO(gene = geneList, ont = "all", OrgDb = "org.Vvinifera.eg.db", pvalueCutoff = 1, scoreType = "pos")
+  out <- as.data.frame(tmp)
+  outfile <- gsub("_DE_analysis.txt", "_GO.txt", basename(filename))
+  outfile <- file.path("GO_results_2022", outfile)
+  write.table(out, file = outfile, quote = FALSE, sep = "\t")
+  contrast <- gsub("_DE_analysis.txt", "", basename(filename))
+  tab <- kable(head(out, 100), caption = paste0("Top GO term enrichment analysis for ", contrast), row.names = FALSE) %>% kable_styling() %>% scroll_box(height = "500px")
+  plot <- dotplot(tmp)
+  return(list(tab, plot))
+})
+```
+
+```{r, results = "asis"}
+tmp <- lapply(output, function(out){
+  print(out[[1]])
+  print(out[[2]])
+})
+```
+
+# R session information
+```{r}
+sessionInfo()
+```
