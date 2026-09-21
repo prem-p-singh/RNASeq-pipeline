@@ -3,17 +3,20 @@
 setup.py — Central project setup wizard.
 
 Takes 7 minimal inputs (see scripts/setup_inputs.template.yaml) and produces
-every external file the pipeline needs to run:
+every external file the pipeline needs to run, inside ONE project directory:
 
-    config/config.yaml
-    config/samples.tsv
-    reference/annotation_info.tsv       (from NCBI)
-    reference/<org.XXX.eg.db>/          (built via AnnotationForge if needed)
+    <project>/config/config.yaml
+    <project>/config/samples.tsv
+    <project>/config/thresholds.yaml        (copied from the repo defaults)
+    <project>/reference/annotation_info.tsv (from NCBI)
+
+Nothing is written into the pipeline checkout, so several projects can share
+one copy of the pipeline without overwriting each other.
 
 Usage:
-    python scripts/setup.py setup_inputs.yaml
-    python scripts/setup.py --interactive
-    python scripts/setup.py                     # uses setup_inputs.yaml if present
+    python scripts/setup.py --project-dir ~/rnaseq_projects/my_study inputs.yaml
+    python scripts/setup.py --project-dir ~/rnaseq_projects/my_study --interactive
+    python scripts/setup.py          # current directory; uses its setup_inputs.yaml
 
 Design notes
 ------------
@@ -43,12 +46,30 @@ from typing import Any
 import yaml
 
 # --------------------------------------------------------------------- paths
+# Two roots, deliberately separate. ROOT is the pipeline checkout and is only
+# ever read from; PROJECT is one dataset's directory and is the only thing
+# written to, so several projects can share one checkout without colliding.
 ROOT = Path(__file__).resolve().parent.parent
-CONFIG_DIR = ROOT / "config"
 PRESETS_DIR = ROOT / "scripts" / "presets"
-REFERENCE_DIR = ROOT / "reference"
-TEMPLATE_CFG = CONFIG_DIR / "config.template.yaml"
-DECISIONS_LOG = ROOT / "gates" / "decisions.log"
+REPO_CONFIG_DIR = ROOT / "config"
+TEMPLATE_CFG = REPO_CONFIG_DIR / "config.template.yaml"
+TEMPLATE_THRESHOLDS = REPO_CONFIG_DIR / "thresholds.yaml"
+
+# Assigned by set_project() before any work happens.
+PROJECT = None
+CONFIG_DIR = None
+REFERENCE_DIR = None
+DECISIONS_LOG = None
+
+
+def set_project(path: Path):
+    """Point the writable paths at one project directory."""
+    global PROJECT, CONFIG_DIR, REFERENCE_DIR, DECISIONS_LOG
+    PROJECT = Path(path).resolve()
+    CONFIG_DIR = PROJECT / "config"
+    REFERENCE_DIR = PROJECT / "reference"
+    DECISIONS_LOG = PROJECT / "gates" / "decisions.log"
+    return PROJECT
 
 
 # ======================================================================= I/O
@@ -81,9 +102,12 @@ def gather_inputs(args) -> dict:
     if args.inputs_file and Path(args.inputs_file).exists():
         inputs = load_yaml(Path(args.inputs_file))
         log("INPUTS", f"loaded from {args.inputs_file}")
-    elif (ROOT / "setup_inputs.yaml").exists() and not args.interactive:
-        inputs = load_yaml(ROOT / "setup_inputs.yaml")
-        log("INPUTS", "loaded from setup_inputs.yaml")
+    # The project's own inputs file, not the checkout's: one shared
+    # setup_inputs.yaml in the repo is exactly how two projects overwrote
+    # each other's setup.
+    elif (PROJECT / "setup_inputs.yaml").exists() and not args.interactive:
+        inputs = load_yaml(PROJECT / "setup_inputs.yaml")
+        log("INPUTS", f"loaded from {PROJECT / 'setup_inputs.yaml'}")
     else:
         inputs = prompt_inputs()
 
@@ -585,7 +609,29 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("inputs_file", nargs="?", default=None)
     ap.add_argument("--interactive", action="store_true")
+    ap.add_argument("--project-dir", default=".",
+                    help="project directory to write config/ and reference/ into "
+                         "(default: current directory). Must not be the pipeline "
+                         "checkout, so projects cannot overwrite each other.")
     args = ap.parse_args()
+
+    proj = set_project(args.project_dir)
+    if proj == ROOT:
+        raise SystemExit(
+            f"--project-dir must not be the pipeline checkout ({ROOT}).\n"
+            f"Give the project its own directory, e.g.\n"
+            f"  python {Path(__file__).name} --project-dir ~/rnaseq_projects/<name> ...")
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+
+    # The Snakefile opens config/thresholds.yaml relative to its working
+    # directory, which is the project, so every project needs its own copy.
+    # Never overwrite one the user has already tuned.
+    proj_thresholds = CONFIG_DIR / "thresholds.yaml"
+    if not proj_thresholds.exists():
+        shutil.copyfile(TEMPLATE_THRESHOLDS, proj_thresholds)
+        log("CONFIG", f"seeded {proj_thresholds} from repo defaults")
+    else:
+        log("CONFIG", f"kept existing {proj_thresholds}")
 
     inputs = gather_inputs(args)
     org = resolve_organism(int(inputs["tax_id"]))
@@ -602,8 +648,11 @@ def main():
     print("\n" + "=" * 60)
     print(" Setup complete.")
     print("=" * 60)
+    print(f"  project:  {PROJECT}")
+    print(f"  workflow: {ROOT}")
     print(f"  config/config.yaml          ✓")
     print(f"  config/samples.tsv          ✓")
+    print(f"  config/thresholds.yaml      ✓")
     print(f"  reference/annotation_info.tsv   "
           f"{'✓' if (REFERENCE_DIR/'annotation_info.tsv').exists() else '⚠ skipped'}")
     if orgdb_status == "bioconductor":
@@ -621,12 +670,13 @@ def main():
         print("=" * 60)
         for p in problems:
             print(f"  - {p}")
-        print("\nFix reference.*_url in config/config.yaml, then run ./submit.sh.")
+        print(f"\nFix reference.*_url in {CONFIG_DIR / 'config.yaml'}, then run")
+        print(f"  {ROOT / 'submit.sh'} -d {PROJECT}")
         sys.exit(1)
 
     print("\nNext:")
-    print("  1. Review config/config.yaml and config/samples.tsv")
-    print("  2. Launch:  ./submit.sh")
+    print(f"  1. Review {CONFIG_DIR / 'config.yaml'} and {CONFIG_DIR / 'samples.tsv'}")
+    print(f"  2. Launch:  {ROOT / 'submit.sh'} -d {PROJECT}")
 
 
 if __name__ == "__main__":

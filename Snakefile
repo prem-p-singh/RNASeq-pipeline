@@ -35,12 +35,42 @@ samples = pd.read_csv(
 SAMPLES = samples.index.tolist()
 N_SAMPLES = len(SAMPLES)
 
+# --- Where the workflow itself lives -------------------------------------
+# Shell rules invoke helper scripts by path. Those live with the workflow, not
+# in the project, and the working directory is the project, so a repo-relative
+# path like "workflow/scripts/01_qc_quant.sh" would not resolve.
+# submit.sh passes --config repo_dir=<checkout>; the "." default keeps a bare
+# `snakemake` run from inside the checkout working as before.
+# Passed as config rather than read from a Snakemake attribute so the value is
+# explicit and survives into SLURM job invocations.
+REPO_DIR = Path(config.get("repo_dir", ".")).resolve()
+
 # --- Output roots --------------------------------------------------------
+# All relative, so they land in whatever directory the run was launched from.
+# submit.sh chdirs into the project first, which is what keeps two projects
+# using this one checkout out of each other's state.
 OUT = Path(config["project"]["output_dir"])
-REF = Path("reference")
 QUANT = OUT / "quant"
 METRICS = Path("metrics")
 GATES = Path("gates")
+
+# Reference artifacts (transcriptome, GTF, salmon index) are derived purely from
+# the assembly, so they can be shared between projects. Keying the cache by
+# accession means two projects on the same genome reuse one index, while two on
+# different genomes cannot overwrite each other. Set reference.cache_dir to null
+# to keep them inside the project instead.
+# Note: reference.annotation_tsv.path stays project-relative and is unaffected.
+#
+# ponytail: no lock on the shared cache. Two runs starting a build of the SAME
+# accession at the same moment can race, because Snakemake's lock covers a
+# working directory, not this cache. Add an flock around the index rules if that
+# becomes real; sequential runs and different accessions are already safe.
+_ref_cache = (config.get("reference") or {}).get("cache_dir")
+_accession = (config.get("reference") or {}).get("accession") or "unspecified_assembly"
+if _ref_cache:
+    REF = Path(os.path.expanduser(str(_ref_cache))) / str(_accession)
+else:
+    REF = Path("reference")
 
 for d in (OUT, REF, QUANT, METRICS, GATES):
     d.mkdir(parents=True, exist_ok=True)

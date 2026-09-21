@@ -34,7 +34,7 @@ rule qc_quant_sample:
     shell:
         """
         set -euo pipefail
-        bash workflow/scripts/01_qc_quant.sh \
+        bash {REPO_DIR}/workflow/scripts/01_qc_quant.sh \
             --sample {wildcards.sample} \
             --url "{params.fastq_url}" \
             --url2 "{params.fastq_url_r2}" \

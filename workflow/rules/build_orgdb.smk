@@ -67,7 +67,7 @@ rule build_orgdb:
         set -euo pipefail
         mkdir -p $(dirname {output.sentinel})
 
-        Rscript scripts/build_orgdb.R \
+        Rscript {REPO_DIR}/scripts/build_orgdb.R \
             --tax_id {params.tax_id} \
             --genus "{params.genus}" \
             --species "{params.species}" \

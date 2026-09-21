@@ -45,6 +45,12 @@ reference:
   # config yourself, otherwise the cache key degrades to "unknown".
   accession: null                               # e.g. "GCF_030704535.1"
   assembly_name: null                           # e.g. "ASM3070453v1"
+  # Shared cache for the transcriptome, GTF and salmon index, keyed by
+  # accession, so projects on the same genome reuse one index instead of each
+  # downloading and indexing their own. Set to null to keep them inside the
+  # project directory. annotation_tsv.path below is NOT affected; it stays
+  # project-relative.
+  cache_dir: "~/rnaseq_reference_cache"
   # URLs must be concrete filenames. A '*' here is a guaranteed Stage 0 failure:
   # curl does not expand globs. setup.py refuses to finish if one slips through.
   genome_fasta_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_genomic.fna.gz"
