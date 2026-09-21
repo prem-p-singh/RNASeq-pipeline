@@ -1,7 +1,7 @@
 #!/usr/bin/env Rscript
 # Self-checks for the non-trivial logic in the Stage 2/3 scripts:
-#   03_de.R       build_contrasts(), validate_design()
-#   02_aggregate.R biological_replicates()
+#   03_de.R       build_contrasts()
+#   _design.R     validate_design(), biological_replicates()
 #
 # What must not break:
 #   - a contrast named "treated_vs_control" must actually mean treated minus
@@ -31,10 +31,13 @@ load_fns <- function(path, names) {
     stop("not found in ", path, ": ", paste(missing, collapse = ", "))
   }
 }
+# _design.R is a plain sourceable file, so it loads directly.
+source(file.path("workflow", "scripts", "_design.R"))
+
 load_fns(file.path("workflow", "scripts", "03_de.R"),
-         c("build_contrasts", "validate_design"))
+         c("build_contrasts"))
 load_fns(file.path("workflow", "scripts", "02_aggregate.R"),
-         c("biological_replicates", "sample_disposition"))
+         c("sample_disposition"))
 load_fns(file.path("workflow", "scripts", "04_enrichment.R"),
          c("go_skip_because", "kegg_skip_because"))
 

@@ -20,6 +20,10 @@ rule aggregate_counts:
         counts = OUT / "counts.tsv",
         metrics = METRICS / "aggregate.json",
         disposition = OUT / "sample_disposition.tsv",
+    params:
+        # Shared study-design helpers, so this stage, preflight and Stage 3
+        # cannot disagree about replicate counts or estimability.
+        design_lib = lambda wc: str(REPO_DIR / "workflow" / "scripts" / "_design.R"),
     resources:
         mem_mb = 8000,
         runtime = 30,
@@ -41,6 +45,7 @@ rule differential_expression:
         model_fixed = config["model"]["fixed_effects"],
         model_random = config["model"].get("random_effects"),
         primary = config["model"]["primary_factor"],
+        design_lib = lambda wc: str(REPO_DIR / "workflow" / "scripts" / "_design.R"),
     resources:
         mem_mb = 16000,
         runtime = 120,
