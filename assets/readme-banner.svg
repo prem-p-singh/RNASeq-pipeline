@@ -68,10 +68,10 @@
 
   <text x="176" y="212" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
         font-size="13.5" fill="#B9CCC2">
-    The design is checked for estimability before any data is fetched, so an unfittable model costs seconds, not a cohort of compute.
+    Study design is validated for estimability before data retrieval begins. Unsupported assay, design and backend combinations are rejected at preflight.
   </text>
   <text x="176" y="234" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
         font-size="12.5" fill="#93AFA1">
-    Green stages have run on real data. Blue stages are implemented and not yet executed end to end.
+    Green: executed on real data.   Blue: implemented, not yet executed end to end.
   </text>
 </svg>
