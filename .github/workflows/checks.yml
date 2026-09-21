@@ -3,14 +3,16 @@ name: self-checks
 # Runs the same tests/run_all.sh you run locally. Dormant until this repo has a
 # GitHub remote; pushing it there is all that is needed to activate it.
 #
-# Deliberately does NOT install the Bioconductor stack. Installing WGCNA, edgeR,
-# limma, emmeans and variancePartition takes tens of minutes per run, and the
-# scientific correctness of those stages is not what this job is guarding: it
+# Installs base R and jsonlite, but NOT the Bioconductor stack. preflight shells
+# out to Rscript for its estimability check, so without base R the preflight and
+# project-isolation checks cannot run at all. WGCNA, edgeR, limma, emmeans and
+# variancePartition are a different matter: they take tens of minutes to install,
+# and the scientific correctness of those stages is not what this job guards. It
 # guards the plumbing (path handling, sample matching, storage policy, project
-# isolation, report truthfulness). run_all.sh reports the two R checks as SKIP
-# here, and the job log prints the skip count, so the gap is visible rather than
-# silently counted as a pass. Run them locally, or on FARM inside the conda
-# environment, before trusting downstream output.
+# isolation, report truthfulness). run_all.sh reports check_de.R and
+# check_wgcna.R as SKIP here and prints the skip count, so the gap stays visible
+# rather than being silently counted as a pass. Run those locally, or on FARM
+# inside the conda environment, before trusting downstream output.
 
 on:
   push:
@@ -30,6 +32,13 @@ jobs:
 
       - name: Install python dependencies
         run: python3 -m pip install --quiet pyyaml openpyxl
+
+      - name: Install base R (preflight's estimability check shells out to it)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq r-base-core
+          Rscript -e 'install.packages("jsonlite", repos="https://cloud.r-project.org")'
+          Rscript -e 'stopifnot(requireNamespace("jsonlite", quietly=TRUE)); cat("jsonlite ok\n")' 
 
       - name: Shell syntax
         run: |
