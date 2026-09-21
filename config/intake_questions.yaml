@@ -33,7 +33,7 @@ common_questions:
 
   - id: contact_email
     text: "Contact email"
-    help: "Where SLURM job notifications go. Example: yourname@ucdavis.edu"
+    help: "Where SLURM job notifications go. Example: you@example.edu"
     type: text
     required: true
 
