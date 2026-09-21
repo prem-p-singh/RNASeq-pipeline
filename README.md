@@ -1,191 +1,266 @@
-# RNA-Seq Pipeline
+<div align="center">
 
-A generic, HPC-aware, adaptive RNA-Seq analysis pipeline. Runs on any dataset with a sample sheet and a config file — no code changes needed to swap species, experimental design, or project.
+<img src="./assets/readme-banner.svg" alt="RNA-Seq pipeline: preflight, reference, quantify, differential expression, enrichment and WGCNA" width="100%" />
 
-Built for a **20 GB storage budget** on a SLURM cluster, with **storage-aware concurrency** (the launcher caps how many samples are in flight so the working set stays inside the budget) and **adaptive downstream decisions** (DE backend, batch correction, enrichment filtering, WGCNA skip) driven by metrics from prior stages.
+### A reproducible RNA-Seq workflow that refuses to run an analysis it cannot support
+
+Swap species, assay, or experimental design by editing configuration. No code changes, no per-project forks.
+
+[![self-checks](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/checks.yml/badge.svg)](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/checks.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-285F47?style=flat-square)](LICENSE)
+[![Snakemake](https://img.shields.io/badge/Snakemake-9.19-397C68?style=flat-square)](https://snakemake.readthedocs.io)
+[![Python](https://img.shields.io/badge/Python-3.12-46567D?style=flat-square&logo=python&logoColor=white)](https://www.python.org)
+[![R](https://img.shields.io/badge/R-Bioconductor-9C482D?style=flat-square&logo=r&logoColor=white)](https://bioconductor.org)
+
+</div>
 
 ---
 
-## Quick start
+## 🧭 Where to look
 
-Each project gets its own directory. The pipeline checkout is read-only at run
-time, so several projects can share one copy without overwriting each other.
+| | Area | What lives there | Open |
+|---|---|---|---|
+| 🚦 | **Preflight** | Validates config, metadata and study design before any compute | [scripts/preflight.py](scripts/preflight.py) |
+| 📐 | **Capability spec** | The assays, designs and backends this pipeline claims to support | [config/spec.yaml](config/spec.yaml) |
+| ⚙️ | **Configuration** | Every knob, with the template doubling as the schema | [config/config.template.yaml](config/config.template.yaml) |
+| 🧪 | **Self-checks** | Seven runnable checks, no test framework | [tests/](tests/) |
+| 🧬 | **Worked example** | The grapevine study this was refactored from | [examples/grape/](examples/grape/) |
+| 📖 | **Architecture** | Stages, decision gates, storage budget | [DESIGN.md](DESIGN.md) |
 
-**Guided (recommended).** From your Mac, upload a metadata spreadsheet and start
-the wizard on FARM:
+---
+
+## 🔁 The path a dataset takes
+
+<p align="center">
+  <strong>🚦 Validate &nbsp;➜&nbsp; 📚 Reference &nbsp;➜&nbsp; 🔬 Quantify &nbsp;➜&nbsp; 🧹 Disposition &nbsp;➜&nbsp; 📊 Model &nbsp;➜&nbsp; 🎯 Evidence</strong>
+</p>
+
+The organising idea is that a result is only worth having when the design behind it was estimable, the samples that produced it are accounted for, and every stage that did not run says why.
+
+<table>
+<tr>
+<td width="50%" valign="top">
+<h3 align="center">🔬 Measurement</h3>
+<p align="center">Reads to transcript abundance, with QC that distinguishes absent from zero.</p>
+<p align="center">
+<img src="https://img.shields.io/badge/fastp_0.23.4-285F47?style=for-the-badge" alt="fastp" />
+<img src="https://img.shields.io/badge/Salmon_1.10.3-397C68?style=for-the-badge" alt="Salmon" />
+<img src="https://img.shields.io/badge/MultiQC-9C482D?style=for-the-badge" alt="MultiQC" />
+<img src="https://img.shields.io/badge/tximport-7A5B16?style=for-the-badge" alt="tximport" />
+</p>
+</td>
+<td width="50%" valign="top">
+<h3 align="center">📊 Inference</h3>
+<p align="center">Declarative contrasts, estimability enforced, per-contrast status recorded.</p>
+<p align="center">
+<img src="https://img.shields.io/badge/limma--voom-46567D?style=for-the-badge" alt="limma-voom" />
+<img src="https://img.shields.io/badge/dream-285F47?style=for-the-badge" alt="dream" />
+<img src="https://img.shields.io/badge/emmeans-9C482D?style=for-the-badge" alt="emmeans" />
+<img src="https://img.shields.io/badge/clusterProfiler-7A5B16?style=for-the-badge" alt="clusterProfiler" />
+<img src="https://img.shields.io/badge/WGCNA-397C68?style=for-the-badge" alt="WGCNA" />
+</p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<h3 align="center">🖥️ Execution</h3>
+<p align="center">Three concurrency tiers chosen from cohort size, capped by a storage budget.</p>
+<p align="center">
+<img src="https://img.shields.io/badge/Snakemake_9.19-1D2621?style=for-the-badge" alt="Snakemake" />
+<img src="https://img.shields.io/badge/SLURM-46567D?style=for-the-badge" alt="SLURM" />
+<img src="https://img.shields.io/badge/conda-285F47?style=for-the-badge&logo=anaconda&logoColor=white" alt="conda" />
+</p>
+</td>
+<td width="50%" valign="top">
+<h3 align="center">🛡️ Guardrails</h3>
+<p align="center">23 stable issue codes, per-project isolation, cleanup that never touches your source reads.</p>
+<p align="center">
+<img src="https://img.shields.io/badge/Preflight_gate-9C482D?style=for-the-badge" alt="Preflight gate" />
+<img src="https://img.shields.io/badge/Issue_codes-7A5B16?style=for-the-badge" alt="Issue codes" />
+<img src="https://img.shields.io/badge/GitHub_Actions-2088FF?style=for-the-badge&logo=githubactions&logoColor=white" alt="GitHub Actions" />
+</p>
+</td>
+</tr>
+</table>
+
+---
+
+## 🚦 Preflight, the part worth knowing about
+
+`submit.sh` runs [preflight](scripts/preflight.py) first and refuses to submit if it reports an error. In seconds, before a single FASTQ is fetched, it checks:
+
+| Check | What it catches |
+|---|---|
+| **Configuration** | Unknown keys and wrong types, validated against the template, so a typo is rejected rather than ignored |
+| **Scope** | Assays, designs and backends outside [`config/spec.yaml`](config/spec.yaml), rejected by name instead of half-working |
+| **Metadata** | Duplicate or blank sample ids, model columns that do not exist, factors with only one level |
+| **Estimability** | Rank deficiency, residual degrees of freedom, and independent biological replicates |
+
+That last row is the one that pays for itself. An unfittable model used to surface only in Stage 3, after the whole cohort had been quantified. Preflight calls the same [`_design.R`](workflow/scripts/_design.R) that the DE stage uses, so the two cannot reach different verdicts.
+
+It writes `gates/preflight_issues.tsv` (code, severity, scope, remedy) and `gates/preflight_plan.json`, which names every stage and, for each one that will not run, why not.
+
+```text
+  assay=tagseq  design=independent_groups  backend=limma_voom  count_treatment=no
+  samples=6  model_vars=treatment  unit=sample
+  design: 2 coefficients, 4 residual df, 3 biological replicates per sample
+  stages: reference, quantification, aggregation, differential_expression, enrichment, report
+    not planned: wgcna (downstream.run_wgcna is false)
+```
+
+---
+
+## 📋 What is supported
+
+| Capability | Status | Notes |
+|---|---|---|
+| Paired-end bulk RNA-seq | ✅ Supported | Both mates required for every library |
+| Single-end bulk RNA-seq | ✅ Supported | Length-corrected abundance |
+| 3′ TAGseq | ⚠️ Provisional | Counts are not length-corrected. No kit validated yet, and preflight says so |
+| Independent groups, factorial | ✅ Supported | limma-voom; contrasts must be estimable |
+| Repeated measures | ✅ Supported | dream; replicates counted as units, not rows |
+| Non-model organisms | ⚠️ Conditional | Needs compatible annotation and identifier coverage |
+| Enrichment, WGCNA | 🔵 Optional | Unavailable rather than silently empty when prerequisites are missing |
+| Small RNA, single-cell, UMI protocols | ❌ Not supported | Rejected by name with a reason |
+| Multi-lane merging, external quant import | ❌ Not supported | Merge lanes before running |
+
+---
+
+## 📊 Honest status
+
+| Stage | Implemented | Executed on real data |
+|---|---|---|
+| 0 · Reference and index | ✅ | ✅ |
+| 1 · QC and quantification | ✅ | ✅ |
+| 2 · Aggregation | ✅ | **Not yet** |
+| 3 · Differential expression | ✅ | **Not yet** |
+| 4 · Enrichment | ✅ | **Not yet** |
+| 5 · WGCNA | ✅ | **Not yet** |
+
+All five stages are written, as parameterized refactors of [`examples/grape/`](examples/grape/). Stages 2 to 5 have not been run end to end: the cluster's R module does not provide tximport, variancePartition, clusterProfiler or WGCNA, so they need the conda environment in [`environment.yml`](environment.yml). Building it is the next step before any downstream output should be trusted.
+
+---
+
+## 🚀 Quick start
+
+Each project gets its own directory. The checkout is read-only at run time, so several projects share one copy without overwriting each other.
+
+<details open>
+<summary><strong>Guided setup</strong></summary>
+
+From your laptop, upload a metadata spreadsheet and start the wizard on the cluster:
 
 ```bash
 scripts/start_new.sh <project_name> <metadata_file> [fastq_dir]
 ```
 
-That uploads into `~/new_project_inbox/<project_name>/` and drops you into
-`scripts/new_project.sh`, which detects the sample-ID and factor columns, asks a
-few questions, then runs setup and launches. The project lands in
-`~/rnaseq_projects/<project_name>/` (override with `RNASEQ_PROJECTS_ROOT`).
+It detects the sample-ID and factor columns, asks a few questions, then runs setup and launches. The project lands in `~/rnaseq_projects/<project_name>/`, overridable with `RNASEQ_PROJECTS_ROOT`.
 
-**By hand**, if you would rather drive it yourself:
+</details>
+
+<details>
+<summary><strong>By hand</strong></summary>
 
 ```bash
 PROJ=~/rnaseq_projects/my_study
 mkdir -p "$PROJ"
 
-# 1. Fill in 7 minimal fields
+# 1. Seven minimal fields
 cp scripts/setup_inputs.template.yaml "$PROJ/setup_inputs.yaml"
-$EDITOR "$PROJ/setup_inputs.yaml"     # project name, taxID, fastq source, metadata file, ...
+$EDITOR "$PROJ/setup_inputs.yaml"
 
-# 2. Setup wizard: writes config.yaml, samples.tsv, thresholds.yaml and the
-#    NCBI annotation table into the project, and resolves the OrgDb
+# 2. Writes config.yaml, samples.tsv, thresholds.yaml and the NCBI
+#    annotation table into the project, and resolves the OrgDb
 python3 scripts/setup.py --project-dir "$PROJ" "$PROJ/setup_inputs.yaml"
 
-# 3. Check the project before spending any compute on it (optional: submit.sh
-#    runs this itself and refuses to submit if it finds errors)
+# 3. Check the project before spending compute on it
 python3 scripts/preflight.py -d "$PROJ"
 
-# 4. Launch. The submitter counts samples, picks the SLURM tier, and caps
-#    concurrency to stay inside the storage budget
+# 4. Launch. Counts samples, picks the SLURM tier, caps concurrency
+#    so the working set stays inside the storage budget
 ./submit.sh -d "$PROJ"
 
-# 5. Resume after any interruption: same command
+# 5. Resume after any interruption: the same command
 ./submit.sh -d "$PROJ"
 ```
 
-The first run for a given genome fetches the reference and builds a Salmon index.
-Those are cached in `~/rnaseq_reference_cache/<accession>/` and shared by every
-project on that assembly, so it happens once, not once per project.
-See [**INPUTS.md**](INPUTS.md) for the full list of what the wizard generates.
+</details>
 
-`intake_template.xlsx` is a **planning aid**: it lists every decision you will be
-asked about so you can work them out beforehand. Nothing parses it; you type the
-answers into the prompts. `rnaseq_pipeline.n8n.json` is likewise a **diagram** of
-the stages for reading in n8n, not an executable workflow.
+<details>
+<summary><strong>📁 Repository map</strong></summary>
 
----
-
-## Where to read next
-
-| Doc | Read when you want to… |
-|---|---|
-| [**INPUTS.md**](INPUTS.md) | Use the setup wizard — 7 inputs, auto-generates everything external |
-| [**DESIGN.md**](DESIGN.md) | Understand the architecture, stages, decision gates, and storage budget |
-| [**STRATEGY.md**](STRATEGY.md) | Understand how `./submit.sh -d <project>` auto-picks small / medium / large SLURM tier based on sample count |
-| [`config/config.template.yaml`](config/config.template.yaml) | See every knob you can set per project |
-| [`config/thresholds.yaml`](config/thresholds.yaml) | See default decision-gate cutoffs (mapping rate, WGCNA power, etc.) |
-| [`examples/grape/`](examples/grape/) | The worked example — original grape/GRBV project that this pipeline was refactored from |
-
----
-
-## Directory map
-
-```
-RNASeq_pipeline/
-├── README.md                ← you are here
-├── DESIGN.md                ← architecture + decision gates
-├── STRATEGY.md              ← three-tier auto-selection
-│
-├── Snakefile                ← Snakemake entry point
-├── submit.sh                ← launcher (counts samples, picks tier)
-│
-├── scripts/
-│   ├── preflight.py         ← validates a project before any compute
-│   ├── setup.py             ← generates a project's config from 7 inputs
-│   └── new_project.sh       ← guided setup on FARM
-│
-├── config/
-│   ├── spec.yaml            ← supported assays/designs/backends + issue codes
-│   ├── config.template.yaml ← also the schema: preflight rejects unknown keys
-│   ├── thresholds.yaml
-│   └── samples.tsv.template
-│
-├── profiles/
-│   ├── small/               ← ≤ 20 samples, serial
-│   ├── medium/              ← 21–200 samples, 20 concurrent
-│   └── large/               ← 201+ samples, throttled
-│
-├── workflow/
-│   ├── rules/
-│   │   ├── common.smk       ← helpers (logging, metrics)
-│   │   ├── retrieve.smk     ← Stage 0: fetch ref + build Salmon index
-│   │   ├── per_sample.smk   ← Stage 1: one SLURM task per sample
-│   │   └── aggregate.smk    ← Stages 2–5: DE, enrichment, WGCNA
-│   └── scripts/
-│       ├── 01_qc_quant.sh           ← fastp + salmon, releases intermediates
-│       ├── 02_aggregate.R           ← tximport + sample disposition
-│       ├── 03_de.R                  ← limma-voom or dream, declarative contrasts
-│       ├── 04_enrichment.R          ← GO + KEGG, per-contrast status
-│       └── 05_wgcna.R               ← WGCNA, blocks sized to the allocation
-│
-├── tests/                   ← runnable self-checks (see below)
-└── examples/
-    └── grape/               ← worked example (original .Rmd / .R sources)
+```text
+Snakefile                   Workflow entry point
+submit.sh                   Launcher: preflight, tier selection, storage cap
+scripts/
+  preflight.py              Validates a project before any compute
+  setup.py                  Generates a project config from seven inputs
+  new_project.sh            Guided setup on the cluster
+  presets/                  Curated organism facts, keyed by NCBI taxID
+config/
+  spec.yaml                 Supported assays, designs, backends, issue codes
+  config.template.yaml      Every knob, and the schema preflight validates against
+  thresholds.yaml           Decision-gate cutoffs
+workflow/
+  rules/                    One module per stage
+  scripts/                  Stage implementations, plus shared _design.R
+tests/                      Seven runnable self-checks
+examples/grape/             The study this was refactored from
 ```
 
-Each run writes into its own project directory, not here:
+A run writes into its project, never here:
 
-```
+```text
 ~/rnaseq_projects/<name>/
-├── config/                  ← config.yaml, samples.tsv, thresholds.yaml
-├── results/                 ← counts, DE_Results, Enrichment, WGCNA
-├── gates/
-│   ├── preflight_issues.tsv ← codes, severity, remedy
-│   ├── preflight_plan.json  ← counts, design facts, planned stages
-│   └── decisions.log        ← every automatic decision this run made
-├── metrics/                 ← per-stage *.json (drives the next stage)
-└── logs/                    ← per-rule logs
+  config/                   config.yaml, samples.tsv, thresholds.yaml
+  results/                  counts, DE_Results, Enrichment, WGCNA
+  gates/                    preflight_issues.tsv, preflight_plan.json, decisions.log
+  metrics/                  per-stage JSON, drives the next stage
+  logs/                     per-rule logs
 
-~/rnaseq_reference_cache/<accession>/   ← transcriptome, GTF, salmon index
-                                          (shared by projects on that assembly)
+~/rnaseq_reference_cache/<accession>/    transcriptome, GTF, salmon index
+                                         shared by every project on that assembly
 ```
 
----
+</details>
 
-## Pipeline status
+<details>
+<summary><strong>🧪 Run the self-checks</strong></summary>
 
-| Stage | Implemented | Executed on real data |
-|---|---|---|
-| 0 — fetch reference + index | yes (`workflow/rules/retrieve.smk`) | yes |
-| 1 — per-sample QC + quant | yes (`workflow/scripts/01_qc_quant.sh`) | yes |
-| 2 — aggregate counts | yes (`workflow/scripts/02_aggregate.R`) | **not yet** |
-| 3 — differential expression | yes (`workflow/scripts/03_de.R`) | **not yet** |
-| 4 — enrichment (GO + KEGG) | yes (`workflow/scripts/04_enrichment.R`) | **not yet** |
-| 5 — WGCNA | yes (`workflow/scripts/05_wgcna.R`) | **not yet** |
-
-All five stages are written, as parameterized refactors of the `examples/grape/`
-files. Stages 2 to 5 have **not** been run end to end yet: FARM's `R/4.4.2`
-module does not provide tximport, variancePartition, clusterProfiler or WGCNA, so
-they need the conda environment in `environment.yml`. Creating that environment is
-the next step before trusting any downstream output.
-
-## Preflight
-
-`submit.sh` runs `scripts/preflight.py` first and refuses to submit if it reports
-an error. It checks, in seconds and before any data is fetched:
-
-- configuration keys against `config/config.template.yaml`, so a typo is rejected
-  rather than silently ignored
-- the assay, design family and DE backend against `config/spec.yaml`, which is
-  the machine-readable record of what this pipeline claims to support
-- the sample sheet: duplicate ids, blank ids, model columns that do not exist,
-  model variables with only one level
-- **model estimability**: rank deficiency, residual degrees of freedom, and
-  independent biological replicates. This previously only surfaced in Stage 3,
-  after the whole cohort had been quantified.
-
-It writes `gates/preflight_issues.tsv` (stable issue codes, severity, remedy) and
-`gates/preflight_plan.json` (counts, design facts, and which stages will run and
-why not). The estimability check calls the same `workflow/scripts/_design.R` that
-Stage 3 uses, so preflight and the DE stage cannot reach different verdicts.
-
-## Self-checks
-
-No test framework; each file is a script that exits non-zero on failure.
+No test framework. Each file is a script that exits non-zero on failure.
 
 ```bash
-Rscript tests/check_de.R                # contrasts, design estimability, sample disposition
-Rscript tests/check_wgcna.R             # block sizing, recorded parameters
-python3 tests/check_setup_helpers.py    # URL resolution, mate detection, sample matching
-python3 tests/check_qc_report.py        # missing-vs-zero metrics, stale sample dirs
-python3 tests/check_preflight.py        # issue codes, scope matrix, estimability gate
-bash    tests/check_storage_policy.sh   # intermediate cleanup, source FASTQs preserved
-bash    tests/check_project_isolation.sh  # two projects cannot touch each other's state
-bash    tests/run_all.sh                # all of the above, one line each
+bash tests/run_all.sh
 ```
+
+```text
+Self-checks
+  PASS  check_de.R                    contrasts, estimability, sample disposition
+  PASS  check_wgcna.R                 block sizing, recorded parameters
+  PASS  check_setup_helpers.py        URL resolution, mate detection, sample matching
+  PASS  check_qc_report.py            missing-vs-zero metrics, stale sample dirs
+  PASS  check_preflight.py            issue codes, scope matrix, estimability gate
+  PASS  check_storage_policy.sh       cleanup, source FASTQs preserved
+  PASS  check_project_isolation.sh    two projects cannot touch each other's state
+```
+
+Checks whose libraries are absent report `SKIP` with the reason and are counted separately. A skipped check is not a passed check. CI installs base R but not the Bioconductor stack, so `check_de.R` and `check_wgcna.R` skip there and the skip count is printed.
+
+</details>
+
+---
+
+<div align="center">
+
+### Built by Prem Pratap Singh
+
+Postdoctoral Scholar, Viticulture and Enology, UC Davis
+
+[![Portfolio](https://img.shields.io/badge/Portfolio-prempsingh.com-285F47?style=flat-square)](https://www.prempsingh.com)
+[![Google Scholar](https://img.shields.io/badge/Google_Scholar-Research-4285F4?style=flat-square&logo=googlescholar&logoColor=white)](https://scholar.google.com/citations?user=UGFMZEYAAAAJ&hl=en)
+[![ORCID](https://img.shields.io/badge/ORCID-0000--0001--7921--9379-A6CE39?style=flat-square&logo=orcid&logoColor=white)](https://orcid.org/0000-0001-7921-9379)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Connect-0A66C2?style=flat-square&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/prem-p-singh)
+
+**🚦 Validate &nbsp;➜&nbsp; 🔬 Measure &nbsp;➜&nbsp; 📊 Model &nbsp;➜&nbsp; 🎯 Evidence**
+
+</div>
