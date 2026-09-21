@@ -79,10 +79,14 @@ fi
 
 run check_storage_policy.sh  "bash tests/check_storage_policy.sh"
 
-if have_py_mods yaml; then
+# submit.sh runs preflight, and preflight shells out to Rscript for the
+# estimability check, so this needs R even though the isolation behaviour
+# it tests does not.
+if have_py_mods yaml && command -v Rscript >/dev/null 2>&1 \
+   && have_r_pkgs jsonlite; then
     run check_project_isolation.sh "bash tests/check_project_isolation.sh"
 else
-    skip check_project_isolation.sh "needs pyyaml (submit.sh reads config with it)"
+    skip check_project_isolation.sh "needs pyyaml, Rscript and jsonlite (submit.sh runs preflight)"
 fi
 
 echo
