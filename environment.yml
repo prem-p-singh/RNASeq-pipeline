@@ -1,0 +1,79 @@
+# =============================================================================
+# Complete conda environment for the RNA-Seq pipeline.
+#
+# This file is the whole runtime: Python, R, Bioconductor, and the
+# preprocessing/quantification binaries. Nothing is expected to come from
+# cluster modules or a user R library, because mixing a module-provided R with
+# conda-installed Bioconductor packages is an ABI accident waiting to happen.
+#
+# Build:
+#   module load conda/base            # FARM only, to get `conda` on PATH
+#   conda env create -f environment.yml
+#
+# Update an existing env:
+#   conda env update -n rnaseq-pipeline -f environment.yml --prune
+#
+# Lock the exact solve (do this once after the first successful build, and
+# commit the result alongside your analysis):
+#   conda activate rnaseq-pipeline
+#   conda env export --no-builds > environment.lock.yml
+#
+# SIZE: R + Bioconductor makes this a multi-GB environment. On a 20 GB home
+# quota that is affordable but not free -- check `df -h ~` before building.
+# =============================================================================
+
+name: rnaseq-pipeline
+
+channels:
+  - conda-forge
+  - bioconda
+
+dependencies:
+  # --- Python runtime + workflow engine -------------------------------------
+  - python=3.12
+  - snakemake=9.19.0
+  - snakemake-executor-plugin-slurm
+  - pandas=2.3.3
+  - pyyaml=6.0.3
+  - openpyxl=3.1.5
+
+  # --- QC aggregation + reporting (workflow/rules/qc_report.smk) ------------
+  - multiqc>=1.25
+  - matplotlib>=3.7
+
+  # --- Preprocessing + quantification (Stages 0-1) --------------------------
+  # Pinned deliberately to the versions the existing quantifications were
+  # produced with. Salmon index format is not portable across major versions,
+  # so bumping to 2.x requires rebuilding every index and re-running Stage 1.
+  - salmon=1.10.3
+  - fastp=0.23.4
+
+  # --- R runtime (Stages 2-5) -----------------------------------------------
+  # r-base is intentionally unpinned: the Bioconductor packages below constrain
+  # it, and pinning both is the fastest way to an unsolvable environment.
+  - r-base
+  - r-optparse
+  - r-readr
+  - r-jsonlite
+  - r-dplyr
+  - r-tibble
+  - r-emmeans
+  - r-wgcna=1.74
+
+  # --- Bioconductor ---------------------------------------------------------
+  - bioconductor-tximport=1.38.2
+  - bioconductor-genomicfeatures
+  - bioconductor-txdbmaker=1.6.2
+  - bioconductor-annotationdbi
+  - bioconductor-annotationforge=1.52.0
+  - bioconductor-edger
+  - bioconductor-limma
+  - bioconductor-variancepartition=1.40.2
+  - bioconductor-clusterprofiler=4.18.4
+  - bioconductor-gosemsim=2.36.0
+
+  # --- Optional: S3 input ---------------------------------------------------
+  # Only needed when samples.tsv points at s3:// URLs. Left out by default so
+  # the environment stays smaller; without it an s3:// source fails loudly with
+  # "aws: command not found" rather than silently.
+  # - awscli

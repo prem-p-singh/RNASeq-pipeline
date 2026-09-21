@@ -1,0 +1,68 @@
+# =============================================================================
+# Decision-gate thresholds — defaults for all projects.
+# Override any of these in config.yaml under `thresholds:` (see config.template.yaml).
+# =============================================================================
+
+# Per-sample QC (Stage 1)
+sample_qc:
+  mapping_rate_min: 0.60         # < this → sample flagged, excluded from downstream
+  min_reads_on_genes_tagseq: 3000000     # handbook p7: 3-10M typical for TAGseq
+  min_reads_on_genes_rnaseq: 20000000    # handbook p7: 20-40M for bulk RNA-seq DE
+  duplication_rate_warn: 0.30    # handbook A: > 30% duplication = over-amplified
+
+# Differential-expression "biologically meaningful" filter (handbook 10.2.3)
+# Statistically significant but tiny fold-changes are filtered out of the
+# *_DE_meaningful.tsv tables. The full *_DE_analysis.tsv keeps everything.
+de_meaningful:
+  adjp_max: 0.05
+  log2fc_min: 1.0                # |log2FC| >= 1 = 2-fold change minimum
+
+# Aggregate (Stage 2)
+aggregate:
+  library_size_cv_warn: 3.0      # CV across samples above this → warning
+  sample_min_fraction_of_median: 0.10   # sample below (median / 10) → flag
+
+# Differential expression backend (Stage 3) is NOT configurable: it follows the
+# declared model. Random effects in model.random_effects -> dream, otherwise
+# limma-voom. A design that cannot support the model stops in 03_de.R rather
+# than falling back to a different test. See 02_aggregate.R.
+
+# Batch correction (Stage 3)
+batch_correction:
+  pc_var_fraction_trigger: 0.30  # batch explains >30% of PC1-2 var → auto-add covariate
+  min_confound_distance: 0.20    # Cramer's V between batch and condition must be < this
+
+# DE result sanity (Stage 3)
+de_sanity:
+  sig_genes_too_many: 5000       # > this per contrast → flag (likely confounder)
+  sig_genes_zero_action: "gsea_absolute"  # if 0 sig, rank by |t| not signed t
+
+# Enrichment (Stage 4)
+enrichment:
+  # Below this fraction of genes mapping to usable identifiers, the contrast
+  # fails instead of enriching a small unrepresentative subset and reporting
+  # it as a result.
+  min_id_mapping_rate: 0.30
+  sig_terms_simplify_trigger: 20
+  go_simplify_cutoff: 0.70       # GOSemSim similarity cutoff
+  go_simplify_by: "p.adjust"
+  go_simplify_select_fun: "min"
+
+# WGCNA (Stage 5)
+wgcna:
+  min_samples: 15                # < this → skip WGCNA entirely
+  target_r2: 0.85
+  power_cap: 30                  # blockwiseModules hard limit
+  max_modules: 50                # > this → re-run with larger mergeCutHeight
+  merge_cut_height_default: 0.25
+  merge_cut_height_bumped: 0.35
+
+# Tier selection (submit.sh)
+tiers:
+  small_max_samples: 20
+  medium_max_samples: 200
+  reserved_gb: 4                 # index + annotation + outputs headroom
+  fastq_size_estimate_gb:
+    tagseq: 0.5
+    rnaseq_single: 2.0
+    rnaseq_paired: 4.0

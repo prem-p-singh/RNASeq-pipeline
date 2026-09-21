@@ -1,0 +1,26 @@
+# SLURM profile — SMALL tier (≤ 20 samples)
+# Single concurrent job; serial per-sample execution. Debug-friendly.
+
+executor: slurm
+jobs: 1
+max-jobs-per-second: 1
+max-status-checks-per-second: 1
+restart-times: 2
+latency-wait: 30
+
+# Default per-rule SLURM resources. Rules override via `resources:` blocks.
+default-resources:
+  - slurm_account=publicgrp
+  - slurm_partition=low
+  - slurm_qos=publicgrp-low-qos
+  - requeue=true
+  - slurm_extra="--mail-type=END,FAIL --mail-user=ppssingh@ucdavis.edu"
+  - runtime=60
+  - mem_mb=4000
+  - tmpdir="tmp"
+
+# Quality of life
+printshellcmds: true
+keep-going: false
+rerun-incomplete: true
+use-conda: false

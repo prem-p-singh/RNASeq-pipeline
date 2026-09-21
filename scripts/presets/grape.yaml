@@ -1,0 +1,5 @@
+tax_id: 29760
+scientific_name: "Vitis vinifera"
+common_name: "grape"
+orgdb_package: "org.Vvinifera.eg.db"   # custom, built once via AnnotationForge
+kegg_code: "vvi"

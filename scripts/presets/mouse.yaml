@@ -1,0 +1,5 @@
+tax_id: 10090
+scientific_name: "Mus musculus"
+common_name: "mouse"
+orgdb_package: "org.Mm.eg.db"          # Bioconductor
+kegg_code: "mmu"
