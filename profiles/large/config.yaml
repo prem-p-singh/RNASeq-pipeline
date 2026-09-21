@@ -10,11 +10,15 @@ restart-times: 3              # be patient with transient queue failures
 latency-wait: 60
 
 default-resources:
+  # Cluster-specific: these are UC Davis FARM values. Change them for your
+  # site, or the scheduler will reject every job.
   - slurm_account=publicgrp
   - slurm_partition=low
   - slurm_qos=publicgrp-low-qos
   - requeue=true
-  - slurm_extra="--mail-type=END,FAIL --mail-user=ppssingh@ucdavis.edu"
+  # Email notifications are off by default: a hardcoded address would mail
+  # this pipeline's author about YOUR jobs. Uncomment and set your own.
+  # - slurm_extra="--mail-type=END,FAIL --mail-user=you@example.edu"
   - runtime=60
   - mem_mb=6000
   - tmpdir="tmp"
