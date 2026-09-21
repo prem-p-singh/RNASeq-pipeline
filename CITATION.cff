@@ -1,0 +1,27 @@
+cff-version: 1.2.0
+title: "RNASeq-pipeline: a configuration-driven Snakemake workflow for bulk RNA-seq and 3' TAGseq differential expression"
+message: "If this workflow contributes to published work, please cite it as below."
+type: software
+authors:
+  - family-names: Singh
+    given-names: Prem Pratap
+    orcid: "https://orcid.org/0000-0001-7921-9379"
+    affiliation: "Department of Viticulture and Enology, University of California, Davis"
+repository-code: "https://github.com/prem-p-singh/RNASeq-pipeline"
+url: "https://github.com/prem-p-singh/RNASeq-pipeline"
+license: MIT
+keywords:
+  - RNA-seq
+  - TAGseq
+  - differential expression
+  - Snakemake
+  - reproducible research
+  - bioinformatics workflow
+abstract: >-
+  A configuration-driven Snakemake workflow for bulk RNA-seq and 3' TAGseq
+  differential expression on SLURM clusters. Species, experimental design and
+  downstream analyses are set in configuration rather than in code. Study design
+  is validated for estimability before compute is committed, unsupported
+  assay, design and backend combinations are rejected at preflight, and each
+  analysis reports an explicit status so that an empty result is distinguishable
+  from a failed or omitted one.
