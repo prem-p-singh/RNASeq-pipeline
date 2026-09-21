@@ -34,7 +34,7 @@ The 20 GB cap is the ceiling — medium/large tiers are already close to it at p
 
 ## How the auto-selection works
 
-When you run `./submit.sh`:
+When you run `./submit.sh -d <project>`:
 
 1. Counts rows in `config/samples.tsv` → `N`
 2. Estimates per-sample FASTQ size from `samples.seq_type` in `config.yaml` (TAGseq ≈ 0.5 GB, RNA-Seq ≈ 2 GB)

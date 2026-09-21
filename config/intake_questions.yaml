@@ -108,19 +108,17 @@ common_questions:
     required: true
     default: "sample_id"
 
-  - id: probe_sample_id
-    text: "Probe sample (which sample_id should the system use for probe runs?)"
-    help: "Used for 'don't know' answers — a single clean sample to detect strandedness, library type, etc. Leave blank to auto-pick the first sample in metadata."
+  # Removed: probe_sample_id and run_probes_for_unknowns. They described a
+  # separate probe-job mechanism that was never built. Salmon auto-detects the
+  # library type during the normal quantification run, and 01_qc_quant.sh
+  # records it and warns when it disagrees with samples.expected_libtype, so
+  # there is nothing for a probe job to do.
+
+  - id: expected_libtype
+    text: "Expected library type, if you know it (e.g. ISR, SR, U)"
+    help: "Optional. Salmon detects the library type itself during quantification; giving it here makes the pipeline warn you if the detected value disagrees. Leave blank to accept whatever Salmon finds."
     type: text
     required: false
-
-  - id: run_probes_for_unknowns
-    text: "Run probes for any 'don't know' answers?"
-    help: "Yes = run small SLURM jobs to detect missing info (recommended). No = use conservative defaults, you can re-run later."
-    type: dropdown
-    options: ["yes", "no"]
-    required: true
-    default: "yes"
 
   - id: run_enrichment
     text: "Run functional enrichment (GO + KEGG)?"

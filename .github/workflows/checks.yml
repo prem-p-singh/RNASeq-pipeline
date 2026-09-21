@@ -1,0 +1,60 @@
+name: self-checks
+
+# Runs the same tests/run_all.sh you run locally. Dormant until this repo has a
+# GitHub remote; pushing it there is all that is needed to activate it.
+#
+# Deliberately does NOT install the Bioconductor stack. Installing WGCNA, edgeR,
+# limma, emmeans and variancePartition takes tens of minutes per run, and the
+# scientific correctness of those stages is not what this job is guarding: it
+# guards the plumbing (path handling, sample matching, storage policy, project
+# isolation, report truthfulness). run_all.sh reports the two R checks as SKIP
+# here, and the job log prints the skip count, so the gap is visible rather than
+# silently counted as a pass. Run them locally, or on FARM inside the conda
+# environment, before trusting downstream output.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install python dependencies
+        run: python3 -m pip install --quiet pyyaml openpyxl
+
+      - name: Shell syntax
+        run: |
+          for f in submit.sh workflow/scripts/*.sh scripts/*.sh tests/*.sh; do
+            bash -n "$f" || exit 1
+          done
+          echo "all shell scripts parse"
+
+      - name: Python syntax
+        run: |
+          python3 -m compileall -q scripts workflow/scripts tests
+          echo "all python files compile"
+
+      - name: Config templates parse
+        run: |
+          python3 - <<'PY'
+          import yaml, glob
+          for f in ["config/config.template.yaml", "config/thresholds.yaml",
+                    "config/intake_questions.yaml",
+                    "scripts/setup_inputs.template.yaml", "environment.yml"] \
+                   + sorted(glob.glob("scripts/presets/*.yaml")) \
+                   + sorted(glob.glob("profiles/*/config.yaml")):
+              yaml.safe_load(open(f))
+              print("ok", f)
+          PY
+
+      - name: Self-checks
+        run: bash tests/run_all.sh
