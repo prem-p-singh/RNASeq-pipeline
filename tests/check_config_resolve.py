@@ -51,27 +51,27 @@ assert deep["p"]["q"] == {"r": 9, "s": 2}, deep
 # --- 2. the real files: the exact bug that shipped --------------------
 schema = cr.load_schema(ROOT)
 w = schema["thresholds"]["wgcna"]
-for k in ("merge_cut_height_default", "merge_cut_height_bumped",
-          "min_samples", "target_r2", "power_cap", "max_modules"):
+for k in ("merge_cut_height", "max_modules_diagnostic",
+          "min_samples", "target_r2", "power_cap"):
     assert k in w, f"composed schema lost thresholds.wgcna.{k}: {w}"
 
 cfg, origins, issues = cr.resolve(
     ROOT, [("project", {"thresholds": {"wgcna": {"min_samples": 20}}})])
 w2 = cfg["thresholds"]["wgcna"]
 assert w2["min_samples"] == 20, w2
-assert w2["merge_cut_height_default"] == 0.25, (
-    "overriding one wgcna key dropped a merge height; this is the shipped bug")
-assert w2["merge_cut_height_bumped"] == 0.35, w2
+assert w2["merge_cut_height"] == 0.25, (
+    "overriding one wgcna key dropped the merge height; this is the shipped bug")
+assert w2["max_modules_diagnostic"] == 50, w2
 assert issues == [], issues
 
 # 05_wgcna.R reads cfg$thresholds$wgcna; none of what it needs may be null.
-for k in ("min_samples", "target_r2", "power_cap", "max_modules",
-          "merge_cut_height_default", "merge_cut_height_bumped"):
+for k in ("min_samples", "target_r2", "power_cap",
+          "merge_cut_height", "max_modules_diagnostic"):
     assert w2.get(k) is not None, f"05_wgcna.R would read NULL for {k}"
 
 # --- 3. origins are recorded (master plan 6.3) ------------------------
 assert origins["thresholds.wgcna.min_samples"] == "project", origins
-assert origins["thresholds.wgcna.merge_cut_height_default"] == "default", origins
+assert origins["thresholds.wgcna.merge_cut_height"] == "default", origins
 
 # --- 4. unknown keys and type conflicts ------------------------------
 _, _, iss = cr.resolve(ROOT, [("project", {"bogus_section": {"a": 1}})])

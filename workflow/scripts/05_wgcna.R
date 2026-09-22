@@ -151,21 +151,53 @@ detect_modules <- function(mergeCutHeight) {
                    nThreads = n_threads,
                    verbose = 0)
 }
-# merge_used tracks the height actually passed to the run that produced `net`.
-# Deriving it afterwards from n_modules was wrong: a successful bump lowers
-# n_modules below max_modules, so the metric reported the default height.
-merge_used <- thr$merge_cut_height_default
+# AN06: "Preserve declared parameter policy; optional sensitivity analysis is a
+# new recorded analysis, not hidden retuning."
+#
+# This previously re-ran with a bumped merge height whenever the module count
+# exceeded a cap, and the second network replaced the first. The published
+# result was therefore whichever height happened to produce a more attractive
+# module count, which is tuning an analysis to its own output. The declared
+# height is now the reported result, full stop.
+merge_used <- thr$merge_cut_height
+if (is.null(merge_used)) {
+  stop("thresholds.wgcna.merge_cut_height is not set. It is the declared ",
+       "parameter policy and has no automatic fallback.")
+}
 net <- detect_modules(merge_used)
 n_modules <- length(unique(net$colors))
-if (n_modules > thr$max_modules) {
-  message("Too many modules (", n_modules, "); re-running with bumped mergeCutHeight")
-  cat(sprintf("[%s] WGCNA_MERGE: bumped mergeCutHeight to %.2f (was %d modules)\n",
-              format(Sys.time(), "%FT%T"),
-              thr$merge_cut_height_bumped, n_modules),
+
+# A high module count is a diagnostic about the data, not a reason to change
+# the analysis. Recorded and reported; nothing is re-run because of it.
+modules_exceed_diagnostic <- !is.null(thr$max_modules_diagnostic) &&
+  n_modules > thr$max_modules_diagnostic
+if (modules_exceed_diagnostic) {
+  message("Module count ", n_modules, " exceeds the diagnostic threshold ",
+          thr$max_modules_diagnostic,
+          ". Reported as-is; the merge height was NOT changed (AN06).")
+  cat(sprintf(paste0("[%s] WGCNA_DIAGNOSTIC: %d modules at declared ",
+                     "mergeCutHeight %.2f exceeds max_modules_diagnostic %d; ",
+                     "no retuning performed\n"),
+              format(Sys.time(), "%FT%T"), n_modules, merge_used,
+              thr$max_modules_diagnostic),
       file = "gates/decisions.log", append = TRUE)
-  merge_used <- thr$merge_cut_height_bumped
-  net <- detect_modules(merge_used)
-  n_modules <- length(unique(net$colors))
+}
+
+# Optional sensitivity analysis. Each requested height is an ADDITIONAL
+# recorded result; none of them replaces the declared one.
+sensitivity <- list()
+heights <- thr$sensitivity_merge_heights
+if (!is.null(heights) && length(heights) > 0) {
+  for (h in heights) {
+    alt <- detect_modules(h)
+    k <- length(unique(alt$colors))
+    sensitivity[[length(sensitivity) + 1L]] <- list(
+      merge_cut_height = h, n_modules = k)
+    message("Sensitivity: mergeCutHeight ", h, " gives ", k, " modules ",
+            "(recorded alongside the declared result, not in place of it)")
+    write_tsv(data.frame(gene_id = colnames(datExpr), module = alt$colors),
+              file.path(out_dir, sprintf("module_assignments_h%s.tsv", h)))
+  }
 }
 
 # --- Outputs -----------------------------------------------------------
@@ -193,7 +225,11 @@ metrics <- list(
   power_used         = power_use,
   r2_at_power_used   = r2_at_used,
   n_modules          = n_modules,
-  merge_cut_height   = merge_used,
+  merge_cut_height          = merge_used,
+  merge_cut_height_policy   = "declared; never retuned to reach a module count (AN06)",
+  max_modules_diagnostic    = thr$max_modules_diagnostic,
+  modules_exceed_diagnostic = modules_exceed_diagnostic,
+  sensitivity_analyses      = sensitivity,
   max_block_size     = max_block,
   n_blocks           = length(unique(net$blocks)),
   mem_mb             = mem_mb,

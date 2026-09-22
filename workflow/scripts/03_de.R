@@ -113,6 +113,41 @@ mm <- model.matrix(form_fixed, data = as.data.frame(sheet))
 # model is a study-design problem; quietly falling back to a simpler test
 # would answer a different question and drop the interactions, blocking and
 # random effects the plan asked for.
+# CT02: "Record scaling; do not add a second transcript-length correction."
+# The count matrix arrives already carrying whatever correction 02_aggregate.R
+# applied. Reading that record, rather than re-deriving it from seq_type, is
+# what stops a backend from adding offsets on top of abundance-derived counts.
+assert_no_double_correction <- function(prov) {
+  if (is.null(prov)) {
+    return(list(ok = TRUE, applied = NA, reason = "no provenance record found"))
+  }
+  if (isTRUE(prov$further_length_correction_permitted)) {
+    return(list(ok = TRUE, applied = isTRUE(prov$length_correction_applied),
+                reason = "provenance permits a further correction"))
+  }
+  list(ok = FALSE,
+       applied = isTRUE(prov$length_correction_applied),
+       reason = paste0("counts were produced with countsFromAbundance='",
+                       prov$counts_from_abundance,
+                       "'; a further transcript-length correction is refused: ",
+                       prov$rationale))
+}
+
+count_prov <- NULL
+prov_file <- file.path(dirname(counts_path), "counts_provenance.json")
+if (file.exists(prov_file)) {
+  count_prov <- fromJSON(prov_file)
+  guard <- assert_no_double_correction(count_prov)
+  message("Count provenance: countsFromAbundance=",
+          count_prov$counts_from_abundance,
+          ", length correction already applied=", guard$applied,
+          ", further correction permitted=",
+          isTRUE(count_prov$further_length_correction_permitted))
+} else {
+  message("No counts_provenance.json beside ", counts_path,
+          "; count semantics are unrecorded and no offsets will be added")
+}
+
 source(snakemake@params$design_lib)   # validate_design()
 design <- validate_design(
   mm, agg$n_bio_replicates_min, primary,

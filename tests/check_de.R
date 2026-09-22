@@ -35,7 +35,7 @@ load_fns <- function(path, names) {
 source(file.path("workflow", "scripts", "_design.R"))
 
 load_fns(file.path("workflow", "scripts", "03_de.R"),
-         c("build_contrasts"))
+         c("build_contrasts", "assert_no_double_correction"))
 load_fns(file.path("workflow", "scripts", "02_aggregate.R"),
          c("sample_disposition"))
 load_fns(file.path("workflow", "scripts", "04_enrichment.R"),
@@ -275,5 +275,37 @@ stopifnot(kegg_skip_because(TRUE, "vvi") == "")
 stopifnot(grepl("run_kegg is false", kegg_skip_because(FALSE, "vvi")))
 stopifnot(grepl("kegg_code is not set", kegg_skip_because(TRUE, NULL)))
 stopifnot(grepl("kegg_code is not set", kegg_skip_because(TRUE, "")))
+
+# ======================================================================
+# CT02: a second transcript-length correction must be refused
+# ======================================================================
+# The count matrix arrives already carrying whatever correction aggregation
+# applied. 03_de.R reads that record rather than re-deriving it from seq_type,
+# so a backend cannot add offsets on top of abundance-derived counts.
+bulk <- list(counts_from_abundance = "lengthScaledTPM",
+             length_correction_applied = TRUE,
+             further_length_correction_permitted = FALSE,
+             rationale = "abundance-derived counts already carry it")
+g <- assert_no_double_correction(bulk)
+stopifnot(!g$ok, isTRUE(g$applied))
+stopifnot(grepl("refused", g$reason), grepl("lengthScaledTPM", g$reason))
+
+# CT03: 3-prime counts were never corrected and still may not be
+tag <- list(counts_from_abundance = "no",
+            length_correction_applied = FALSE,
+            further_length_correction_permitted = FALSE,
+            rationale = "3-prime tag counts do not scale with transcript length")
+g <- assert_no_double_correction(tag)
+stopifnot(!g$ok, !isTRUE(g$applied))
+stopifnot(grepl("do not scale", g$reason))
+
+# an absent record is reported as absent, not assumed safe either way
+g <- assert_no_double_correction(NULL)
+stopifnot(g$ok, is.na(g$applied), grepl("no provenance", g$reason))
+
+# a record that explicitly permits one is honoured
+ok <- list(counts_from_abundance = "no", length_correction_applied = FALSE,
+           further_length_correction_permitted = TRUE, rationale = "raw counts")
+stopifnot(assert_no_double_correction(ok)$ok)
 
 cat("check_de.R: all assertions passed\n")
