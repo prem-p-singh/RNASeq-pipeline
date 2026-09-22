@@ -164,19 +164,20 @@ hpc:
 # profile comes from profiles/<tier>, chosen by submit.sh).
 
 # -----------------------------------------------------------------------------
-# Decision-gate thresholds (see GENERIC_PIPELINE.md §5)
-# Override here per-project; defaults live in config/thresholds.yaml
+# Decision-gate thresholds
 # -----------------------------------------------------------------------------
-thresholds:
-  mapping_rate_min: 0.60                        # < this flags sample / reference
-  batch_pc_var_fraction: 0.30                   # > this triggers auto batch covariate
-  de_sig_terms_simplify: 20                     # apply simplify() when # sig terms exceeds this
-  go_simplify_cutoff: 0.70                      # GOSemSim cutoff for simplify()
-  wgcna:
-    min_samples: 15                             # < this skips WGCNA
-    target_r2: 0.85                             # scale-free R² target
-    power_cap: 30                               # blockwiseModules hard limit
-    max_modules: 50                             # > this triggers mergeCutHeight bump
-  # The DE backend is not configurable: it follows model.random_effects
-  # (present -> dream, absent -> limma-voom). An unsupported or non-estimable
-  # design stops with a reason instead of switching to a different test.
+# Defaults live in config/thresholds.yaml and nowhere else, so there is one
+# source per setting (master plan 5.2). Override any of them per project by
+# adding a `thresholds:` block here; scripts/config_resolve.py deep-merges it,
+# so setting one key keeps its siblings.
+#
+# This template previously carried its own `thresholds:` block. Four of its
+# settings were dead (mapping_rate_min and go_simplify_cutoff were read from
+# thresholds.sample_qc and thresholds.enrichment instead; batch_pc_var_fraction
+# and de_sig_terms_simplify were read nowhere), and its `wgcna` entry shadowed
+# the fuller definition in thresholds.yaml, leaving both merge heights unset at
+# run time. Removed rather than duplicated.
+#
+# The DE backend is not configurable: it follows model.random_effects
+# (present -> dream, absent -> limma-voom). An unsupported or non-estimable
+# design stops with a reason instead of switching to a different test.

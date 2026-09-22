@@ -28,11 +28,14 @@ import subprocess
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import yaml
+
+import config_resolve
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "config" / "spec.yaml"
-TEMPLATE = ROOT / "config" / "config.template.yaml"
 DESIGN_LIB = ROOT / "workflow" / "scripts" / "_design.R"
 
 
@@ -76,71 +79,25 @@ class Issues:
 
 
 # ------------------------------------------------------------------- config
-def key_paths(node, prefix=()) -> set[tuple]:
-    """Every dotted key path in a nested mapping.
+def check_config(cfg: dict, repo_root, iss: Issues) -> dict:
+    """Resolve the project config and report what resolution found.
 
-    Recursion stops at a mapping whose keys are user-chosen rather than part of
-    the schema (contrast ids, arbitrary column maps), which the template marks
-    by example rather than enumeration.
+    Shares scripts/config_resolve.py with the Snakefile and setup, so the three
+    cannot disagree about defaults, unknown keys or types (R17e, R05; master
+    plan 6.3). Returns the resolved configuration, which every later check uses
+    in place of the raw file: validating the raw config would miss a default
+    that only appears after merging.
     """
-    out = set()
-    if isinstance(node, dict):
-        for k, v in node.items():
-            out.add(prefix + (k,))
-            out |= key_paths(v, prefix + (k,))
-    return out
-
-
-def check_config(cfg: dict, template: dict, iss: Issues):
-    """Unknown keys and type mismatches, against the template as the schema.
-
-    The template is the source of known keys deliberately: a separate schema
-    listing would be a second copy to keep in step with it.
-    """
-    # Sections whose sub-keys are user-defined, so they are not compared.
-    opaque = {("contrasts",), ("reference", "annotation_tsv", "columns"),
-              ("samples", "columns")}
-
-    known = key_paths(template)
-    actual = key_paths(cfg)
-
-    for path in sorted(actual - known):
-        if any(path[:len(o)] == o for o in opaque):
-            continue
-        # repo_dir is injected by submit.sh, not authored by the user.
-        if path == ("repo_dir",):
-            continue
-        iss.add("CFG001", "config", ".".join(path))
+    resolved, origins, issues = config_resolve.resolve(
+        repo_root, [("project", cfg)])
+    for code, detail in issues:
+        iss.add(code, "config", detail)
 
     for section in ("project", "samples", "model", "reference", "organism"):
-        if section not in cfg:
+        if section not in resolved:
             iss.add("CFG002", "config", section)
 
-    # Type check only where the template commits to a concrete value.
-    for path in sorted(known & actual):
-        if any(path[:len(o)] == o for o in opaque):
-            continue
-        t_val, c_val = template, cfg
-        try:
-            for k in path:
-                t_val, c_val = t_val[k], c_val[k]
-        except (KeyError, TypeError):
-            continue
-        if t_val is None or c_val is None or isinstance(t_val, dict):
-            continue
-        if isinstance(t_val, bool) != isinstance(c_val, bool):
-            iss.add("CFG003", "config",
-                    f"{'.'.join(path)}: expected {type(t_val).__name__}, "
-                    f"got {type(c_val).__name__}")
-        elif isinstance(t_val, (int, float)) and not isinstance(t_val, bool):
-            if not isinstance(c_val, (int, float)) or isinstance(c_val, bool):
-                iss.add("CFG003", "config",
-                        f"{'.'.join(path)}: expected number, "
-                        f"got {type(c_val).__name__}")
-        elif isinstance(t_val, str) and not isinstance(c_val, str):
-            iss.add("CFG003", "config",
-                    f"{'.'.join(path)}: expected string, "
-                    f"got {type(c_val).__name__}")
+    return resolved
 
 
 # -------------------------------------------------------------------- scope
@@ -390,11 +347,12 @@ def main():
         sys.exit(f"preflight: config not found: {cfg_path}")
 
     spec = yaml.safe_load(open(SPEC))
-    template = yaml.safe_load(open(TEMPLATE))
     cfg = yaml.safe_load(open(cfg_path))
     iss = Issues(spec["issues"])
 
-    check_config(cfg, template, iss)
+    # Every later check runs against the RESOLVED config, not the raw file:
+    # a default that only exists after merging would otherwise look missing.
+    cfg = check_config(cfg, ROOT, iss)
     resolved = check_scope(cfg, spec, iss)
 
     sheet_rel = (cfg.get("samples", {}) or {}).get("sheet", "config/samples.tsv")

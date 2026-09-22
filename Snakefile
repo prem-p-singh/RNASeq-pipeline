@@ -17,13 +17,31 @@ from pathlib import Path
 # --- Config --------------------------------------------------------------
 configfile: "config/config.yaml"
 
-# Merge threshold defaults into config
-import yaml
-with open("config/thresholds.yaml") as f:
-    _thresh_defaults = yaml.safe_load(f)
-config.setdefault("thresholds", {})
-for k, v in _thresh_defaults.items():
-    config["thresholds"].setdefault(k, v)
+# Resolve defaults through the one shared path (R17e, R05; master plan 6.3).
+#
+# This used to be a one-level `setdefault` over config/thresholds.yaml. Because
+# config.template.yaml carried its own partial `thresholds.wgcna`, the richer
+# definition in thresholds.yaml was never merged and 05_wgcna.R read NULL for
+# both merge heights. WGCNA swallows that error and returns unmerged modules,
+# so the run looked successful while the requested merging never happened.
+#
+# scripts/config_resolve.py deep-merges, so overriding one key keeps its
+# siblings, and reports unknown keys and type conflicts rather than absorbing
+# them. preflight surfaces those same findings as CFG001/CFG003 before launch;
+# here they are a hard stop, because by this point a run is starting.
+import sys as _sys
+_repo = Path(config.get("repo_dir", ".")).resolve()
+_sys.path.insert(0, str(_repo / "scripts"))
+import config_resolve as _cr
+
+_project_layer = {k: v for k, v in config.items() if k != "repo_dir"}
+config, CONFIG_ORIGINS, _cfg_issues = _cr.resolve(_repo, [("project", _project_layer)])
+config["repo_dir"] = str(_repo)          # injected by submit.sh, not user-authored
+
+if _cfg_issues:
+    raise RuntimeError(
+        "Configuration problems (preflight reports the same findings):\n  "
+        + "\n  ".join(f"{code}: {detail}" for code, detail in _cfg_issues))
 
 # --- Load sample sheet ---------------------------------------------------
 samples = pd.read_csv(
