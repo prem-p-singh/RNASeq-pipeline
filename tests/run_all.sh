@@ -28,7 +28,12 @@ sys.exit(0 if all(importlib.util.find_spec(m) for m in sys.argv[1:]) else 1)" \
 run() {  # $1 = label, $2 = command
     local label=$1 cmd=$2 out rc
     out=$(eval "$cmd" 2>&1); rc=$?
-    if [ $rc -eq 0 ]; then
+    if [ $rc -eq 77 ]; then
+        # 77 is "skipped", the automake convention. A check that gates itself
+        # on a missing tool reports it this way, because exiting 0 would be
+        # indistinguishable from having run and passed.
+        skip "$label" "$(echo "$out" | tail -1)"
+    elif [ $rc -eq 0 ]; then
         printf '  PASS  %-28s\n' "$label"
         pass=$((pass + 1))
     else
@@ -83,15 +88,11 @@ else
     skip check_preflight.py "needs pyyaml, Rscript and jsonlite"
 fi
 
-# Needs snakemake, which the environment of WORKING_PLAN 3.2 item 3 supplies and
-# this machine does not. Gated here rather than left to the check's own internal
-# skip, because that skip exits 0 and `run` would report it as a pass.
-# Set SNAKEMAKE=/path/to/snakemake to run it from a venv.
-if "${SNAKEMAKE:-snakemake}" --version >/dev/null 2>&1; then
-    run check_dag.sh "bash tests/check_dag.sh"
-else
-    skip check_dag.sh "needs snakemake (set SNAKEMAKE=... to point at one)"
-fi
+# Both need the environment of WORKING_PLAN 3.2 item 3, which this machine does
+# not have. They gate themselves and exit 77, which `run` reports as a skip.
+# Set SNAKEMAKE=/path/to/snakemake to point them at one.
+run check_dag.sh             "bash tests/check_dag.sh"
+run check_stages.sh          "bash tests/check_stages.sh"
 
 run check_storage_policy.sh  "bash tests/check_storage_policy.sh"
 

@@ -17,8 +17,8 @@
 # requested terminal outputs) and confirms the content-keyed reference cache
 # path from R03/R17d appears in the resolved commands.
 #
-# Needs snakemake, pandas and pyyaml. Skips cleanly when snakemake is absent,
-# because that is the normal state until the runtime of item 3 exists.
+# Needs snakemake, pandas and pyyaml. Exits 77 (skipped) when snakemake is absent,
+# which is the normal state until the runtime of item 3 exists.
 #
 # Run:  bash tests/check_dag.sh
 set -uo pipefail
@@ -30,8 +30,8 @@ if [ -z "$SMK" ]; then
     if command -v snakemake >/dev/null 2>&1; then SMK=$(command -v snakemake); fi
 fi
 if [ -z "$SMK" ] || ! "$SMK" --version >/dev/null 2>&1; then
-    echo "check_dag.sh: SKIP (no snakemake; set SNAKEMAKE=/path/to/snakemake)"
-    exit 0
+    echo "needs snakemake (set SNAKEMAKE=/path/to/snakemake)"
+    exit 77
 fi
 
 TMP=$(mktemp -d)
