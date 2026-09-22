@@ -42,8 +42,9 @@ if (!is.null(anno_path) && file.exists(anno_path)) {
 }
 
 # --- Skip semantics ----------------------------------------------------
-# "skipped" (switched off, or a prerequisite is absent), "failed" (errored),
-# and "empty" (ran fine, found nothing) are three different outcomes. The
+# Statuses follow master plan 11: "skipped_by_policy" (switched off),
+# "unavailable" (a prerequisite is absent), "failed" (errored), and
+# "succeeded_empty" (ran fine, found nothing) are distinct outcomes. The
 # status table keeps them apart instead of collapsing all three into a flag.
 orgdb_strategy <- if (is.null(cfg$orgdb$strategy)) "auto" else cfg$orgdb$strategy
 
@@ -98,10 +99,27 @@ message("Identifier namespace: ", id_namespace,
         " (minimum usable mapping rate ", 100 * min_id_mapping_rate, "%)")
 
 status_rows <- list()
-record <- function(contrast, method, status, reason = "", n_terms = NA_integer_) {
+# `output_table` is what makes this file a manifest rather than a log:
+# scripts/artifacts.py verifies every path a `succeeded` row claims, so a
+# deleted enrichment table invalidates the stage instead of being masked by the
+# done flag (R09/R11, master plan 11).
+#
+# Statuses follow the master plan section 11 taxonomy: succeeded,
+# succeeded_empty, skipped_by_policy, unavailable, failed. Only `succeeded`
+# asserts a file exists; an empty result is a valid outcome with no table.
+# master plan 11 separates a module the user turned off from one whose
+# prerequisite is missing. Both were previously "skipped".
+skip_status <- function(reason) {
+  if (grepl("run_go|run_kegg|is false|switched off|kegg_code", reason,
+            ignore.case = TRUE)) "skipped_by_policy" else "unavailable"
+}
+
+record <- function(contrast, method, status, reason = "", n_terms = NA_integer_,
+                   output_table = NA_character_) {
   status_rows[[length(status_rows) + 1L]] <<- data.frame(
     contrast = contrast, method = method, status = status,
-    reason = reason, n_terms = n_terms, stringsAsFactors = FALSE)
+    reason = reason, n_terms = n_terms, output_table = output_table,
+    schema_version = 1L, stringsAsFactors = FALSE)
 }
 
 for (i in seq_len(nrow(manifest))) {
@@ -154,7 +172,7 @@ for (i in seq_len(nrow(manifest))) {
 
   # --- GO GSEA (non-directional, ranked by |statistic|) ---------------
   if (!run_go) {
-    record(contrast, "GO", "skipped", go_skip_reason)
+    record(contrast, "GO", skip_status(go_skip_reason), go_skip_reason)
   } else {
     gl <- abs(de[[rank_col]]); names(gl) <- de$NCBI
     gl <- sort(gl, decreasing = TRUE)
@@ -176,15 +194,17 @@ for (i in seq_len(nrow(manifest))) {
                     format(Sys.time(), "%FT%T"), contrast, n_sig),
             file = "gates/decisions.log", append = TRUE)
       }
+      rel <- file.path("Enrichment", "GO", paste0(contrast, "_GO.tsv"))
       write_tsv(tab, file.path(go_dir, paste0(contrast, "_GO.tsv")))
       record(contrast, "GO",
-             if (nrow(tab) == 0) "empty" else "succeeded", "", nrow(tab))
+             if (nrow(tab) == 0) "succeeded_empty" else "succeeded",
+             "", nrow(tab), rel)
     }
   }
 
   # --- KEGG GSEA (directional, signed statistic) ----------------------
   if (!run_kegg) {
-    record(contrast, "KEGG", "skipped", kegg_skip_reason)
+    record(contrast, "KEGG", skip_status(kegg_skip_reason), kegg_skip_reason)
   } else {
     gl <- de[[rank_col]]; names(gl) <- de$NCBI
     gl <- sort(gl, decreasing = TRUE)
@@ -196,9 +216,11 @@ for (i in seq_len(nrow(manifest))) {
       record(contrast, "KEGG", "failed", conditionMessage(res))
     } else {
       tab <- as.data.frame(res)
+      rel <- file.path("Enrichment", "KEGG", paste0(contrast, "_KEGG.tsv"))
       write_tsv(tab, file.path(kegg_dir, paste0(contrast, "_KEGG.tsv")))
       record(contrast, "KEGG",
-             if (nrow(tab) == 0) "empty" else "succeeded", "", nrow(tab))
+             if (nrow(tab) == 0) "succeeded_empty" else "succeeded",
+             "", nrow(tab), rel)
     }
   }
 }
@@ -216,9 +238,10 @@ metrics <- list(
   go_skip_reason   = go_skip_reason,
   kegg_skip_reason = kegg_skip_reason,
   n_succeeded      = n_of("succeeded"),
-  n_empty          = n_of("empty"),
+  n_empty          = n_of("succeeded_empty"),
   n_failed         = n_of("failed"),
-  n_skipped        = n_of("skipped")
+  n_skipped        = n_of("skipped_by_policy"),
+  n_unavailable    = n_of("unavailable")
 )
 write_json(metrics, out_metrics, pretty = TRUE, auto_unbox = TRUE)
 
@@ -232,11 +255,13 @@ for (i in seq_len(nrow(failed))) {
 
 # A run where every attempt errored is a failed stage, not a success with a
 # done flag. Skipped-only runs are fine: nothing was attempted.
-attempted <- status[status$status != "skipped", , drop = FALSE]
+attempted <- status[!status$status %in% c("skipped_by_policy", "unavailable"),
+                    , drop = FALSE]
 if (nrow(attempted) > 0 && all(attempted$status == "failed")) {
   stop("every attempted enrichment failed; see ", out_status)
 }
 
 file.create(out_done)
-message("Enrichment: ", n_of("succeeded"), " succeeded, ", n_of("empty"),
-        " empty, ", n_of("failed"), " failed, ", n_of("skipped"), " skipped")
+message("Enrichment: ", n_of("succeeded"), " succeeded, ",
+        n_of("succeeded_empty"), " empty, ", n_of("failed"), " failed, ",
+        n_of("skipped_by_policy"), " skipped, ", n_of("unavailable"), " unavailable")

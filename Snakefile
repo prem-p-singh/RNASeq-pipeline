@@ -93,6 +93,19 @@ else:
 for d in (OUT, REF, QUANT, METRICS, GATES):
     d.mkdir(parents=True, exist_ok=True)
 
+
+# --- Invalidate results a flag claims but the filesystem lacks ----------
+# R09 / master plan 11: "A done flag alone never proves a result exists."
+# Runs here, at parse time, so it happens BEFORE Snakemake resolves the DAG:
+# clearing a stale flag and manifest makes the producing stage look incomplete,
+# and it is rescheduled in this same invocation rather than the next one.
+import artifacts as _artifacts
+
+_stale = _artifacts.invalidate_stale(OUT)
+if _stale:
+    print("Stale results detected; affected stages will rerun:")
+    print(_artifacts.format_report(_stale))
+
 # --- Rule modules --------------------------------------------------------
 include: "workflow/rules/common.smk"
 include: "workflow/rules/retrieve.smk"
