@@ -69,6 +69,7 @@ else
 fi
 
 run check_qc_report.py       "python3 tests/check_qc_report.py"
+run check_reference_lock.py  "python3 tests/check_reference_lock.py"
 
 if have_py_mods yaml && command -v Rscript >/dev/null 2>&1 \
    && have_r_pkgs jsonlite; then

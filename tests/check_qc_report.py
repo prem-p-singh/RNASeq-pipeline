@@ -117,13 +117,15 @@ assert "no fastp" in labels[1], labels
 assert "no salmon" not in labels[1], labels
 
 # --- identity comes from the run, with honest fallbacks ---------------
-name, species, ref, title = qc.identity("MyRun", "Vitis vinifera", "GCF_1.2", "ASM9")
+# identity() no longer carries the reference: R17c moved every statement about
+# reference construction into reference_description(), which reads
+# reference.lock.json. See tests/check_reference_lock.py.
+name, species, title = qc.identity("MyRun", "Vitis vinifera")
 assert (name, species) == ("MyRun", "Vitis vinifera")
-assert ref == "GCF_1.2 (ASM9)", ref
 assert title == "MyRun — Vitis vinifera: cleaning & alignment QC", title
 
-name, species, ref, title = qc.identity("", "", "", "")
-assert name == "RNA-Seq run" and species == "" and ref == "unspecified"
+name, species, title = qc.identity("", "")
+assert name == "RNA-Seq run" and species == ""
 assert title == "RNA-Seq run: cleaning & alignment QC", title
 
 # the old hardcoded identity must not be reachable from any code path
