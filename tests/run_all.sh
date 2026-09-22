@@ -83,6 +83,10 @@ else
     skip check_preflight.py "needs pyyaml, Rscript and jsonlite"
 fi
 
+# Needs snakemake. Skips cleanly until the runtime exists (WORKING_PLAN 3.2
+# item 3); set SNAKEMAKE=/path/to/snakemake to run it from a venv.
+run check_dag.sh             "bash tests/check_dag.sh"
+
 run check_storage_policy.sh  "bash tests/check_storage_policy.sh"
 
 # submit.sh runs preflight, and preflight shells out to Rscript for the
