@@ -128,6 +128,18 @@ issues:
   MET004: {severity: error,   message: "Model formula names a column absent from the sample sheet"}
   MET005: {severity: error,   message: "Model variable has only one level; nothing to compare"}
   MET006: {severity: warning, message: "Column present in the sheet but used by nothing"}
+  # Three-table metadata contract (master plan 6.1/6.2, rules IN01-IN04).
+  MET007: {severity: error,   message: "Foreign key has no matching parent record",
+           remedy: "Every libraries.sample_id must exist in samples.tsv, and every reads.library_id in libraries.tsv."}
+  MET008: {severity: error,   message: "Duplicate identifier in a metadata table"}
+  MET009: {severity: error,   message: "One file is assigned to more than one read unit",
+           remedy: "A read unit owns its file. Repeated assignment means the same reads would be counted twice."}
+  MET010: {severity: error,   message: "Paired library is missing a mate",
+           remedy: "IN02: supply the missing mate. A paired library is never silently downgraded to single-end."}
+  MET011: {severity: error,   message: "Unknown read role"}
+  MET012: {severity: warning, message: "Several libraries from one biological sample",
+           remedy: "IN04: preserved as a relationship. These are not independent biological replicates."}
+  MET013: {severity: error,   message: "Read structure inconsistent with the declared layout"}
 
   DSN001: {severity: error,   message: "Design is rank-deficient; terms are confounded"}
   DSN002: {severity: error,   message: "No residual degrees of freedom"}

@@ -33,6 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import yaml
 
 import config_resolve
+import metadata as metadata_tables
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "config" / "spec.yaml"
@@ -251,6 +252,32 @@ cat(jsonlite::toJSON(res, auto_unbox = TRUE))
 '''
 
 
+def check_metadata_tables(proj: Path, iss: Issues) -> dict | None:
+    """Validate the three-table contract when a project uses it.
+
+    Master plan 6.1 defines samples / libraries / reads. A project that still
+    has only samples.tsv keeps working: this returns None and the caller falls
+    back to the single-sheet checks, which the legacy form is all that supports.
+    """
+    mdir = proj / "metadata"
+    tables = metadata_tables.load_tables(mdir)
+    if not any(tables.values()):
+        return None
+
+    present = [n for n, rows in tables.items() if rows]
+    for code, detail in metadata_tables.validate(tables):
+        iss.add(code, "metadata", detail)
+
+    lanes = metadata_tables.lane_groups(tables)
+    multi_lane = {lib: sorted(l) for lib, l in lanes.items() if len(l) > 1}
+    return {
+        "form": "three_table",
+        "tables_present": present,
+        "counts": {n: len(rows) for n, rows in tables.items()},
+        "multi_lane_libraries": multi_lane,
+    }
+
+
 def check_design(cfg: dict, sheet_path: Path, iss: Issues) -> dict:
     """Estimability, via the same _design.R the DE stage uses.
 
@@ -359,6 +386,10 @@ def main():
     sheet_path = proj / sheet_rel
     meta: dict = {}
     design: dict = {"checked": False, "reason": "sample sheet unreadable"}
+    # Three-table form takes precedence when present (master plan 6.1); the
+    # single sheet remains supported so existing projects still run.
+    tables_meta = check_metadata_tables(proj, iss)
+
     if not sheet_path.is_file():
         iss.add("MET001", "samples.tsv", f"file not found: {sheet_path}")
     else:
@@ -377,6 +408,7 @@ def main():
         "config": str(cfg_path),
         "resolved": resolved,
         "metadata": meta,
+        "metadata_tables": tables_meta,
         "design": design,
         "stages": stage_plan(cfg, resolved, design),
         "n_errors": len(iss.errors),
