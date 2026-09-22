@@ -1,0 +1,48 @@
+name: release-validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  scientific-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    defaults:
+      run:
+        shell: bash -el {0}
+    env:
+      PYTHONNOUSERSITE: '1'
+      R_ENVIRON_USER: /dev/null
+      R_PROFILE_USER: /dev/null
+      OMP_NUM_THREADS: '1'
+      OPENBLAS_NUM_THREADS: '1'
+      MKL_NUM_THREADS: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: conda-incubator/setup-miniconda@v4
+        with:
+          miniforge-version: latest
+          activate-environment: rnaseq-release
+          environment-file: environments/linux-64.explicit.txt
+          auto-update-conda: false
+      - name: Verify locked runtime and execute all scientific checks
+        run: |
+          mkdir -p release-evidence
+          export R_LIBS_USER="$CONDA_PREFIX/lib/R/library"
+          export R_LIBS_SITE="$CONDA_PREFIX/lib/R/library"
+          python3 scripts/environment_check.py --out release-evidence/environment_report.json
+          set -o pipefail
+          bash tests/run_all.sh --strict 2>&1 | tee release-evidence/tests.log
+          bash tests/check_public.sh 2>&1 | tee release-evidence/public.log
+      - name: Preserve qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-release-evidence
+          path: release-evidence/
+          if-no-files-found: warn

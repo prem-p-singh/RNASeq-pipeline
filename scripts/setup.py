@@ -135,7 +135,7 @@ def prompt_inputs() -> dict:
         "primary_factor":        ask("Primary factor (column used for DE contrasts)"),
         "model_fixed_effects":   ask("Fixed-effects formula", "~ treatment"),
         "model_random_effects":  ask("Random-effects term (e.g. (1|donor); blank = none)") or None,
-        "storage_budget_gb":     int(ask("HPC storage budget GB", "20")),
+        "storage_budget_gb":     None,  # storage is planned from data and filesystem capacity
     }
 
 
@@ -598,7 +598,7 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
     # treatment-only project ended up testing grape's group/stage variables.
     cfg["contrasts"] = build_contrast_specs(inputs, CONFIG_DIR / "samples.tsv")
 
-    cfg["hpc"]["storage_budget_gb"] = inputs["storage_budget_gb"]
+    cfg["hpc"]["storage_budget_gb"] = inputs.get("storage_budget_gb")
 
     dump_yaml(cfg, out_path)
     log("CONFIG", f"wrote {out_path}")

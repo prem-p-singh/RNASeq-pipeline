@@ -1,8 +1,8 @@
 # =============================================================================
 # setup_inputs.yaml — MINIMAL inputs for the setup wizard.
-# Copy to setup_inputs.yaml (root of repo), fill in 7 fields, then run:
+# Copy to your project directory, fill in the fields, then run:
 #
-#     python scripts/setup.py setup_inputs.yaml
+#     python scripts/setup.py --project-dir /path/to/project /path/to/project/setup_inputs.yaml
 #
 # Everything else is derived: reference URLs, OrgDb, KEGG code, annotation,
 # sample sheet, and config/config.yaml.
@@ -53,4 +53,4 @@ model_random_effects: null                 # e.g. "(1|donor)" for paired designs
 # ---------------------------------------------------------------------------
 # HPC
 # ---------------------------------------------------------------------------
-storage_budget_gb: 20
+storage_budget_gb: null

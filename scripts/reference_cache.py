@@ -39,7 +39,7 @@ from pathlib import Path
 
 # Bumped when the meaning of a key input changes, so old entries do not appear
 # compatible with a new construction scheme.
-KEY_SCHEMA = 1
+KEY_SCHEMA = 2
 
 
 def key_inputs(reference: dict, kmer: int = 31, decoys: str | None = None) -> dict:
@@ -51,6 +51,7 @@ def key_inputs(reference: dict, kmer: int = 31, decoys: str | None = None) -> di
     reference = reference or {}
     return {
         "key_schema": KEY_SCHEMA,
+        "salmon_version": "1.10.3",
         "accession": reference.get("accession") or "unspecified_assembly",
         "transcriptome_fasta_url": reference.get("transcriptome_fasta_url") or "",
         "gtf_url": reference.get("gtf_url") or "",
@@ -115,6 +116,12 @@ def verify_entry(entry_dir, reference: dict, kmer: int = 31,
     wanted = key_inputs(reference, kmer, decoys)
     diffs = [f"{k}: entry has {recorded.get(k)!r}, request wants {v!r}"
              for k, v in wanted.items() if recorded.get(k) != v]
+    for name, rel in (("transcriptome", "transcriptome.fa"), ("annotation", "annotation.gtf")):
+        expected = (lock.get("files") or {}).get(name, {}).get("sha256")
+        with (Path(entry_dir) / rel).open("rb") as f:
+            actual = hashlib.file_digest(f, "sha256").hexdigest()
+        if not expected or actual != expected:
+            diffs.append(f"{rel}: checksum differs from reference.lock.json")
     return diffs
 
 
@@ -213,7 +220,9 @@ def demo():
                       ("salmon_idx/info.json", "{}")):
         (entry / rel).write_text(text)
     (entry / "reference.lock.json").write_text(json.dumps(
-        {"cache": {"key_inputs": key_inputs(ref, 31)}}))
+        {"cache": {"key_inputs": key_inputs(ref, 31)},
+         "files": {name: {"sha256": hashlib.sha256((entry / rel).read_bytes()).hexdigest()}
+                   for name, rel in (("transcriptome", "transcriptome.fa"), ("annotation", "annotation.gtf"))}}))
     assert entry_problems(entry) == [], entry_problems(entry)
     assert verify_entry(entry, ref, 31) == []
     assert verify_entry(entry, ref, 25), "a k-mer mismatch must refuse reuse"

@@ -26,6 +26,7 @@ Run:  python3 tests/check_reference_cache.py
 """
 import importlib.util
 import json
+import hashlib
 import multiprocessing as mp
 import tempfile
 import time
@@ -67,7 +68,9 @@ def make_entry(root, ref=REF, kmer=31, complete=True, key_inputs=None):
     if complete:
         (e / "salmon_idx" / "info.json").write_text('{"index_version":5}')
         (e / "reference.lock.json").write_text(json.dumps(
-            {"cache": {"key_inputs": key_inputs or rc.key_inputs(ref, kmer)}}))
+            {"cache": {"key_inputs": key_inputs or rc.key_inputs(ref, kmer)},
+             "files": {name: {"sha256": hashlib.sha256((e / rel).read_bytes()).hexdigest()}
+                       for name, rel in (("transcriptome", "transcriptome.fa"), ("annotation", "annotation.gtf"))}}))
     return e
 
 
@@ -103,6 +106,28 @@ e3 = make_entry(Path(tempfile.mkdtemp()))
 (e3 / "reference.lock.json").write_text(json.dumps({"schema_version": 1}))
 assert rc.verify_entry(e3, REF, 31), "lock without key_inputs was accepted"
 
+
+# Reference corruption at the same path must not pass reuse validation.
+e4 = make_entry(Path(tempfile.mkdtemp()))
+(e4 / "transcriptome.fa").write_text(">t\nTTTT\n")
+assert any("checksum" in x for x in rc.verify_entry(e4, REF, 31))
+
+# Identifier compatibility is independently checked before indexing.
+import sys
+sys.path.insert(0, str(ROOT / "workflow/scripts"))
+from build_salmon_index import check_identifiers
+ids = Path(tempfile.mkdtemp())
+fa, gtf = ids / "x.fa", ids / "x.gtf"
+fa.write_text(">t\nACGT\n")
+gtf.write_text('c\tt\texon\t1\t4\t.\t+\t.\tgene_id "g"; transcript_id "t";\n')
+assert check_identifiers(fa, gtf)["mapped_targets"] == 1
+for text in (">other\nACGT\n", ">t\nACGT\n>t\nACGT\n"):
+    fa.write_text(text)
+    try:
+        check_identifiers(fa, gtf)
+        raise AssertionError("Invalid reference accepted")
+    except ValueError:
+        pass
 
 # --- 4. the build lock actually excludes (R17d, V19) ------------------
 def hold(target, seconds, started, done):

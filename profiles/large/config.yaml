@@ -3,7 +3,7 @@
 # Checkpointed per-sample; a crash only re-queues unfinished samples.
 
 executor: slurm
-jobs: 20                      # max concurrent — same as medium to stay under 20 GB
+jobs: 20                      # upper bound; the dataset storage plan may reduce this
 max-jobs-per-second: 1        # throttle submissions (queue-friendly)
 max-status-checks-per-second: 2
 restart-times: 3              # be patient with transient queue failures

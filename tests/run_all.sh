@@ -1,12 +1,21 @@
 #!/usr/bin/env bash
 # Runs every self-check and reports one line per check.
 #
-# Exits 0 only if all of them pass. Checks whose interpreter or libraries are
+# Use --strict for release qualification: any skip fails the suite.
+# In developer mode, checks whose interpreter or libraries are
 # absent are reported as SKIP, with the reason, and do not count as passes:
 # a skipped check is not a passed check.
 #
 # Run:  bash tests/run_all.sh
 set -uo pipefail
+
+strict=0
+case "${1:-}" in
+    --strict) strict=1 ;;
+    "") ;;
+    *) echo "Usage: bash tests/run_all.sh [--strict]" >&2; exit 2 ;;
+esac
+[ "$#" -le 1 ] || { echo "Too many arguments" >&2; exit 2; }
 
 cd "$(dirname "$0")/.."
 
@@ -80,6 +89,7 @@ run check_artifacts.py       "python3 tests/check_artifacts.py"
 run check_reference_cache.py "python3 tests/check_reference_cache.py"
 run check_metadata.py        "python3 tests/check_metadata.py"
 run check_resources.py       "python3 tests/check_resources.py"
+run check_recommend.py       "python3 tests/check_recommend.py"
 
 if have_py_mods yaml && command -v Rscript >/dev/null 2>&1 \
    && have_r_pkgs jsonlite; then
@@ -88,13 +98,18 @@ else
     skip check_preflight.py "needs pyyaml, Rscript and jsonlite"
 fi
 
-# These four need the environment of WORKING_PLAN 3.2 item 3, which this machine
-# does not have. They share tests/_gate.sh and exit 77, which `run` reports as a
-# skip. Set SNAKEMAKE=/path/to/snakemake to point them at one.
+# Integration checks require the full release environment; absent dependencies
+# are explicit skips and fail strict release qualification.
 run check_dag.sh             "bash tests/check_dag.sh"
 run check_stages.sh          "bash tests/check_stages.sh"
 run check_counts.sh          "bash tests/check_counts.sh"
 run check_network.sh         "bash tests/check_network.sh"
+run check_end_to_end.sh      "bash tests/check_end_to_end.sh"
+if command -v Rscript >/dev/null 2>&1; then
+    run check_enrichment.R "Rscript tests/check_enrichment.R"
+else
+    skip check_enrichment.R "needs Rscript"
+fi
 
 run check_storage_policy.sh  "bash tests/check_storage_policy.sh"
 
@@ -112,6 +127,10 @@ echo
 echo "  $pass passed, $fail failed, $skip skipped"
 if [ $fail -gt 0 ]; then
     echo "  failed: ${failed_names[*]}"
+    exit 1
+fi
+if [ "$strict" -eq 1 ] && [ "$skip" -gt 0 ]; then
+    echo "  RELEASE BLOCKED: required checks were skipped"
     exit 1
 fi
 exit 0

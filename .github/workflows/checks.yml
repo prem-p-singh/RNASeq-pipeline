@@ -1,20 +1,7 @@
-name: self-checks
+name: lightweight-checks
 
-# Runs the same tests/run_all.sh you run locally. Dormant until this repo has a
-# GitHub remote; pushing it there is all that is needed to activate it.
-#
-# Installs base R and jsonlite, but NOT the Bioconductor stack. preflight shells
-# out to Rscript for its estimability check, so without base R the preflight and
-# project-isolation checks cannot run at all. WGCNA, edgeR, limma, emmeans and
-# variancePartition are a different matter: they take tens of minutes to install,
-# and the scientific correctness of those stages is not what this job guards. It
-# guards the plumbing (path handling, sample matching, storage policy, project
-# isolation, report truthfulness). Snakemake is absent too, so the two checks
-# that build or run a DAG cannot run either. run_all.sh reports check_de.R,
-# check_wgcna.R, check_dag.sh and check_stages.sh as SKIP here, with the reason,
-# and prints the skip count, so the gap stays visible rather than being silently
-# counted as a pass. Run those locally, or on FARM inside the conda environment,
-# before trusting downstream output.
+# Fast feedback. Missing scientific dependencies are reported as skips here.
+# release-validation.yml is the separate required zero-skip scientific gate.
 
 on:
   push:

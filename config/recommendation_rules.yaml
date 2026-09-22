@@ -1,0 +1,26 @@
+# Executable subset of RNA_SEQ_RECOMMENDATION_RULES.md. Unsupported routes block.
+policy_version: 1
+routes:
+  rnaseq_single:
+    route: salmon_bulk
+    rule_ids: [AS01, UP01, CT01, CT02]
+    handbook_ids: [H15, H35, H36]
+    count_treatment: lengthScaledTPM
+  rnaseq_paired:
+    route: salmon_bulk
+    rule_ids: [AS01, IN02, UP01, CT01, CT02]
+    handbook_ids: [H04, H15, H35, H36]
+    count_treatment: lengthScaledTPM
+  tagseq:
+    route: salmon_end_tag_provisional
+    rule_ids: [AS02, UP04, CT03]
+    handbook_ids: [H18, H35]
+    count_treatment: 'no'
+objectives: [gene_expression, differential_expression, enrichment, coexpression]
+backends:
+  fixed: {name: limma_voom, rule_ids: [ST01, ST02]}
+  random: {name: dream, rule_ids: [ST04]}
+alternatives:
+  - {route: star_counts, status: planned, reason: 'Genomic alignment and counting are not implemented.'}
+  - {route: deseq2, status: planned, reason: 'The DESeq2 count adapter is not implemented.'}
+  - {route: edger_ql, status: planned, reason: 'The edgeR QL adapter is not implemented.'}

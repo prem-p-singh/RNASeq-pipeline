@@ -138,3 +138,22 @@ stale_names = emitted - allowed
 assert not stale_names, f"pre-taxonomy status still emitted: {stale_names}"
 
 print("check_artifacts.py: all assertions passed")
+
+# A malformed/empty manifest must not make a stale flag look trustworthy.
+for payload in ("", "wrong\tcolumns\nx\ty\n",
+                "analysis_table\tmeaningful_table\nNA\tNA\n"):
+    d = project(enrich=False)
+    (d / "de_manifest.tsv").write_text(payload)
+    assert art.invalidate_stale(d), payload
+    assert not (d / "de_done.flag").exists()
+
+# WGCNA artifacts are now covered by the same reuse contract.
+d = Path(tempfile.mkdtemp())
+(d / "WGCNA").mkdir()
+(d / "WGCNA/network.rds").write_bytes(b"fixture")
+(d / "wgcna_manifest.tsv").write_text("status\toutput_table\nsucceeded\tWGCNA/network.rds\n")
+(d / "wgcna_done.flag").touch()
+assert not art.invalidate_stale(d)
+(d / "WGCNA/network.rds").unlink()
+assert art.invalidate_stale(d)[0]["stage"] == "wgcna"
+assert not (d / "wgcna_done.flag").exists()

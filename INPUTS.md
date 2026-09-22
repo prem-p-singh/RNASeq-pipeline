@@ -1,164 +1,47 @@
-# Project setup — the easy path
+# Project inputs
 
-Three ways to start a new project, listed from **least effort** to most.
+Use the environment and launch instructions in [README.md](README.md). A project lives outside the source checkout and contains three files:
 
-## 🚀 Easiest: drag-and-drop via `start_new.sh`
+| File | Purpose |
+|---|---|
+| `config/config.yaml` | Organism, versioned references, assay/layout, model, contrasts and requested analyses |
+| `config/samples.tsv` | One row per biological measurement, with its read file or pair and model covariates |
+| `config/thresholds.yaml` | Explicit QC and analysis thresholds; project overrides are merged with defaults |
 
-From your Mac, one command uploads your metadata (and optionally FASTQs),
-SSHes to FARM, and runs an interactive wizard. No YAML editing, no taxID
-lookups, no remembering column names.
+Copy the templates from `config/` into your project, then edit them. Do not run the shipped grapevine/model examples unchanged on a different experiment.
 
-```bash
-# Just metadata — FASTQs already on FARM or pulled from a URL you'll paste
-scripts/start_new.sh my_project ~/Downloads/my_metadata.xlsx
+## Sample sheet
 
-# With local FASTQs to upload
-scripts/start_new.sh my_project ~/data/meta.csv ~/data/fastq/
+A paired-end example is:
+
+```tsv
+sample_id	fastq_url	fastq_url_r2	treatment
+control_1	/shared/reads/control_1_R1.fastq.gz	/shared/reads/control_1_R2.fastq.gz	control
+control_2	/shared/reads/control_2_R1.fastq.gz	/shared/reads/control_2_R2.fastq.gz	control
+control_3	/shared/reads/control_3_R1.fastq.gz	/shared/reads/control_3_R2.fastq.gz	control
+treated_1	/shared/reads/treated_1_R1.fastq.gz	/shared/reads/treated_1_R2.fastq.gz	treated
+treated_2	/shared/reads/treated_2_R1.fastq.gz	/shared/reads/treated_2_R2.fastq.gz	treated
+treated_3	/shared/reads/treated_3_R1.fastq.gz	/shared/reads/treated_3_R2.fastq.gz	treated
 ```
 
-On FARM, you'll be prompted for (all with smart defaults):
+Use unique sample IDs, both mates for every paired library, and columns for every model variable. For single-end input, omit or leave the second-mate column blank and choose `rnaseq_single`. Repeated measurements require their biological-unit column and an explicit random-effect term; repeated rows from one unit are not independent biological replicates.
 
-| Prompt | What it does | Typical keystrokes |
-|---|---|---|
-| Organism | Menu: grape / human / mouse / rice / arabidopsis / other | `1` + Enter |
-| Sample-ID column | Auto-guessed from your metadata | Enter |
-| Primary factor | Auto-listed + guessed | `1` + Enter |
-| Sequencing type | Menu: tagseq / rnaseq_single / rnaseq_paired | `1` + Enter |
-| Proceed? | Confirms, runs everything | `y` |
+Local input files must be readable on every worker. HTTPS inputs are downloaded per sample. S3 requires additional AWS tooling and credentials and is outside the locked release's tested input routes. Local source FASTQs are read in place and never deleted by workflow cleanup.
 
-That's it. Total interaction: ~6 keystrokes + one `y`.
+The executable workflow currently accepts one read file/pair per sample-sheet row. Multiple lanes need an external, documented merge. The metadata templates for samples/libraries/reads support validation work for the broader roadmap; they are not yet an alternative executable intake contract.
 
-## ⚙️ Medium: manual YAML (the old path)
+## References and analysis
 
-Fill in `setup_inputs.yaml` by hand if you want full control:
+Provide a transcriptome FASTA and a matching GTF from a recorded reference release. Every quantifiable transcript must map unambiguously to one annotated gene. The pipeline stops on unmatched or duplicated transcript identifiers. Record accession and organism identity; use immutable source URLs. The current default is a transcriptome-only Salmon index. Do not describe it as decoy-aware unless a compatible decoy reference and identifier list were explicitly supplied.
 
-```bash
-PROJ=~/rnaseq_projects/my_study
-mkdir -p "$PROJ"
-cp scripts/setup_inputs.template.yaml "$PROJ/setup_inputs.yaml"
-$EDITOR "$PROJ/setup_inputs.yaml"
-python3 scripts/setup.py --project-dir "$PROJ" "$PROJ/setup_inputs.yaml"
-./submit.sh -d "$PROJ"
-```
+Set the fixed-effects formula, any random-effects term, primary factor and contrasts to match the experiment. Preflight checks estimability and supported capabilities. `analysis.backend: auto` follows the dependence structure; unavailable backend choices block. Optional GO/KEGG/WGCNA settings must match the requested objectives and available annotation.
 
-## 🔧 Full manual
+For GO, provide a compatible OrgDb package and the correct `orgdb.key_type` (`ENTREZID` for suitable public packages, or `GID` for a compatible custom package). Non-Entrez input gene identifiers require a valid annotation mapping. A numeric-looking identifier alone is not biological proof of the correct namespace; review mapping and reference provenance.
 
-Write `<project>/config/config.yaml`, `<project>/config/samples.tsv` and
-`<project>/config/thresholds.yaml` by hand (copy the last from this repo's
-`config/thresholds.yaml`), skip the wizard entirely, then
-`./submit.sh -d <project>`.
+## Optional setup helpers
 
----
+`python3 scripts/setup.py --project-dir PROJECT INPUTS.yaml` can generate the project files from a spreadsheet and read-source directory/list. Start from `scripts/setup_inputs.template.yaml` and review every generated reference URL, sample match and model field. Automatic lookups can change as external services change; preserve the resolved configuration.
 
-# Details: what the wizard generates (all three paths converge here)
+The interactive `scripts/new_project.sh` helper uses the same locked runtime and reads an inbox at `~/new_project_inbox/PROJECT_NAME`. `scripts/start_new.sh` is a convenience uploader/wizard launcher whose transfer and interactive path is not covered by the release's end-to-end qualification. Explicit TSV/YAML input is the tested release interface.
 
----
-
-## What you need to provide (7 fields)
-
-Copy `scripts/setup_inputs.template.yaml` to `setup_inputs.yaml` in the repo root and fill in:
-
-| # | Field | Example |
-|---|---|---|
-| 1 | `project_name` | `"rice_heat_stress"` |
-| 2 | `tax_id` | `4530` (Oryza sativa) |
-| 3 | `seq_type` | `"rnaseq_paired"` |
-| 4 | `fastq_source` | `"/scratch/fastq/"` or `"s3://bucket/project/fastq/"` |
-| 5 | `metadata_file` | `"~/metadata.xlsx"` (or `.csv`) |
-| 6 | `sample_id_column` | `"Sample"` |
-| 7 | `primary_factor` | `"treatment"` |
-
-Plus two optional fields: `model_fixed_effects` (default `"~ treatment"`) and `model_random_effects` (default `null`).
-
----
-
-## What you get out
-
-Running `python3 scripts/setup.py --project-dir <project> <inputs>.yaml`
-produces, inside that project directory:
-
-```
-config/
-  config.yaml               ← fully populated, ready for ./submit.sh -d <project>
-  samples.tsv               ← one row per matched sample
-  thresholds.yaml           ← copied from the repo defaults; edit per project
-reference/
-  annotation_info.tsv       ← pulled from NCBI gene_info
-  org.XXX.eg.db/            ← built for non-model organisms via AnnotationForge
-```
-
-And appends a line to `gates/decisions.log` for every step.
-
----
-
-## What the wizard does behind the scenes
-
-| Stage | Action | Source |
-|---|---|---|
-| Resolve organism | taxID → scientific name → OrgDb package name → KEGG code | NCBI Taxonomy eutils + KEGG REST |
-| Resolve reference | taxID → latest RefSeq assembly accession → FASTA/GTF/gene_info URLs | NCBI Datasets API |
-| Fetch annotation | Download `*_gene_info.gz`, project to our 4-column schema | NCBI FTP |
-| Match FASTQs to metadata | Enumerate `fastq_source`, substring-match to `sample_id_column` | local / S3 / HTTP listing |
-| Install OrgDb | If Bioconductor has it → print `BiocManager::install(...)` command. Else → invoke `build_orgdb.R` → AnnotationForge builds from NCBI | Bioconductor / AnnotationForge |
-| Render config | Merge inputs into `config.template.yaml` | — |
-
----
-
-## Two ways to run it
-
-**Declarative (recommended):**
-```bash
-PROJ=~/rnaseq_projects/my_study && mkdir -p "$PROJ"
-cp scripts/setup_inputs.template.yaml "$PROJ/setup_inputs.yaml"
-$EDITOR "$PROJ/setup_inputs.yaml"         # fill in the 7 fields
-python3 scripts/setup.py --project-dir "$PROJ" "$PROJ/setup_inputs.yaml"
-```
-
-**Interactive (no YAML needed):**
-```bash
-python scripts/setup.py --interactive
-# Prompts you for each field at the terminal
-```
-
----
-
-## What happens when something fails
-
-Network calls (NCBI Datasets, Ensembl BioMart, KEGG) are best-effort. If one fails, the wizard:
-
-1. Logs a **WARN** line to stdout and `gates/decisions.log`
-2. Writes the output file with placeholders (e.g. `"TODO"` URLs, empty annotation)
-3. Continues — downstream stages degrade gracefully:
-   - Missing `annotation_info.tsv` → DE tables have no `Description` column
-   - Missing `kegg_code` → KEGG stage auto-skips
-   - OrgDb not built → GO enrichment errors (only real hard-fail)
-
-You can re-run the wizard any time; it overwrites.
-
----
-
-## Skipping the wizard
-
-If you already have `config/config.yaml` + `config/samples.tsv` written by hand, you don't need `setup.py` at all. The wizard is strictly a convenience.
-
----
-
-## Worked example (grape)
-
-The grape GRBV project — preserved in `examples/grape/` — would be regenerated from:
-
-```yaml
-project_name: "grape_grbv"
-tax_id: 29760
-seq_type: "tagseq"
-fastq_source: "s3://ucd-core/singh_grape/fastq/"
-metadata_file: "~/Correct.Sample_Metadata.xlsx"
-sample_id_column: "Sample"
-fastq_pattern: "{sample_id}.fastq.gz"
-primary_factor: "treatment"
-model_fixed_effects: "~ group * stage"
-model_random_effects: "(1|vine)"
-storage_budget_gb: 20
-```
-
-`python scripts/setup.py` would produce the same `config/config.yaml` + `config/samples.tsv` the hand-written grape pipeline used.
+Storage is planned from the dataset and filesystem capacity. New setup files have `storage_budget_gb: null`; there is no 20 GB platform cap. A manually supplied legacy value represents an explicit site constraint and produces a migration notice.

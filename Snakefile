@@ -11,6 +11,8 @@
 # =============================================================================
 
 import os
+import hashlib
+import json
 import pandas as pd
 from pathlib import Path
 
@@ -47,6 +49,11 @@ if _cfg_blocking:
         "Configuration problems (preflight reports the same findings):\n  "
         + "\n  ".join(f"{code}: {detail}" for code, detail in _cfg_blocking))
 
+from recommend import recommend as _recommend
+RECOMMENDATION = _recommend(config)
+if RECOMMENDATION["issues"]:
+    raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
+
 # --- Load sample sheet ---------------------------------------------------
 samples = pd.read_csv(
     config["samples"]["sheet"],
@@ -76,17 +83,8 @@ QUANT = OUT / "quant"
 METRICS = Path("metrics")
 GATES = Path("gates")
 
-# Reference artifacts (transcriptome, GTF, salmon index) are derived purely from
-# the assembly, so they can be shared between projects. Keying the cache by
-# accession means two projects on the same genome reuse one index, while two on
-# different genomes cannot overwrite each other. Set reference.cache_dir to null
-# to keep them inside the project instead.
-# Note: reference.annotation_tsv.path stays project-relative and is unaffected.
-#
-# ponytail: no lock on the shared cache. Two runs starting a build of the SAME
-# accession at the same moment can race, because Snakemake's lock covers a
-# working directory, not this cache. Add an flock around the index rules if that
-# becomes real; sequential runs and different accessions are already safe.
+# Shared references are keyed by URLs, index parameters and the pinned Salmon
+# version. The completion lock records source checksums and is verified on reuse.
 import reference_cache as _refcache
 
 _ref_cfg = config.get("reference") or {}
@@ -124,6 +122,13 @@ if _ref_cache and REF.exists():
 for d in (OUT, REF, QUANT, METRICS, GATES):
     d.mkdir(parents=True, exist_ok=True)
 
+_snapshot = json.dumps(config, sort_keys=True, indent=2) + "\n"
+_snapshot_path = GATES / "resolved_config.json"
+if not _snapshot_path.exists() or _snapshot_path.read_text() != _snapshot:
+    _snapshot_path.write_text(_snapshot)
+_lock_path = REPO_DIR / "environments/linux-64.explicit.txt"
+RUNTIME_ID = hashlib.sha256(_lock_path.read_bytes()).hexdigest() if _lock_path.exists() else "unlocked"
+
 
 # --- Invalidate results a flag claims but the filesystem lacks ----------
 # R09 / master plan 11: "A done flag alone never proves a result exists."
@@ -153,6 +158,10 @@ def all_targets():
         *expand(str(QUANT / "{sample}/quant.sf"), sample=SAMPLES),
         # Stage 1b — comparative QC report (before/after-clean charts + MultiQC)
         OUT / "qc_report/qc_report.done",
+        OUT / "qc_report/qc_charts.html",
+        OUT / "qc_report/comparative_charts.png",
+        OUT / "qc_report/alignment_summary.tsv",
+        OUT / "qc_report/multiqc/multiqc_report.html",
         # Stage 2 — aggregated counts
         OUT / "counts.tsv",
         # Stage 3 — DE results

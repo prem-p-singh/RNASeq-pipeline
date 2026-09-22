@@ -19,7 +19,8 @@ schema_version: 1
 
 # ---------------------------------------------------------------------------
 # Per-library working set and retained output, by assay.
-# Used only when actual file sizes cannot be measured (RS02). Ranges are
+# Input bands apply when sizes cannot be measured; output/cache coefficients
+# remain conservative assumptions. Ranges are
 # low/high so the plan can report a band rather than a false point estimate.
 # ---------------------------------------------------------------------------
 assays:
@@ -35,8 +36,8 @@ assays:
   bulk_end_tag:
     input_gb: {low: 0.3, high: 2.0, source: assumed}
     retained_gb: {low: 0.02, high: 0.1, source: assumed}
-    # Single-end streams fastp into salmon, so no trimmed copy lands on disk.
-    temporary_gb: {low: 0.1, high: 0.5, source: assumed}
+    # Single-end keeps seekable trimmed reads until Salmon is validated.
+    temporary_gb: {low: 0.6, high: 4.0, source: assumed}
 
 # ---------------------------------------------------------------------------
 # One-off costs, counted once per unique identity, not per library (RS03/RS05).

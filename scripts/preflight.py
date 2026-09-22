@@ -34,6 +34,7 @@ import yaml
 
 import config_resolve
 import metadata as metadata_tables
+from recommend import recommend
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "config" / "spec.yaml"
@@ -402,11 +403,16 @@ def main():
             design = {"checked": False,
                       "reason": "model variables missing or single-level"}
 
+    recommendation = recommend(cfg, meta.get("n_rows"))
+    for reason in recommendation["issues"]:
+        iss.add("SCP003", "recommendation", reason)
+
     plan = {
         "spec_version": spec["spec_version"],
         "project_dir": str(proj),
         "config": str(cfg_path),
         "resolved": resolved,
+        "recommendation": recommendation,
         "metadata": meta,
         "metadata_tables": tables_meta,
         "design": design,
@@ -419,6 +425,7 @@ def main():
     plan_path = proj / "gates" / "preflight_plan.json"
     iss.write(issues_path)
     plan_path.parent.mkdir(parents=True, exist_ok=True)
+    (plan_path.parent / "recommendation.json").write_text(json.dumps(recommendation, indent=2) + "\n")
     with open(plan_path, "w") as fh:
         json.dump(plan, fh, indent=2)
         fh.write("\n")
