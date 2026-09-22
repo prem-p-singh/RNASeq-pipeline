@@ -45,7 +45,8 @@ make_counts <- function(n_samples, n_genes, seed = 1, constant_genes = 0) {
 }
 
 # Runs the script in a throwaway directory and returns the parsed metrics.
-run_wgcna <- function(counts_df, mem_mb, max_modules, threads = 2) {
+run_wgcna <- function(counts_df, mem_mb, max_modules, threads = 2,
+                      sensitivity = list()) {
   wd <- file.path(tempdir(), paste0("wgcna_", as.integer(runif(1, 1, 1e9))))
   dir.create(file.path(wd, "gates"), recursive = TRUE)
   old <- setwd(wd); on.exit(setwd(old), add = TRUE)
@@ -57,9 +58,9 @@ run_wgcna <- function(counts_df, mem_mb, max_modules, threads = 2) {
       project = list(output_dir = "results"),
       thresholds = list(wgcna = list(
         min_samples = 15, target_r2 = 0.85, power_cap = 30,
-        max_modules = max_modules,
-        merge_cut_height_default = 0.25,
-        merge_cut_height_bumped  = 0.35))),
+        max_modules_diagnostic = max_modules,
+        merge_cut_height = 0.25,
+        sensitivity_merge_heights = sensitivity))),
     input     = list(counts = "counts.tsv"),
     output    = list(done = "wgcna.done", metrics = "wgcna.json"),
     params    = list(run_wgcna = TRUE, min_samples = 15),
@@ -74,24 +75,27 @@ run_wgcna <- function(counts_df, mem_mb, max_modules, threads = 2) {
 
 cts <- make_counts(20, 900)
 
-# --- 1. a bumped run records the bumped height ------------------------
-# max_modules = 0 forces the bump branch.
-#
-# NOT covered: the specific regression where the bump SUCCEEDS (module count
-# falls back to <= max_modules) and the old code then reported the default
-# height. Exposing it needs a fixture where mergeCutHeight actually changes the
-# module count, and I could not build one: raising the height to 0.99 left the
-# count unchanged, because WGCNA merges on 1 - cor(eigengenes) and an arbitrary
-# eigenvector sign flip puts the dissimilarity above every height.
+# --- 1. the declared height is the result, whatever the module count ---
+# AN06 forbids retuning to reach an attractive module count. Previously a
+# module count above the cap triggered a second run at a bumped height whose
+# network replaced the first, so the published result depended on its own
+# output. max_modules_diagnostic = 0 forces the diagnostic to trip.
 m <- run_wgcna(cts, mem_mb = 8000, max_modules = 0)
 stopifnot(identical(m$skipped, FALSE))
-if (!isTRUE(all.equal(m$merge_cut_height, 0.35)))
-  stop("bumped run recorded merge_cut_height=", m$merge_cut_height, ", expected 0.35")
-
-# --- 2. no bump; the metric must say 0.25 -----------------------------
-m <- run_wgcna(cts, mem_mb = 8000, max_modules = 999)
 if (!isTRUE(all.equal(m$merge_cut_height, 0.25)))
-  stop("un-bumped run recorded merge_cut_height=", m$merge_cut_height, ", expected 0.25")
+  stop("declared merge_cut_height was not used: ", m$merge_cut_height)
+stopifnot(isTRUE(m$modules_exceed_diagnostic))
+stopifnot(length(m$sensitivity_analyses) == 0)
+
+# --- 2. a module count within the threshold behaves identically --------
+m2 <- run_wgcna(cts, mem_mb = 8000, max_modules = 999)
+if (!isTRUE(all.equal(m2$merge_cut_height, 0.25)))
+  stop("declared merge_cut_height was not used: ", m2$merge_cut_height)
+stopifnot(!isTRUE(m2$modules_exceed_diagnostic))
+# the network itself must not depend on whether the diagnostic tripped
+stopifnot(identical(m$n_modules, m2$n_modules))
+
+m <- m2
 if (m$n_blocks != 1)
   stop("900 genes at 8 GB should fit one block, got ", m$n_blocks)
 if (m$max_block_size < m$n_genes)
@@ -104,6 +108,15 @@ if (m$n_threads_requested != 2)
   stop("n_threads_requested not taken from snakemake@threads: ", m$n_threads_requested)
 if (!(m$n_threads >= 1 && m$n_threads <= m$n_threads_requested))
   stop("n_threads used (", m$n_threads, ") outside 1..", m$n_threads_requested)
+
+# --- 2b. sensitivity is additional, never a replacement ----------------
+ms <- run_wgcna(cts, mem_mb = 8000, max_modules = 999,
+                sensitivity = list(0.4, 0.9))
+stopifnot(isTRUE(all.equal(ms$merge_cut_height, 0.25)))
+stopifnot(nrow(ms$sensitivity_analyses) == 2 ||
+          length(ms$sensitivity_analyses) == 2)
+# the declared result is unchanged by running a sensitivity analysis
+stopifnot(identical(ms$n_modules, m2$n_modules))
 
 # --- 3. a small allocation must split into blocks, not force one ------
 # 5 MB admits only a few hundred genes, so the same matrix has to be blocked.

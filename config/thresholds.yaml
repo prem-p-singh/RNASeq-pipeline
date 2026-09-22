@@ -53,9 +53,19 @@ wgcna:
   min_samples: 15                # < this → skip WGCNA entirely
   target_r2: 0.85
   power_cap: 30                  # blockwiseModules hard limit
-  max_modules: 50                # > this → re-run with larger mergeCutHeight
-  merge_cut_height_default: 0.25
-  merge_cut_height_bumped: 0.35
+  # AN06: "Preserve declared parameter policy; optional sensitivity analysis is
+  # a new recorded analysis, not hidden retuning." merge_cut_height is the
+  # declared policy and is the height the reported network is built at. It is
+  # never changed automatically to obtain a more attractive module count.
+  merge_cut_height: 0.25
+  # Diagnostic only. Exceeding it is recorded and reported; it does not trigger
+  # a re-run. Previously a second run at merge_cut_height_bumped replaced the
+  # first, so the published network was whichever height happened to yield
+  # fewer modules.
+  max_modules_diagnostic: 50
+  # Opt-in sensitivity analysis. Each height listed here is run and recorded
+  # ALONGSIDE the declared result, never in place of it. Empty means none.
+  sensitivity_merge_heights: []
 
 # Tier selection (submit.sh)
 tiers:

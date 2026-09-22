@@ -74,6 +74,28 @@ txi <- tximport(quant_files, type = "salmon", tx2gene = tx2gene,
 
 counts <- round(txi$counts)
 
+# CT01/CT02: record the count semantics with the counts, so a downstream stage
+# can tell what was already done rather than inferring it from seq_type. CT02:
+# "Record scaling; do not add a second transcript-length correction." The
+# `length_correction_applied` flag is what 03_de.R checks before it would add
+# offsets of its own.
+count_provenance <- list(
+  schema_version            = 1L,
+  producer                  = "02_aggregate.R",
+  seq_type                  = seq_type,
+  counts_from_abundance     = counts_from_abundance,
+  length_correction_applied = !identical(counts_from_abundance, "no"),
+  # CT03: 3-prime counts are molecule-like and must never receive the
+  # conventional full-length correction, here or later.
+  further_length_correction_permitted = FALSE,
+  rationale = if (identical(counts_from_abundance, "no"))
+      paste("3-prime tag counts do not scale with transcript length;",
+            "no length correction was applied and none may be added (CT03)")
+    else
+      paste("abundance-derived counts already carry the transcript-length",
+            "correction (lengthScaledTPM); adding another would double it (CT02)")
+)
+
 # --- Optional gene-info merge -----------------------------------------
 anno_path <- cfg$reference$annotation_tsv$path
 if (!is.null(anno_path) && file.exists(anno_path)) {
@@ -198,6 +220,21 @@ if (length(excluded) > 0) {
 if (ncol(counts) == 0) stop("every sample was excluded by the QC policy")
 message("Cohort: ", ncol(counts), " samples retained, ",
         length(excluded), " excluded (see ", out_disposition, ")")
+
+# --- Count provenance and gene lengths (CT01) --------------------------
+prov_path <- file.path(dirname(out_counts), "counts_provenance.json")
+write_json(count_provenance, prov_path, pretty = TRUE, auto_unbox = TRUE)
+message("Wrote ", prov_path, " (countsFromAbundance=", counts_from_abundance, ")")
+
+# CT01 asks that length information be preserved, not just counts. tximport
+# returns it per gene; keeping it means a backend that wants offsets has them
+# without re-importing.
+if (!is.null(txi$length)) {
+  len_df <- as.data.frame(txi$length)
+  len_df$gene_id <- rownames(txi$length)
+  write_tsv(len_df[, c("gene_id", setdiff(names(len_df), "gene_id"))],
+            file.path(dirname(out_counts), "gene_lengths.tsv"))
+}
 
 # --- Write count matrix ------------------------------------------------
 out_df <- as.data.frame(counts)
