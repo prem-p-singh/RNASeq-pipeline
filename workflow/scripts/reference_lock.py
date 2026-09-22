@@ -50,7 +50,13 @@ def file_record(path: str) -> dict:
 
 
 def salmon_version() -> str | None:
-    """The version that built this index, or None when it cannot be read."""
+    """The version on PATH now. NOT necessarily the one that built the index.
+
+    WORKING_PLAN 3.1: querying the available Salmon "need not identify the
+    version that built a reused index". Callers pass --salmon-version, captured
+    in the shell that ran `salmon index`; this is only the fallback, and the
+    record marks which of the two it holds.
+    """
     try:
         out = subprocess.run(["salmon", "--version"], capture_output=True,
                              text=True, timeout=60)
@@ -60,7 +66,8 @@ def salmon_version() -> str | None:
     return text[0].replace('"', "").strip() if text else None
 
 
-def index_record(index_dir: str, kmer: int, decoy_file: str | None) -> dict:
+def index_record(index_dir: str, kmer: int, decoy_file: str | None,
+                 built_version: str | None = None) -> dict:
     """What was actually built.
 
     `decoys` is derived from whether a decoy file was supplied to
@@ -78,9 +85,15 @@ def index_record(index_dir: str, kmer: int, decoy_file: str | None) -> dict:
         except (OSError, ValueError):
             info = None
 
+    # Build-time capture is authoritative; the ambient query is a labelled
+    # fallback so a reader can tell the difference.
+    version = built_version or salmon_version()
+    provenance = "build_time" if built_version else "observed_at_record_time"
+
     return {
         "tool": "salmon",
-        "tool_version": salmon_version(),
+        "tool_version": version,
+        "tool_version_provenance": provenance,
         "path": index_dir or None,
         "present": bool(index_dir and os.path.isdir(index_dir)),
         "kmer": kmer,
@@ -124,7 +137,11 @@ def build_lock(args) -> dict:
             "transcriptome": file_record(args.transcriptome),
             "annotation": file_record(args.gtf),
         },
-        "index": index_record(args.index, args.kmer, args.decoys),
+        "index": index_record(args.index, args.kmer, args.decoys,
+                              args.salmon_version or None),
+        # RF09: what a reader must match before reusing this entry.
+        "cache": {"key_inputs": json.loads(args.cache_key_inputs)
+                  if args.cache_key_inputs else None},
     }
 
 
@@ -137,8 +154,13 @@ def describe(lock: dict) -> str:
     ref = f"{acc} ({name})" if name else acc
     decoys = (idx.get("decoys") or {}).get("label") or "construction unrecorded"
     tool = idx.get("tool") or "unknown quantifier"
-    ver = idx.get("tool_version")
-    tool_s = f"{tool} {ver}" if ver else tool
+    ver = (idx.get("tool_version") or "").strip()
+    # salmon --version prints "salmon 1.10.3", so joining tool and version
+    # naively gave "salmon salmon 1.10.3".
+    if ver.lower().startswith(tool.lower()):
+        tool_s = ver
+    else:
+        tool_s = f"{tool} {ver}" if ver else tool
     mode = idx.get("quantification_mode") or "unrecorded mode"
     return f"{ref}, {tool_s}, {mode}, {decoys}"
 
@@ -157,6 +179,12 @@ def main():
     ap.add_argument("--gtf-url", default="")
     ap.add_argument("--genome-url", default="")
     ap.add_argument("--kmer", type=int, default=31)
+    ap.add_argument("--salmon-version", default="",
+                    help="version captured in the shell that built the index; "
+                         "authoritative, unlike the version on PATH later")
+    ap.add_argument("--cache-key-inputs", default="",
+                    help="JSON of the construction parameters this entry was "
+                         "built from, for RF09 reuse checks")
     ap.add_argument("--decoys", default="",
                     help="decoy file passed to `salmon index -d`; empty means "
                          "no decoys were used, which is recorded as such")

@@ -83,12 +83,39 @@ GATES = Path("gates")
 # accession at the same moment can race, because Snakemake's lock covers a
 # working directory, not this cache. Add an flock around the index rules if that
 # becomes real; sequential runs and different accessions are already safe.
-_ref_cache = (config.get("reference") or {}).get("cache_dir")
-_accession = (config.get("reference") or {}).get("accession") or "unspecified_assembly"
+import reference_cache as _refcache
+
+_ref_cfg = config.get("reference") or {}
+_ref_cache = _ref_cfg.get("cache_dir")
+# Index construction parameters. Kept here because they must be knowable when
+# the DAG is built: they decide the cache path.
+SALMON_KMER = int(_ref_cfg.get("kmer") or 31)
+SALMON_DECOYS = _ref_cfg.get("decoys") or None
+
+# RF09 and master plan 5.3: "Assembly accession alone is insufficient:
+# annotation, decoys, tool version, and index parameters can differ." The key
+# was the bare accession, so two projects agreeing on the genome but differing
+# in annotation release, k-mer or decoy status shared one directory and
+# consumed each other's index. The digest below covers all of them.
+CACHE_KEY = _refcache.cache_key(_ref_cfg, SALMON_KMER, SALMON_DECOYS)
 if _ref_cache:
-    REF = Path(os.path.expanduser(str(_ref_cache))) / str(_accession)
+    REF = Path(os.path.expanduser(str(_ref_cache))) / CACHE_KEY
 else:
     REF = Path("reference")
+
+# Refuse an entry that is incomplete or was built from other parameters,
+# rather than reading whatever happens to sit at that path.
+if _ref_cache and REF.exists():
+    _entry_issues = _refcache.verify_entry(REF, _ref_cfg, SALMON_KMER, SALMON_DECOYS)
+    _fatal = [i for i in _entry_issues if not i.startswith(("missing ", "empty "))]
+    if _fatal:
+        raise RuntimeError(
+            "Reference cache entry does not match this run (RF09):\n  "
+            + str(REF) + "\n  " + "\n  ".join(_fatal))
+    if _entry_issues:
+        print("Reference cache entry incomplete; it will be rebuilt:")
+        for i in _entry_issues:
+            print(f"  {i}")
 
 for d in (OUT, REF, QUANT, METRICS, GATES):
     d.mkdir(parents=True, exist_ok=True)
