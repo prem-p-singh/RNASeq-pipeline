@@ -88,12 +88,13 @@ else
     skip check_preflight.py "needs pyyaml, Rscript and jsonlite"
 fi
 
-# These three need the environment of WORKING_PLAN 3.2 item 3, which this machine
+# These four need the environment of WORKING_PLAN 3.2 item 3, which this machine
 # does not have. They share tests/_gate.sh and exit 77, which `run` reports as a
 # skip. Set SNAKEMAKE=/path/to/snakemake to point them at one.
 run check_dag.sh             "bash tests/check_dag.sh"
 run check_stages.sh          "bash tests/check_stages.sh"
 run check_counts.sh          "bash tests/check_counts.sh"
+run check_network.sh         "bash tests/check_network.sh"
 
 run check_storage_policy.sh  "bash tests/check_storage_policy.sh"
 
