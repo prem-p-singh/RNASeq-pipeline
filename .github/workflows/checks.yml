@@ -9,10 +9,12 @@ name: self-checks
 # variancePartition are a different matter: they take tens of minutes to install,
 # and the scientific correctness of those stages is not what this job guards. It
 # guards the plumbing (path handling, sample matching, storage policy, project
-# isolation, report truthfulness). run_all.sh reports check_de.R and
-# check_wgcna.R as SKIP here and prints the skip count, so the gap stays visible
-# rather than being silently counted as a pass. Run those locally, or on FARM
-# inside the conda environment, before trusting downstream output.
+# isolation, report truthfulness). Snakemake is absent too, so the two checks
+# that build or run a DAG cannot run either. run_all.sh reports check_de.R,
+# check_wgcna.R, check_dag.sh and check_stages.sh as SKIP here, with the reason,
+# and prints the skip count, so the gap stays visible rather than being silently
+# counted as a pass. Run those locally, or on FARM inside the conda environment,
+# before trusting downstream output.
 
 on:
   push:

@@ -122,16 +122,37 @@ record <- function(contrast, method, status, reason = "", n_terms = NA_integer_,
     schema_version = 1L, stringsAsFactors = FALSE)
 }
 
+# Outcomes of the shared preparation below (reading the DE table, resolving
+# identifiers) apply to whichever methods were going to consume it. A method
+# policy already switched off keeps its skip status: it cannot have failed at a
+# step it was never going to reach, and master plan 11 keeps skipped_by_policy
+# and failed apart. Recording both as "failed" made a run with GO and KEGG both
+# off end as a failed stage, on gene IDs that were never needed.
+record_prepared <- function(contrast, status, reason) {
+  if (run_go) record(contrast, "GO", status, reason)
+  else        record(contrast, "GO", skip_status(go_skip_reason), go_skip_reason)
+  if (run_kegg) record(contrast, "KEGG", status, reason)
+  else          record(contrast, "KEGG", skip_status(kegg_skip_reason),
+                       kegg_skip_reason)
+}
+
 for (i in seq_len(nrow(manifest))) {
   contrast <- manifest$contrast_name[i]
   path     <- file.path(out_dir, manifest$analysis_table[i])
   rank_col <- manifest$statistic[i]
+
+  # Neither method will run, so there is nothing to prepare and no identifier
+  # to resolve. Leaving this to the gates below meant reading and mapping every
+  # DE table to decide nothing.
+  if (!run_go && !run_kegg) {
+    record_prepared(contrast, "skipped_by_policy", "")
+    next
+  }
   message("Enrichment for: ", contrast)
 
   if (!file.exists(path)) {
     msg <- paste0("DE table listed in the manifest is missing: ", path)
-    record(contrast, "GO", "failed", msg)
-    record(contrast, "KEGG", "failed", msg)
+    record_prepared(contrast, "failed", msg)
     next
   }
   de <- read_tsv(path, show_col_types = FALSE)
@@ -140,8 +161,7 @@ for (i in seq_len(nrow(manifest))) {
   # silently, which looks identical to "analysed and found nothing".
   if (!rank_col %in% names(de)) {
     msg <- paste0("ranking column '", rank_col, "' absent from ", basename(path))
-    record(contrast, "GO", "failed", msg)
-    record(contrast, "KEGG", "failed", msg)
+    record_prepared(contrast, "failed", msg)
     next
   }
 
@@ -163,8 +183,7 @@ for (i in seq_len(nrow(manifest))) {
     msg <- sprintf(
       "only %.1f%% of %d genes mapped to usable IDs (minimum %.0f%%, namespace: %s)",
       100 * coverage, n_input, 100 * min_id_mapping_rate, id_namespace)
-    record(contrast, "GO", "failed", msg)
-    record(contrast, "KEGG", "failed", msg)
+    record_prepared(contrast, "failed", msg)
     next
   }
   message(sprintf("  %d/%d genes mapped (%.1f%%)", nrow(de), n_input,
