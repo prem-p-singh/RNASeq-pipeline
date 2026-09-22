@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """A tiny synthetic project, and the expected answers for Stages 2 to 5.
 
-    tiny_project.py build   <dest> <repo> [seq_type]
+    tiny_project.py build   <dest> <repo> [seq_type] [shape]
     tiny_project.py verify  <dest>
     tiny_project.py qualify <dest>
+    tiny_project.py network <a> <b> <big>
 
 `build` writes a reference and Stage 1 outputs for 8 samples. Stages 0 and 1
 need salmon and fastp, so their products are written here directly; everything
@@ -20,9 +21,14 @@ own arithmetic would confirm nothing.
 declared tolerances", for the bulk branch. It reimplements lengthScaledTPM here,
 in Python, from the definition, and compares cell by cell.
 
+`network` is V09, over three Stage 5 runs. `shape` selects the cohort: `de` is
+8 samples and 202 genes for stages 2 to 5, `wgcna` is 20 samples and 2000 genes
+carrying four planted co-expression modules.
+
 Deterministic: one seed, fixed below, so a regenerated fixture is the same
 fixture. Nothing here is random at check time.
 """
+import collections
 import csv
 import json
 import math
@@ -62,6 +68,23 @@ SHORT_ISOFORM, LONG_ISOFORM = "T001a", "T001b"
 EFFLEN = {SHORT_ISOFORM: 500.0, LONG_ISOFORM: 5000.0, "T002": 1200.0}
 SWITCH = {"control": (0.80, 0.20), "treated": (0.20, 0.80)}
 
+# The `wgcna` shape. Stage 5 needs more samples than thresholds.wgcna.min_samples
+# (15) and enough genes that blockSize() splits the work, which is the whole
+# point of R16: the previous code forced one huge block regardless of memory.
+# blockSize is min(nGenes, floor(mem_bytes / 8 / overhead / nGenes)), so 2000
+# genes at a small mem_mb gives several blocks.
+WG_SAMPLES = [f"W{i:02d}" for i in range(1, 21)]
+WG_MODULES = 4           # co-expressed blocks of genes, driven by a latent factor
+WG_PER_MODULE = 150
+WG_NOISE = 1400          # genes belonging to no module
+WG_LOADING = 0.9         # how strongly a module gene follows its factor
+# Module 1's factor is deliberately near-collinear with module 0's, so their
+# eigengenes sit about WG_TWIN_RHO apart and mergeCutHeight decides whether they
+# are one module or two. With four independent factors nothing ever merges, the
+# height has no observable effect, and an AN06 assertion about "the declared
+# height" cannot fail. This is what gives it something to bite on.
+WG_TWIN_RHO = 0.94
+
 
 def genes():
     """(gene_id, [transcript ids], treated-group multiplier)."""
@@ -76,6 +99,33 @@ def genes():
     out += [(f"UP{i:03d}", [f"UP{i:03d}_t1"], EFFECT) for i in range(N_DE)]
     out += [(f"DN{i:03d}", [f"DN{i:03d}_t1"], 1.0 / EFFECT) for i in range(N_DE)]
     out += [(f"G{i + 100:03d}", [f"G{i + 100:03d}_t1"], 1.0) for i in range(N_FLAT)]
+    return out
+
+
+# max_modules_diagnostic is set to 1 so the diagnostic always trips: AN06 says
+# that is recorded and reported, never a reason to re-run at a different height.
+# sensitivity_merge_heights asks for one extra height, low enough to keep the
+# near-collinear pair apart, so the sensitivity network is visibly a DIFFERENT
+# network. It must be written ALONGSIDE the declared result, never over it.
+WGCNA_THRESHOLDS = """\
+thresholds:
+  wgcna:
+    min_samples: 15
+    target_r2: 0.85
+    power_cap: 30
+    merge_cut_height: 0.25
+    max_modules_diagnostic: 1
+    sensitivity_merge_heights: [0.02]
+"""
+
+
+def wgcna_genes():
+    """(gene_id, [transcript id], module index or None)."""
+    out = []
+    for m in range(WG_MODULES):
+        out += [(f"M{m}G{i:03d}", [f"M{m}G{i:03d}_t1"], m)
+                for i in range(WG_PER_MODULE)]
+    out += [(f"N{i:04d}", [f"N{i:04d}_t1"], None) for i in range(WG_NOISE)]
     return out
 
 
@@ -111,16 +161,29 @@ def read_tx2gene(dest):
 
 
 # --------------------------------------------------------------------------
-def build(dest: Path, repo: Path, seq_type: str = "tagseq"):
+def build(dest: Path, repo: Path, seq_type: str = "tagseq", shape: str = "de"):
     rng = random.Random(SEED)
-    gs = genes()
+    wg = shape == "wgcna"
+    # The third element is the de shape's treated-group multiplier, and the
+    # wgcna shape's module index (or None for a gene in no module).
+    gs = wgcna_genes() if wg else genes()
+    samples = WG_SAMPLES if wg else SAMPLES
+    treated = set(samples[len(samples) // 2:])
+
+    # One latent factor per module, drawn once and reused for every gene in it.
+    # Co-expression is the signal Stage 5 is supposed to find; without it the
+    # run succeeds but its modules mean nothing.
+    factors = [[rng.gauss(0, 1) for _ in samples] for _ in range(WG_MODULES)]
+    factors[1] = [WG_TWIN_RHO * f0 + math.sqrt(1 - WG_TWIN_RHO ** 2) * f1
+                  for f0, f1 in zip(factors[0], factors[1])]
+
     (dest / "config").mkdir(parents=True, exist_ok=True)
     ref = dest / "reference"
     ref.mkdir(exist_ok=True)
 
     lengths = {}
     gtf, fa = [], []
-    for i, (gid, txs, _) in enumerate(gs):
+    for i, (gid, txs, _role) in enumerate(gs):
         for j, tx in enumerate(txs):
             lengths[tx] = efflen(tx, i)
             span = int(lengths[tx]) + 150            # genomic span > effective
@@ -137,15 +200,24 @@ def build(dest: Path, repo: Path, seq_type: str = "tagseq"):
     (ref / "salmon_idx" / "info.json").write_text('{"fixture": true}\n')
     (ref / "reference.lock.json").write_text('{"fixture": true}\n')
 
-    for s in SAMPLES:
+    for si, s in enumerate(samples):
         d = dest / "results" / "quant" / s
         d.mkdir(parents=True, exist_ok=True)
-        group = "treated" if s in TREATED else "control"
+        group = "treated" if s in treated else "control"
 
         reads = {}
-        for gid, txs, mult in gs:
-            eff = mult if s in TREATED else 1.0
+        for gid, txs, role in gs:
             for k, tx in enumerate(txs):
+                if wg:
+                    # A module gene follows its factor; a noise gene follows its
+                    # own draw. Both land on the same baseline depth, so module
+                    # membership is a correlation structure and not a level shift.
+                    load = (WG_LOADING * factors[role][si] if role is not None
+                            else rng.gauss(0, 1))
+                    reads[tx] = max(1, int(round(
+                        BASE * math.exp(0.5 * load + rng.gauss(0, 0.15)))))
+                    continue
+                eff = role if s in treated else 1.0
                 # G001 keeps its total depth and moves it between a short and a
                 # long isoform. Raw counts stay flat; the molecule count does
                 # not, which is the bias lengthScaledTPM exists to remove.
@@ -170,8 +242,8 @@ def build(dest: Path, repo: Path, seq_type: str = "tagseq"):
         # would pass one branch and exclude the whole cohort on the other.
         deep, shallow = (5_000_000, 2_000_000) if seq_type == "tagseq" \
                         else (30_000_000, 12_000_000)
-        map_rate, n_reads = {LOW_MAPPING: (0.45, deep),
-                             LOW_DEPTH: (0.82, shallow)}.get(s, (0.88, deep))
+        bad = {} if wg else {LOW_MAPPING: (0.45, deep), LOW_DEPTH: (0.82, shallow)}
+        map_rate, n_reads = bad.get(s, (0.88, deep))
         (d / "metrics.json").write_text(json.dumps({
             "sample": s, "seq_type": seq_type,
             "num_reads_processed": n_reads, "mapping_rate": map_rate,
@@ -183,8 +255,8 @@ def build(dest: Path, repo: Path, seq_type: str = "tagseq"):
         }, indent=2) + "\n")
 
     sheet = ["sample_id\tfastq_url\ttreatment"] + [
-        f"{s}\t/dev/null/{s}.fq.gz\t" + ("treated" if s in TREATED else "control")
-        for s in SAMPLES]
+        f"{s}\t/dev/null/{s}.fq.gz\t" + ("treated" if s in treated else "control")
+        for s in samples]
     (dest / "config" / "samples.tsv").write_text("\n".join(sheet) + "\n")
 
     # seq_type tagseq makes countsFromAbundance "no", the branch whose answer is
@@ -212,7 +284,7 @@ sample_policy: {exclude_failing_qc: true}
 downstream: {run_go: false, run_kegg: false, run_wgcna: true}
 orgdb: {strategy: skip}
 hpc: {delete_fastq_after_quant: false, samples_in_flight: null}
-""".replace("SEQ_TYPE", seq_type))
+""".replace("SEQ_TYPE", seq_type) + (WGCNA_THRESHOLDS if wg else ""))
     shutil.copy(repo / "config" / "thresholds.yaml",
                 dest / "config" / "thresholds.yaml")
 
@@ -475,14 +547,181 @@ def qualify(dest: Path):
     return 1 if fails else 0
 
 
+# --------------------------------------------------------------------------
+# V09: "Memory behavior, sample/gene filtering, documented parameters and
+# stable output identity" (master plan 12), plus AN06 on the merge height.
+def network(a: Path, b: Path, big: Path):
+    """a and b are independent runs at the same small memory allocation; big is
+    the same data with enough memory for a single block."""
+    fails = []
+
+    def ck(cond, msg):
+        print(("  ok   " if cond else "  FAIL ") + msg)
+        if not cond:
+            fails.append(msg)
+
+    def mods(d):
+        with open(d / "results" / "WGCNA" / "module_assignments.tsv") as f:
+            return {r["gene_id"]: r["module"]
+                    for r in csv.DictReader(f, delimiter="\t")}
+
+    ma = json.loads((a / "metrics" / "wgcna.json").read_text())
+    mb = json.loads((b / "metrics" / "wgcna.json").read_text())
+    mg = json.loads((big / "metrics" / "wgcna.json").read_text())
+
+    print("== it ran at all ==")
+    ck(ma["skipped"] is False, f"not skipped: {ma['n_samples']} samples, "
+                               f"{ma['n_genes']} genes")
+    for f in ("module_assignments.tsv", "MEs.tsv", "network.rds"):
+        ck((a / "results" / "WGCNA" / f).exists(), f"wrote {f}")
+
+    print("== memory behaviour (R16: no more one forced huge block) ==")
+    # WGCNA::blockSize is min(nGenes, floor(bytes / 8 / overheadFactor / nGenes)),
+    # with overheadFactor 3 as 05_wgcna.R passes it. Recomputed here rather than
+    # read back from the metrics it is supposed to justify.
+    def expect_block(mem_mb, n_genes):
+        return min(n_genes, int((mem_mb * 1024 ** 2 / 8) / 3 // n_genes))
+    for m in (ma, mg):
+        want = expect_block(m["mem_mb"], m["n_genes"])
+        ck(m["max_block_size"] == want,
+           f"mem_mb={m['mem_mb']}: max_block_size {m['max_block_size']} "
+           f"matches blockSize() = {want}")
+        # blockwiseModules pre-clusters genes with projectiveKMeans rather than
+        # chunking them, so the block count is at least, and need not equal,
+        # nGenes/maxBlockSize.
+        floor_blocks = math.ceil(m["n_genes"] / m["max_block_size"])
+        ck(m["n_blocks"] >= floor_blocks,
+           f"mem_mb={m['mem_mb']}: {m['n_blocks']} blocks, at least the "
+           f"{floor_blocks} that {m['max_block_size']} genes per block forces")
+    ck(ma["n_blocks"] > 1 and mg["n_blocks"] == 1,
+       f"block count tracks the allocation: {ma['n_blocks']} blocks at "
+       f"{ma['mem_mb']} MB, {mg['n_blocks']} at {mg['mem_mb']} MB")
+
+    print("== documented parameters, and AN06 ==")
+    ck(ma["merge_cut_height"] == 0.25,
+       f"the reported network is at the declared height {ma['merge_cut_height']}")
+    ck(ma["modules_exceed_diagnostic"] is True,
+       f"{ma['n_modules']} modules exceeds the diagnostic threshold "
+       f"{ma['max_modules_diagnostic']}, and that is recorded")
+    # The whole of AN06: exceeding the diagnostic must NOT move the height.
+    ck(ma["merge_cut_height"] == 0.25 and "never retuned" in
+       ma["merge_cut_height_policy"],
+       "exceeding it did not retune the height (AN06)")
+    ck(len(ma["sensitivity_analyses"]) == 1
+       and ma["sensitivity_analyses"][0]["merge_cut_height"] == 0.02,
+       "the requested sensitivity height is recorded as a separate analysis")
+    sens_file = a / "results" / "WGCNA" / "module_assignments_h0.02.tsv"
+    ck(sens_file.exists(),
+       "the sensitivity network is written to its own file, not over the declared one")
+    # The declared height must be observable IN the result, not just asserted in
+    # the metrics. Modules 0 and 1 are near-collinear by construction: at 0.25
+    # they merge, at 0.02 they do not. A silent retune to another height would
+    # change which of these two pictures the declared file shows.
+    with open(sens_file) as f:
+        sens = {r["gene_id"]: r["module"] for r in csv.DictReader(f, delimiter="\t")}
+    dec = mods(a)
+
+    def main_label(m, pre):
+        return collections.Counter(m[g] for g in m
+                                   if g.startswith(pre)).most_common(1)[0][0]
+    ck(main_label(dec, "M0G") == main_label(dec, "M1G"),
+       "at the declared 0.25 the near-collinear pair is ONE module, which is "
+       "what that height means")
+    ck(main_label(sens, "M0G") != main_label(sens, "M1G"),
+       "at the sensitivity 0.02 the same pair is TWO, so the height is doing "
+       "something observable")
+    ck(dec != sens and ma["sensitivity_analyses"][0]["n_modules"] > ma["n_modules"],
+       f"the two networks really differ ({ma['n_modules']} modules declared, "
+       f"{ma['sensitivity_analyses'][0]['n_modules']} at the sensitivity height)")
+    # Two documented paths: a power that reaches target_r2, or the cap when
+    # none does. Assert the rule rather than one outcome, and say which was
+    # taken. R writes a missing estimate as the string "NA".
+    capped = ma["power_estimate"] in ("NA", None) or ma["power_estimate"] > 30
+    ck(ma["power_used"] <= 30, f"soft-threshold power {ma['power_used']} is "
+                               f"within power_cap 30")
+    if capped:
+        ck(ma["power_used"] == 30,
+           f"no power reached target_r2, so the cap was used "
+           f"(R^2 {ma['r2_at_power_used']}), which is the documented fallback")
+        ck("WGCNA_POWER" in (a / "gates" / "decisions.log").read_text(),
+           "and the fallback is recorded in gates/decisions.log")
+    else:
+        ck(ma["power_used"] == ma["power_estimate"] and ma["r2_at_power_used"] >= 0.85,
+           f"power {ma['power_used']} was chosen on its own merits "
+           f"(R^2 {ma['r2_at_power_used']})")
+
+    print("== sample and gene filtering ==")
+    ck("n_genes_dropped" in ma and "n_samples_dropped" in ma,
+       f"goodSamplesGenes ran and is accounted for "
+       f"({ma['n_genes_dropped']} genes, {ma['n_samples_dropped']} samples dropped)")
+    # Not a claim that the drop branch works: it is unreachable from counts on
+    # this path. filterByExpr removes an all-zero gene first, and TMM factors
+    # keep even a constant-CPM gene off exactly zero variance. Probed and
+    # recorded in WORKING_PLAN 5.8 rather than asserted here.
+    ck(ma["n_samples"] >= 15,
+       f"the cohort clears thresholds.wgcna.min_samples ({ma['n_samples']} >= 15)")
+
+    print("== stable output identity ==")
+    ck(mods(a) == mods(b),
+       "two independent runs at the same settings give identical modules")
+    ck((a / "results" / "WGCNA" / "MEs.tsv").read_text()
+       == (b / "results" / "WGCNA" / "MEs.tsv").read_text(),
+       "and identical eigengenes")
+
+    print("== the structure that was planted is the structure that is found ==")
+    # Modules 0 and 1 are one module at the declared height, by design. The two
+    # independent ones must come back whole and distinct from each other.
+    for tag, d in (("5-block", a), ("1-block", big)):
+        m = mods(d)
+        purity, labels = [], []
+        for k in (2, 3):
+            members = [g for g in m if g.startswith(f"M{k}G")]
+            top = collections.Counter(m[g] for g in members).most_common(1)[0]
+            purity.append(top[1] / len(members))
+            labels.append(top[0])
+        ck(min(purity) >= 0.95 and labels[0] != labels[1],
+           f"{tag}: both independent planted modules come back as one module "
+           f"each and distinct from each other (purity {min(purity):.1%})")
+        ck(main_label(m, "M0G") == main_label(m, "M1G"),
+           f"{tag}: the near-collinear pair is merged, as the declared height asks")
+
+    # Colour names are assigned by module size rank, and the sizes shift a
+    # little when the gene set is split into blocks. The partition survives;
+    # the labels do not. Anything that joins two runs on colour is wrong.
+    A, B = mods(a), mods(big)
+    by_colour = collections.defaultdict(set)
+    for g, c in A.items():
+        by_colour[c].add(g)
+    other = collections.defaultdict(set)
+    for g, c in B.items():
+        other[c].add(g)
+    overlaps = [max(len(by_colour[c] & other[k]) for k in other) / len(by_colour[c])
+                for c in by_colour]
+    same_label = sum(A[g] == B[g] for g in A) / len(A)
+    ck(min(overlaps) >= 0.90,
+       f"across allocations every module keeps >= 90% of its genes "
+       f"(worst {min(overlaps):.1%}), so the partition survives blocking")
+    # Reported, not asserted. Colour names come from module size rank, so they
+    # can permute when block sizes shift; whether they do on any one fixture is
+    # luck, and an assertion that passes by luck is worse than none.
+    print(f"  note   {same_label:.1%} of genes keep the same colour NAME across "
+          f"allocations; colours rank by module size and are not join keys")
+
+    print(f"\n{len(fails)} failed")
+    return 1 if fails else 0
+
+
 if __name__ == "__main__":
     if sys.argv[1] == "build":
         build(Path(sys.argv[2]), Path(sys.argv[3]),
-              sys.argv[4] if len(sys.argv) > 4 else "tagseq")
+              sys.argv[4] if len(sys.argv) > 4 else "tagseq",
+              sys.argv[5] if len(sys.argv) > 5 else "de")
     elif sys.argv[1] == "verify":
         sys.exit(verify(Path(sys.argv[2])))
     elif sys.argv[1] == "qualify":
         sys.exit(qualify(Path(sys.argv[2])))
+    elif sys.argv[1] == "network":
+        sys.exit(network(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4])))
     else:
-        sys.exit(f"usage: {sys.argv[0]} build <dest> <repo> [seq_type] "
-                 f"| verify <dest> | qualify <dest>")
+        sys.exit(f"usage: {sys.argv[0]} build <dest> <repo> [seq_type] [shape] "
+                 f"| verify <dest> | qualify <dest> | network <a> <b> <big>")

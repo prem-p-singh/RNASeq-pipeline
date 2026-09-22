@@ -39,10 +39,13 @@ gate_runtime() {
 # default ILP scheduler shells out to a CBC binary that pulp ships only for
 # x86-64, so on arm64 it raises "Bad CPU type in executable". Greedy needs no
 # solver and makes the run deterministic.
+# SMK_EXTRA holds any further options, and is placed BEFORE --cores on purpose:
+# --set-resources and --config take one-or-more values, so anything greedy must
+# be followed by another flag rather than by the target list.
 run_workflow() {  # $1 = project dir, $2 = repo, $3 = log, rest = targets
     local proj=$1 repo=$2 log=$3
     shift 3
     ( cd "$proj" && "$SMK" --snakefile "$repo/Snakefile" \
         --configfile config/config.yaml --config repo_dir="$repo" \
-        --cores 2 --scheduler greedy "$@" ) > "$log" 2>&1
+        ${SMK_EXTRA:-} --cores 2 --scheduler greedy "$@" ) > "$log" 2>&1
 }
