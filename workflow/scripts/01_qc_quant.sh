@@ -19,8 +19,7 @@
 set -euo pipefail
 
 # --- Tools --------------------------------------------------------------
-# Prefer the activated environment (environment.yml pins salmon and fastp);
-# cluster modules are only a fallback and announce themselves when used.
+# Use the verified release environment; missing tools stop the stage.
 source "$(dirname "$0")/_tools.sh"
 ensure_tools fastp salmon
 
@@ -65,18 +64,22 @@ owned=()
 # --- Fetch helper (remote sources only) ---------------------------------
 fetch() {
     local src=$1 dst=$2
+    local partial
+    partial=$(mktemp "${dst}.partial.XXXXXX")
     case $src in
-        s3://*)     aws s3 cp "$src" "$dst" ;;
-        http*|ftp*) curl -sSL -o "$dst" "$src" ;;
+        s3://*)     aws s3 cp "$src" "$partial" ;;
+        http*|ftp*) curl --fail --retry 3 -sSL -o "$partial" "$src" ;;
         *) echo "Unrecognized remote URL scheme: $src" >&2; exit 1 ;;
     esac
+    gzip -t "$partial"
+    mv "$partial" "$dst"
 }
 
 # --- Locate / pull R1 ---------------------------------------------------
 # Absolute local paths are read in place (no copy, no deletion).
 # Remote sources are downloaded into the work dir and kept.
-if [[ "$url" == /* ]]; then
-    fastq_local="$url"
+if [[ "$url" != *://* || "$url" == file://* ]]; then
+    fastq_local="${url#file://}"
     echo "[$(date -Iseconds)] R1 in place: $fastq_local"
 else
     fastq_local="$outdir/${sample}.fastq.gz"
@@ -87,8 +90,8 @@ fi
 
 # --- Locate / pull R2 (paired-end only) --------------------------------
 if [[ "$seq_type" == "rnaseq_paired" ]]; then
-    if [[ "$url2" == /* ]]; then
-        fastq_local_r2="$url2"
+    if [[ "$url2" != *://* || "$url2" == file://* ]]; then
+        fastq_local_r2="${url2#file://}"
         echo "[$(date -Iseconds)] R2 in place: $fastq_local_r2"
     else
         fastq_local_r2="$outdir/${sample}_R2.fastq.gz"
@@ -145,20 +148,21 @@ if [[ "$seq_type" == "rnaseq_paired" ]]; then
         -o "$outdir" \
         2> "$outdir/salmon.log"
 else
-    # Single-end (e.g. TAGseq, rnaseq_single): fastp streams trimmed reads
-    # into salmon via stdout. --gcBias is single-pass on SE so streaming is OK.
+    # Keep a seekable input for every Salmon bias/optimization pass.
+    trim_se="$outdir/${sample}.trim.fastq.gz"
+    owned+=("$trim_se")
     fastp \
         -i "$fastq_local" \
-        --stdout \
+        -o "$trim_se" \
         --trim_poly_g \
         --json "$fastp_report" \
         --html "$outdir/fastp.html" \
         --thread "$threads" \
-        2> "$outdir/fastp.log" \
-    | salmon quant \
+        2> "$outdir/fastp.log"
+    salmon quant \
         -i "$index" \
         -l A \
-        -r - \
+        -r "$trim_se" \
         -p "$threads" \
         --validateMappings \
         $salmon_bias_flags \
@@ -181,65 +185,47 @@ if [[ ! -f "$meta" ]]; then
     exit 3
 fi
 
-map_rate=$(python3 -c "
-import json
-with open('$meta') as f: d = json.load(f)
-# Salmon reports percent_mapped as a percentage (0-100)
-print(d.get('percent_mapped', 0) / 100.0)
-")
-
-num_processed=$(python3 -c "
-import json
-with open('$meta') as f: d = json.load(f)
-print(d.get('num_processed', 0))
-")
-
-# Salmon's auto-detected library type (e.g. ISR for paired stranded-reverse,
-# SR for single-end stranded-reverse, U for unstranded). Handbook section 4.1.3
-# flags this as a routine source of silent ~50% count errors.
-detected_libtype=$(python3 -c "
-import json
-with open('$meta') as f: d = json.load(f)
-lt = d.get('library_types', [])
-print(lt[0] if lt else '')
-")
-
-# --- Gate: mapping rate -----------------------------------------------
-flagged="false"
-if awk "BEGIN {exit !($map_rate < $min_map_rate)}"; then
-    flagged="true"
-    echo "[$(date -Iseconds)] WARN: mapping rate $map_rate < $min_map_rate — flagged"
-fi
-
-# --- Gate: strandedness mismatch --------------------------------------
-libtype_mismatch="false"
-if [[ -n "$expected_libtype" && -n "$detected_libtype" ]]; then
-    exp_upper=$(echo "$expected_libtype" | tr '[:lower:]' '[:upper:]')
-    det_upper=$(echo "$detected_libtype" | tr '[:lower:]' '[:upper:]')
-    if [[ "$exp_upper" != "$det_upper" ]]; then
-        libtype_mismatch="true"
-        echo "[$(date -Iseconds)] WARN: Salmon detected libtype=$detected_libtype but config expected $expected_libtype"
-    fi
-fi
-
-# --- Write metrics.json -----------------------------------------------
-cat > "$outdir/metrics.json" <<EOF
-{
-  "sample": "$sample",
-  "seq_type": "$seq_type",
-  "num_reads_processed": $num_processed,
-  "mapping_rate": $map_rate,
-  "min_map_rate_threshold": $min_map_rate,
-  "flagged_low_mapping": $flagged,
-  "detected_libtype": "$detected_libtype",
-  "expected_libtype": "$expected_libtype",
-  "libtype_mismatch": $libtype_mismatch,
-  "salmon_bias_flags": "$salmon_bias_flags",
-  "salmon_version": "$salmon_version",
-  "fastp_version": "$fastp_version",
-  "fastp_report": "$fastp_report"
-}
-EOF
+# Parse values as data, never as shell/Python source. Missing metrics fail closed.
+qc_values=$(python3 - "$meta" "$outdir" "$sample" "$seq_type" "$min_map_rate" \
+    "$expected_libtype" "$salmon_bias_flags" "$salmon_version" "$fastp_version" "$fastq_local" "${fastq_local_r2:-}" <<'PYQC'
+import csv, hashlib, json, math, sys
+from pathlib import Path
+meta, outdir, sample, seq_type, min_map, expected, bias, salmon_ver, fastp_ver = sys.argv[1:10]
+out = Path(outdir)
+with open(meta) as f:
+    data = json.load(f)
+rate = float(data["percent_mapped"]) / 100
+processed = int(data["num_processed"])
+if not math.isfinite(rate) or not 0 <= rate <= 1 or processed <= 0:
+    raise SystemExit("Invalid Salmon mapping metrics")
+with open(out / "quant.sf") as f:
+    rows = list(csv.DictReader(f, delimiter="\t"))
+if not rows or not {"Name", "NumReads", "TPM", "EffectiveLength"}.issubset(rows[0]):
+    raise SystemExit("Salmon quant.sf is not a valid quantification table")
+for row in rows:
+    if any(not math.isfinite(float(row[k])) or float(row[k]) < 0
+           for k in ("NumReads", "TPM", "EffectiveLength")):
+        raise SystemExit("Nonfinite or negative quantification value")
+libtypes = data.get("library_types", [])
+detected = libtypes[0] if libtypes else ""
+flagged = rate < float(min_map)
+mismatch = bool(expected and detected and expected.upper() != detected.upper())
+metrics = dict(sample=sample, seq_type=seq_type, num_reads_processed=processed,
+    mapping_rate=rate, min_map_rate_threshold=float(min_map), flagged_low_mapping=flagged,
+    detected_libtype=detected, expected_libtype=expected, libtype_mismatch=mismatch,
+    salmon_bias_flags=bias, salmon_version=salmon_ver, fastp_version=fastp_ver,
+    fastp_report=str(out / "fastp.json"))
+metrics["input_files"] = []
+for raw in sys.argv[10:]:
+    if raw:
+        with open(raw, "rb") as f:
+            digest = hashlib.file_digest(f, "sha256").hexdigest()
+        metrics["input_files"].append(dict(path=raw, bytes=Path(raw).stat().st_size, sha256=digest))
+(out / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
+print(rate, processed, str(flagged).lower(), str(mismatch).lower(), detected)
+PYQC
+)
+read -r map_rate num_processed flagged libtype_mismatch detected_libtype <<< "$qc_values"
 
 # --- Log decisions if flagged -----------------------------------------
 mkdir -p gates

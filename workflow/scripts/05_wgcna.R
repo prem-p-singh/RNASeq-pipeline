@@ -4,7 +4,7 @@
 # Gates:
 #   * Skipped if run_wgcna = false or n_samples < min_samples.
 #   * Soft-threshold power: lowest with scale-free R² >= target_r2, capped at 30.
-#   * If >max_modules detected, re-run with bumped mergeCutHeight.
+#   * Preserve the declared merge height; sensitivity runs are separate outputs.
 #
 # Inputs (named):  counts, de_flag
 # Outputs (named): done, metrics
@@ -28,10 +28,16 @@ min_samples <- snakemake@params$min_samples
 
 out_dir     <- file.path(cfg$project$output_dir, "WGCNA")
 
+write_manifest <- function(status, files = NA_character_) {
+  write_tsv(data.frame(status = status, output_table = files),
+            file.path(cfg$project$output_dir, "wgcna_manifest.tsv"))
+}
+
 write_skip <- function(reason) {
   dir.create(dirname(out_metrics), recursive = TRUE, showWarnings = FALSE)
   write_json(list(skipped = TRUE, reason = reason),
              out_metrics, pretty = TRUE, auto_unbox = TRUE)
+  write_manifest("skipped_by_policy")
   cat(sprintf("[%s] WGCNA_SKIP: %s\n",
               format(Sys.time(), "%FT%T"), reason),
       file = "gates/decisions.log", append = TRUE)
@@ -238,5 +244,10 @@ metrics <- list(
   detected_cores     = if (is.na(n_cores)) NA_integer_ else as.integer(n_cores)
 )
 write_json(metrics, out_metrics, pretty = TRUE, auto_unbox = TRUE)
+result_files <- c("WGCNA/MEs.tsv", "WGCNA/module_assignments.tsv", "WGCNA/network.rds")
+if (length(heights) > 0) {
+  result_files <- c(result_files, sprintf("WGCNA/module_assignments_h%s.tsv", heights))
+}
+write_manifest("succeeded", result_files)
 file.create(out_done)
 message("WGCNA done. Modules: ", n_modules)

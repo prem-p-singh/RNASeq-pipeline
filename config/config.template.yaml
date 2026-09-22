@@ -9,6 +9,11 @@ project:
   description: "One-line purpose — e.g. 'Heat-shock response in rice leaves'"
   output_dir: "results/"
 
+analysis:
+  objectives: [gene_expression, differential_expression]
+  backend: auto
+  umi: false
+
 # -----------------------------------------------------------------------------
 # Organism / reference
 # -----------------------------------------------------------------------------
@@ -26,7 +31,7 @@ organism:
 #   Tier 1: existing Bioconductor package (e.g. org.Hs.eg.db) — instant
 #   Tier 2: previously-built package in `cache_dir` — instant
 #   Tier 3a: AnnotationForge::makeOrgPackageFromNCBI(tax_id) — ~1 min
-#   Tier 3b: eggNOG-mapper on translated proteome → makeOrgPackage() — slow but universal
+#   Tier 3b: eggNOG-mapper fallback is experimental and outside the release lock.
 #
 # strategy choices:
 #   "auto"          try the tiers in order; first success wins (recommended)
@@ -34,26 +39,29 @@ organism:
 #   "use_existing"  only use the Bioconductor `orgdb_package` above, no building
 #   "skip"          don't build anything; enrichment stage will be skipped
 orgdb:
+  key_type: "ENTREZID"  # use GID for a compatible custom AnnotationForge package
   strategy: "auto"
   cache_dir: "~/orgdb_cache"                    # per-user default; override per project
   eggnog_db: null                               # path to eggNOG-mapper DB (~50 GB) if you
                                                 # want Tier 3b. null = Tier 3b disabled.
 
 reference:
+  kmer: 31
+  decoys: null
   # accession + assembly_name identify exactly which reference was used and key
   # the OrgDb cache. setup.py fills them in; set them by hand if you write this
   # config yourself, otherwise the cache key degrades to "unknown".
   accession: null                               # e.g. "GCF_030704535.1"
   assembly_name: null                           # e.g. "ASM3070453v1"
   # Shared cache for the transcriptome, GTF and salmon index, keyed by
-  # accession, so projects on the same genome reuse one index instead of each
+  # source URLs and index parameters, so compatible projects reuse an index instead of each
   # downloading and indexing their own. Set to null to keep them inside the
   # project directory. annotation_tsv.path below is NOT affected; it stays
   # project-relative.
   cache_dir: "~/rnaseq_reference_cache"
   # URLs must be concrete filenames. A '*' here is a guaranteed Stage 0 failure:
   # curl does not expand globs. setup.py refuses to finish if one slips through.
-  genome_fasta_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_genomic.fna.gz"
+  genome_fasta_url: null  # optional; the current index uses transcriptome_fasta_url
   transcriptome_fasta_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_rna.fna.gz"
   gtf_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_genomic.gtf.gz"
   annotation_tsv:                               # NCBI/Ensembl-style gene-info table

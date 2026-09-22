@@ -1,47 +1,11 @@
-# =============================================================================
-# Complete conda environment for the RNA-Seq pipeline.
-#
-# This file is the whole runtime: Python, R, Bioconductor, and the
-# preprocessing/quantification binaries. Nothing is expected to come from
-# cluster modules or a user R library, because mixing a module-provided R with
-# conda-installed Bioconductor packages is an ABI accident waiting to happen.
-#
-# Platform support, verified 2026-09-22 by solving without installing:
-#
-#   linux-64   SOLVES. 574 packages, every pin satisfied exactly (salmon
-#              1.10.3, fastp 0.23.4, r-wgcna 1.74, python 3.12.14,
-#              r-base 4.5.2, all Bioconductor pins).
-#   osx-arm64  DOES NOT SOLVE, and cannot be made to without unpinning:
-#              fastp=0.23.4 needs libdeflate >=1.20,<1.21 while salmon=1.10.3
-#              needs >=1.22,<1.23, and r-wgcna has no osx-arm64 build.
-#
-# That is an architecture limitation, not a defect in this file (EV08, master
-# plan 9.3). Do NOT relax the pins to obtain a local macOS build: the pins are
-# the reproducibility contract, and 9.3 says a failed solve is recorded, not
-# silently unpinned. Use Linux, or a container, for the scientific stack.
-# Evidence: docs/evidence/env_feasibility_*.txt
-#
-# Build (on Linux):
-#   module load conda/base            # FARM only, to get `conda` on PATH
-#   conda env create -f environment.yml
-#
-# Update an existing env:
-#   conda env update -n rnaseq-pipeline -f environment.yml --prune
-#
-# Lock the exact solve (do this once after the first successful build, and
-# commit the result alongside your analysis):
-#   conda activate rnaseq-pipeline
-#   conda env export --no-builds > environment.lock.yml
-#
-# environment.lock.yml does NOT exist in this repo yet, because this environment
-# has not been built. Until it is, the versions below are the only pins: the
-# unpinned packages resolve to whatever the channels serve on the day, so two
-# builds of this file are not guaranteed to be the same environment. Produce the
-# lock with the command above on the first successful build, and commit it.
-#
-# SIZE: R + Bioconductor makes this a multi-GB environment. On a 20 GB home
-# quota that is affordable but not free -- check `df -h ~` before building.
-# =============================================================================
+# Maintainer solve specification; installations use the exact release lock in
+# environments/linux-64.explicit.txt (579 packages, URLs/builds/SHA256 hashes).
+# On Linux x86_64 with Conda: bash scripts/bootstrap.sh
+# FARM: module load conda/latest first. See README.md and docs/RELEASE.md.
+# Do not update a qualified runtime in place. To upgrade, solve this file into
+# a separate prefix, export `conda list --explicit --sha256`, inspect the diff,
+# and rerun the complete Linux release checks before replacing the lock.
+# macOS/ARM is not a qualified target for this release.
 
 name: rnaseq-pipeline
 

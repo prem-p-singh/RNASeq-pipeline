@@ -65,18 +65,20 @@ rule build_orgdb:
     shell:
         """
         set -euo pipefail
-        mkdir -p $(dirname {output.sentinel})
+        mkdir -p "$(dirname {output.sentinel:q})"
+        exec 9>{output.sentinel:q}.lock
+        flock -w 3600 9
 
-        Rscript {REPO_DIR}/scripts/build_orgdb.R \
+        Rscript {REPO_DIR:q}/scripts/build_orgdb.R \
             --tax_id {params.tax_id} \
-            --genus "{params.genus}" \
-            --species "{params.species}" \
-            --assembly "{params.assembly}" \
-            --orgdb_package "{params.orgdb_package}" \
-            --cache_dir "{params.cache_dir}" \
-            --strategy "{params.strategy}" \
-            --proteome_fa "{params.proteome_fa}" \
-            --eggnog_db "{params.eggnog_db}" \
-            --sentinel "{output.sentinel}" \
-            > {log} 2>&1
+            --genus {params.genus:q} \
+            --species {params.species:q} \
+            --assembly={params.assembly:q} \
+            --orgdb_package={params.orgdb_package:q} \
+            --cache_dir {params.cache_dir:q} \
+            --strategy {params.strategy:q} \
+            --proteome_fa {params.proteome_fa:q} \
+            --eggnog_db={params.eggnog_db:q} \
+            --sentinel {output.sentinel:q} \
+            > {log:q} 2>&1
         """

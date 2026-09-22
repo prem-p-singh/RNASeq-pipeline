@@ -38,3 +38,14 @@ __pycache__/
 AUDIT.md
 REPAIR_UPGRADE_REAUDIT.md
 PIPELINE_AUDIT_REPAIRS_AND_UPGRADE_PLAN.md
+
+# Local audit trackers and raw FARM evidence are not public documentation.
+docs/WORKING_PLAN.md
+docs/evidence/
+HANDBOOK_COVERAGE_MAP.md
+RNA_SEQ_RECOMMENDATION_RULES.md
+docs/PIPELINE_IMPLEMENTATION_AUDIT_*.md
+docs/archive/
+
+# Generated source release archives.
+/dist/

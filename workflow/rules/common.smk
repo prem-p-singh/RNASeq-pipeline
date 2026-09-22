@@ -3,6 +3,7 @@
 # =============================================================================
 
 import json
+import shlex
 from datetime import datetime
 
 
@@ -44,6 +45,13 @@ def get_fastq_url_r2(wildcards):
         return ""
     val = samples.loc[wildcards.sample, "fastq_url_r2"]
     return "" if pd.isna(val) else val
+
+
+def local_read_inputs(wildcards):
+    """Declare local FASTQs to Snakemake so an edited file invalidates its quant."""
+    sources = [get_fastq_url(wildcards), get_fastq_url_r2(wildcards)]
+    return [str(Path(str(s).removeprefix("file://")).expanduser()) for s in sources
+            if s and not pd.isna(s) and ("://" not in str(s) or str(s).startswith("file://"))]
 
 
 def sample_metadata_col(sample: str, col: str):

@@ -14,6 +14,7 @@ rule qc_report:
         sheet = config["samples"]["sheet"],
         # R17c: the report states reference construction from this record only.
         reference_lock = REF / "reference.lock.json",
+        report_script = REPO_DIR / "workflow/scripts/qc_report.py",
     output:
         done = OUT / "qc_report/qc_report.done",
         tsv  = OUT / "qc_report/alignment_summary.tsv",
@@ -21,6 +22,7 @@ rule qc_report:
         html = OUT / "qc_report/qc_charts.html",
         mqc  = OUT / "qc_report/multiqc/multiqc_report.html",
     params:
+        runtime_identity = RUNTIME_ID,
         quantdir = lambda wc: str(QUANT),
         outdir   = lambda wc: str(OUT / "qc_report"),
         # Report identity comes from this run's config, so the output describes
@@ -38,16 +40,16 @@ rule qc_report:
     shell:
         """
         set -euo pipefail
-        mkdir -p {params.outdir}
-        echo "[qc_report] MultiQC over {params.quantdir}" > {log}
-        multiqc {params.quantdir} -o {params.outdir}/multiqc -n multiqc_report -f >> {log} 2>&1
-        echo "[qc_report] comparative charts" >> {log}
-        python {REPO_DIR}/workflow/scripts/qc_report.py \
-            --quant {params.quantdir} \
-            --out {params.outdir} \
-            --samples {input.sheet} \
-            --project "{params.project}" \
-            --species "{params.species}" \
-            --reference-lock {input.reference_lock} >> {log} 2>&1
-        touch {output.done}
+        mkdir -p {params.outdir:q}
+        echo "[qc_report] MultiQC over {params.quantdir:q}" > {log:q}
+        multiqc {params.quantdir:q} -o {params.outdir:q}/multiqc -n multiqc_report -f >> {log:q} 2>&1
+        echo "[qc_report] comparative charts" >> {log:q}
+        python {REPO_DIR:q}/workflow/scripts/qc_report.py \
+            --quant {params.quantdir:q} \
+            --out {params.outdir:q} \
+            --samples {input.sheet:q} \
+            --project={params.project:q} \
+            --species={params.species:q} \
+            --reference-lock {input.reference_lock:q} >> {log:q} 2>&1
+        touch {output.done:q}
         """

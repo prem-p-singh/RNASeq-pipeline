@@ -162,6 +162,8 @@ def read_tx2gene(dest):
 
 # --------------------------------------------------------------------------
 def build(dest: Path, repo: Path, seq_type: str = "tagseq", shape: str = "de"):
+    if seq_type == "rnaseq":
+        seq_type = "rnaseq_single"
     rng = random.Random(SEED)
     wg = shape == "wgcna"
     # The third element is the de shape's treated-group multiplier, and the
@@ -254,8 +256,10 @@ def build(dest: Path, repo: Path, seq_type: str = "tagseq", shape: str = "de"):
             "fastp_report": "",
         }, indent=2) + "\n")
 
+    # Remote placeholders have no local-file dependency; these downstream-only
+    # fixtures deliberately supply Stage 1 products. check_end_to_end uses reads.
     sheet = ["sample_id\tfastq_url\ttreatment"] + [
-        f"{s}\t/dev/null/{s}.fq.gz\t" + ("treated" if s in treated else "control")
+        f"{s}\thttps://fixture.invalid/{s}.fq.gz\t" + ("treated" if s in treated else "control")
         for s in samples]
     (dest / "config" / "samples.tsv").write_text("\n".join(sheet) + "\n")
 

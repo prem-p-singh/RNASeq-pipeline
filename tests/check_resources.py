@@ -158,7 +158,7 @@ def project(with_legacy_cap):
     (p / "fastq").mkdir()
     for i in range(4):
         (p / "fastq" / f"S{i}.fq.gz").write_bytes(b"x" * (1024 * 1024))
-    hpc = ("hpc: {storage_budget_gb: 20, samples_in_flight: null}"
+    hpc = ("hpc: {storage_budget_gb: 1, samples_in_flight: null}"
            if with_legacy_cap else "hpc: {samples_in_flight: null}")
     (p / "config" / "config.yaml").write_text(
         'project: {name: t, output_dir: "results/"}\n'
@@ -197,15 +197,34 @@ assert rep["legacy_notes"], "RS12: a legacy cap must produce a migration note"
 joined = " ".join(rep["legacy_notes"])
 assert "no longer" in joined and "NOT a planning input" in joined, joined
 assert "must not be silently erased" in joined, joined
-# and it is applied, not ignored: 20 GB cannot hold reference + index + env
+# and it is applied, not ignored: 1 GB cannot hold even the operational reserve
 assert any(m["quota_known"] for m in rep["mounts"]), rep["mounts"]
 assert r.returncode == 1, "an unsatisfiable quota must block (RS09)"
 assert "short by" in (r.stdout + r.stderr)
+
+# Retained remote reads are new allocation, never existing input bytes.
+remote = {"https://host/reads.fq.gz": {"bytes": 2 * GB, "source": "measured_remote"}}
+base_args = dict(repo_root=ROOT, inputs=remote, n_libraries=1, assay="bulk", concurrency=1,
+                 paths={"results": d2 / "res", "scratch": d2 / "res"})
+kept = rs.plan_storage(**base_args, retain_downloads=True)
+dropped = rs.plan_storage(**base_args, retain_downloads=False)
+assert abs(kept["mounts"][0]["retained_new_gb"] - dropped["mounts"][0]["retained_new_gb"] - 2) < 1e-9
+small_reads = rs.plan_storage(**dict(base_args, inputs={str(f): {"bytes": 1024, "source": "measured"}}))
+assert small_reads["mounts"][0]["max_concurrent_temporary_gb"] < kept["mounts"][0]["max_concurrent_temporary_gb"]
+assert reduced["requested_concurrency"] == 16
+ref_args = dict(base_args, paths={"results": d2 / "res", "cache": d2 / "res"})
+small_ref = rs.plan_storage(**ref_args, reference_source_bytes=1024)
+large_ref = rs.plan_storage(**ref_args, reference_source_bytes=GB)
+assert small_ref["mounts"][0]["cache_new_gb"] < large_ref["mounts"][0]["cache_new_gb"]
+assert "assumed" in " ".join(small_ref["mounts"][0]["notes"])
 
 # --- 9. no default cap is reintroduced --------------------------------
 tpl = yaml.safe_load((ROOT / "config" / "config.template.yaml").read_text())
 assert tpl["hpc"].get("storage_budget_gb") is None, (
     "config.template.yaml reinstated a default storage cap")
+setup_tpl = yaml.safe_load((ROOT / "scripts/setup_inputs.template.yaml").read_text())
+assert setup_tpl.get("storage_budget_gb") is None
+assert "storage_budget_gb: 20" not in (ROOT / "scripts/new_project.sh").read_text()
 models = yaml.safe_load((ROOT / "config" / "resource_models.yaml").read_text())
 flat = json.dumps(models)
 assert "storage_budget" not in flat, "resource_models.yaml must not define a cap"

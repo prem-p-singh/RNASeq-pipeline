@@ -60,8 +60,8 @@ mkproject "$A" tagseq 6            # -> small tier
 mkproject "$B" rnaseq_paired 40    # -> medium tier
 BEFORE_A_CFG=$(cat "$A/config/config.yaml")
 
-"$REPO/submit.sh" -d "$A" > "$TMP/a.log" 2>&1
-"$REPO/submit.sh" -d "$B" > "$TMP/b.log" 2>&1
+"$REPO/submit.sh" --plan-only -d "$A" > "$TMP/a.log" 2>&1
+"$REPO/submit.sh" --plan-only -d "$B" > "$TMP/b.log" 2>&1
 
 grep -q "project dir:   $A" "$TMP/a.log" || fail "A did not run in its own dir; see $TMP/a.log"
 grep -q "project dir:   $B" "$TMP/b.log" || fail "B did not run in its own dir"

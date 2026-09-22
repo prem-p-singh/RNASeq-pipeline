@@ -17,6 +17,11 @@ suppressPackageStartupMessages({
 })
 
 cfg     <- snakemake@config
+if (!is.null(cfg$orgdb$cache_dir)) {
+  orgdb_lib <- file.path(path.expand(cfg$orgdb$cache_dir),
+    paste0(cfg$organism$tax_id, "_", cfg$reference$accession), "R-library")
+  if (dir.exists(orgdb_lib)) .libPaths(c(orgdb_lib, .libPaths()))
+}
 thr     <- cfg$thresholds$enrichment
 out_done    <- snakemake@output$done
 out_metrics <- snakemake@output$metrics
@@ -75,13 +80,14 @@ run_kegg <- run_kegg && !nzchar(kegg_skip_reason)
 orgdb_loaded <- FALSE
 if (run_go) {
   library(orgdb, character.only = TRUE)
+  orgdb_object <- getExportedValue(orgdb, orgdb)
   orgdb_loaded <- TRUE
 }
 if (nzchar(go_skip_reason))   message("GO skipped: ", go_skip_reason)
 if (nzchar(kegg_skip_reason)) message("KEGG skipped: ", kegg_skip_reason)
 
 # --- Contrasts come from the DE manifest, never a directory listing ----
-manifest <- read_tsv(snakemake@input$manifest, show_col_types = FALSE)
+manifest <- read_tsv(snakemake@input$manifest, col_types = cols(.default = col_character()))
 if (nrow(manifest) == 0) {
   stop("DE manifest lists no contrasts: ", snakemake@input$manifest)
 }
@@ -110,7 +116,7 @@ status_rows <- list()
 # master plan 11 separates a module the user turned off from one whose
 # prerequisite is missing. Both were previously "skipped".
 skip_status <- function(reason) {
-  if (grepl("run_go|run_kegg|is false|switched off|kegg_code", reason,
+  if (grepl("is false|switched off|strategy is 'skip'", reason,
             ignore.case = TRUE)) "skipped_by_policy" else "unavailable"
 }
 
@@ -155,7 +161,7 @@ for (i in seq_len(nrow(manifest))) {
     record_prepared(contrast, "failed", msg)
     next
   }
-  de <- read_tsv(path, show_col_types = FALSE)
+  de <- read_tsv(path, col_types = cols(gene_id = col_character()))
 
   # The ranking statistic must exist. A table without it used to be skipped
   # silently, which looks identical to "analysed and found nothing".
@@ -167,7 +173,7 @@ for (i in seq_len(nrow(manifest))) {
 
   n_input <- nrow(de)
   if (!is.null(anno)) {
-    de <- de %>% left_join(anno %>% select(Gene.stable.ID, NCBI),
+    de <- de %>% left_join(anno %>% dplyr::select(Gene.stable.ID, NCBI),
                            by = c("gene_id" = "Gene.stable.ID"))
   } else {
     # Without an annotation table the only way gene_id is usable directly is
@@ -189,15 +195,17 @@ for (i in seq_len(nrow(manifest))) {
   message(sprintf("  %d/%d genes mapped (%.1f%%)", nrow(de), n_input,
                   100 * coverage))
 
-  # --- GO GSEA (non-directional, ranked by |statistic|) ---------------
+  # --- GO GSEA: signed statistics retain the contrast direction (AN02).
   if (!run_go) {
     record(contrast, "GO", skip_status(go_skip_reason), go_skip_reason)
   } else {
-    gl <- abs(de[[rank_col]]); names(gl) <- de$NCBI
+    gl <- de[[rank_col]]; names(gl) <- de$NCBI
+    gl <- gl[is.finite(gl)]
     gl <- sort(gl, decreasing = TRUE)
     res <- tryCatch(
-      gseGO(geneList = gl, ont = "all", OrgDb = orgdb,
-            pvalueCutoff = 1, scoreType = "pos", verbose = FALSE),
+      gseGO(geneList = gl, ont = "all", OrgDb = orgdb_object,
+            keyType = if (is.null(cfg$orgdb$key_type)) "ENTREZID" else cfg$orgdb$key_type,
+            pvalueCutoff = 1, scoreType = "std", seed = TRUE, verbose = FALSE),
       error = function(e) e)
     if (inherits(res, "error")) {
       record(contrast, "GO", "failed", conditionMessage(res))
@@ -213,7 +221,7 @@ for (i in seq_len(nrow(manifest))) {
                     format(Sys.time(), "%FT%T"), contrast, n_sig),
             file = "gates/decisions.log", append = TRUE)
       }
-      rel <- file.path("Enrichment", "GO", paste0(contrast, "_GO.tsv"))
+      rel <- file.path("GO_results", paste0(contrast, "_GO.tsv"))
       write_tsv(tab, file.path(go_dir, paste0(contrast, "_GO.tsv")))
       record(contrast, "GO",
              if (nrow(tab) == 0) "succeeded_empty" else "succeeded",
@@ -226,16 +234,17 @@ for (i in seq_len(nrow(manifest))) {
     record(contrast, "KEGG", skip_status(kegg_skip_reason), kegg_skip_reason)
   } else {
     gl <- de[[rank_col]]; names(gl) <- de$NCBI
+    gl <- gl[is.finite(gl)]
     gl <- sort(gl, decreasing = TRUE)
     res <- tryCatch(
       gseKEGG(geneList = gl, organism = kegg_code,
-              pvalueCutoff = 1, verbose = FALSE),
+              pvalueCutoff = 1, seed = TRUE, verbose = FALSE),
       error = function(e) e)
     if (inherits(res, "error")) {
       record(contrast, "KEGG", "failed", conditionMessage(res))
     } else {
       tab <- as.data.frame(res)
-      rel <- file.path("Enrichment", "KEGG", paste0(contrast, "_KEGG.tsv"))
+      rel <- file.path("KEGG_results", paste0(contrast, "_KEGG.tsv"))
       write_tsv(tab, file.path(kegg_dir, paste0(contrast, "_KEGG.tsv")))
       record(contrast, "KEGG",
              if (nrow(tab) == 0) "succeeded_empty" else "succeeded",
@@ -250,6 +259,7 @@ write_tsv(status, out_status)
 n_of <- function(s) sum(status$status == s)
 metrics <- list(
   orgdb_loaded     = orgdb_loaded,
+  ranking_policy  = "signed contrast statistic; scoreType=std",
   id_namespace     = id_namespace,
   min_id_mapping_rate = min_id_mapping_rate,
   go_run           = run_go,
@@ -276,8 +286,8 @@ for (i in seq_len(nrow(failed))) {
 # done flag. Skipped-only runs are fine: nothing was attempted.
 attempted <- status[!status$status %in% c("skipped_by_policy", "unavailable"),
                     , drop = FALSE]
-if (nrow(attempted) > 0 && all(attempted$status == "failed")) {
-  stop("every attempted enrichment failed; see ", out_status)
+if (any(status$status == "failed")) {
+  stop("Enrichment failed: ", paste(failed$reason, collapse = "; "), "; see ", out_status)
 }
 
 file.create(out_done)

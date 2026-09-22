@@ -230,11 +230,18 @@ message("Wrote ", prov_path, " (countsFromAbundance=", counts_from_abundance, ")
 # returns it per gene; keeping it means a backend that wants offsets has them
 # without re-importing.
 if (!is.null(txi$length)) {
-  len_df <- as.data.frame(txi$length)
+  len_df <- as.data.frame(txi$length[, colnames(counts), drop = FALSE])
   len_df$gene_id <- rownames(txi$length)
   write_tsv(len_df[, c("gene_id", setdiff(names(len_df), "gene_id"))],
             file.path(dirname(out_counts), "gene_lengths.tsv"))
 }
+
+# Preserve the gene-level import object for downstream adapters and provenance.
+for (key in c("counts", "abundance", "length")) {
+  txi[[key]] <- txi[[key]][, colnames(counts), drop = FALSE]
+}
+saveRDS(list(import = txi, provenance = count_provenance),
+        file.path(dirname(out_counts), "gene_import.rds"))
 
 # --- Write count matrix ------------------------------------------------
 out_df <- as.data.frame(counts)

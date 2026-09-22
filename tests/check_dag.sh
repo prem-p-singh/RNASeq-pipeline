@@ -34,6 +34,7 @@ fail() { echo "FAIL: $*" >&2; exit 1; }
 
 PROJ="$TMP/proj"
 mkdir -p "$PROJ/config"
+mkdir -p "$PROJ/reads"
 cat > "$PROJ/config/config.yaml" <<EOF
 project: {name: dagcheck, description: dag probe, output_dir: "results/"}
 organism: {common_name: grape, scientific_name: Vitis vinifera, tax_id: 29760,
@@ -47,8 +48,8 @@ hpc: {delete_fastq_after_quant: true, samples_in_flight: null}
 EOF
 cp "$REPO/config/thresholds.yaml" "$PROJ/config/thresholds.yaml"
 { echo -e "sample_id\tfastq_url\ttreatment"
-  for i in 1 2 3; do echo -e "S$i\t/data/S$i.fq.gz\tcontrol"; done
-  for i in 4 5 6; do echo -e "S$i\t/data/S$i.fq.gz\ttreated"; done
+  for i in 1 2 3; do touch "$PROJ/reads/S$i.fq.gz"; echo -e "S$i\t$PROJ/reads/S$i.fq.gz\tcontrol"; done
+  for i in 4 5 6; do touch "$PROJ/reads/S$i.fq.gz"; echo -e "S$i\t$PROJ/reads/S$i.fq.gz\ttreated"; done
 } > "$PROJ/config/samples.tsv"
 
 cd "$PROJ"

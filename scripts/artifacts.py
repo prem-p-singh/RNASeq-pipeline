@@ -46,6 +46,12 @@ STAGE_MANIFESTS = {
         # Only rows that claim a result are checked; see status_is_result.
         "status_column": "status",
     },
+    "wgcna": {
+        "manifest": "wgcna_manifest.tsv",
+        "flag": "wgcna_done.flag",
+        "path_columns": ("output_table",),
+        "status_column": "status",
+    },
 }
 
 # Statuses that assert a file was produced. Master plan section 11 taxonomy:
@@ -71,12 +77,22 @@ def missing_artifacts(manifest_path: Path, out_dir: Path, spec: dict) -> list[st
     """
     status_col = spec.get("status_column")
     missing = []
-    for row in read_rows(manifest_path):
+    rows = read_rows(manifest_path)
+    required = set(spec["path_columns"])
+    if status_col:
+        required.add(status_col)
+    if not rows or not required.issubset(rows[0]):
+        return [f"invalid or empty manifest: {manifest_path.name}"]
+    for row in rows:
         if status_col and row.get(status_col, "") not in RESULT_STATUSES:
+            if row.get(status_col) not in {"succeeded_empty", "skipped_by_policy", "unavailable"}:
+                missing.append(f"nonterminal or invalid completion status: {row.get(status_col)!r}")
             continue
         for col in spec["path_columns"]:
             rel = (row.get(col) or "").strip()
             if not rel or rel.upper() in {"NA", "NONE", ""}:
+                if col != "meaningful_table":
+                    missing.append(f"missing required path: {col}")
                 continue
             target = out_dir / rel
             if not target.is_file() or target.stat().st_size == 0:

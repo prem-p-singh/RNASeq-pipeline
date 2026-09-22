@@ -1,74 +1,13 @@
-# Sample-count strategy (auto-selected)
+# Scheduling and storage
 
-The pipeline picks one of three strategies **automatically** based on how many rows are in `config/samples.tsv`. You don't choose — the submit script counts and decides, then writes the choice to `gates/decisions.log`.
+The scientific route follows the declared assay, requested objectives, available implementations and dependence structure. Sample count does not switch the DE model or invent an unsupported measurement route. See [recommendation rules](config/recommendation_rules.yaml).
 
----
+The launcher currently chooses a small/medium/large FARM profile for scheduler defaults. These are scheduling conveniences, not scientific categories. Each rule requests its own CPU, memory and time allocation. `scripts/plan_resources.py` derives a storage-compatible upper bound on concurrency; `hpc.samples_in_flight` can lower it further.
 
-## The three tiers
+There is no fixed platform storage cap. Planning groups paths on the same filesystem and accounts for new retained output, retained remote downloads, missing references, index workspace, environments and concurrent temporary files. Existing local reads and detected caches are not charged as new allocations. Known input bytes influence the temporary estimate; remote sizes that cannot be measured use labelled assumptions.
 
-| Tier | # samples | How it runs | Why |
-|---|---|---|---|
-| **Small** | **≤ 20** | One SLURM job loops through samples serially (~30 min/sample, ~10 hr total worst case) | Job-array overhead isn't worth it; easier to debug; single log file |
-| **Medium** | **21 – 200** | SLURM job array, **up to 20 samples running at once** | Sweet spot — parallel speedup without flooding the queue |
-| **Large** | **201+** | Chunked array of **50 at a time**, throttled (`--jobs 20`, `--max-jobs-per-second 1`) | Being a good queue citizen; checkpoints after each chunk so interruptions don't cost much |
+The planner compares a conservative peak estimate plus margin/reserve with free space and any explicit remaining quota. It lowers concurrency first. If one job or the final retained output cannot fit, it reports the shortfall and stops. It does not silently change the scientific analysis or delete original FASTQs to fit.
 
-All three run the **same Snakemake rules** — the only difference is the SLURM profile they submit through.
+The shipped coefficients are still assumptions. There is no continuous mid-run capacity monitor, remote HEAD-based sizing, or calibrated large-cohort memory model. Account quota discovery is site-dependent; `df` alone can overstate user capacity on shared storage. Supply a real remaining quota when required and select project/cache locations with enough capacity.
 
----
-
-## What actually changes between tiers
-
-| Setting | Small | Medium | Large |
-|---|---|---|---|
-| SLURM submission | single job | job array | chunked job array |
-| Max concurrent samples | 1 | 20 | 20 (but 50 queued) |
-| `--jobs` (Snakemake) | 1 | 20 | 20 |
-| `--max-jobs-per-second` | — | — | 1 |
-| Peak disk usage | 1 FASTQ (~0.5 GB) | 20 FASTQ (~10 GB) | 20 FASTQ (~10 GB) |
-| Wall time (rough) | hours | minutes–hours | hours–day |
-| Checkpoint granularity | per-sample | per-sample | per-chunk |
-
-The 20 GB cap is the ceiling — medium/large tiers are already close to it at peak (10 GB of FASTQ in flight + 1 GB index + ~3 GB outputs). If a medium project has unusually big files, the submit script drops you to a stricter `--jobs` value automatically.
-
----
-
-## How the auto-selection works
-
-When you run `./submit.sh -d <project>`:
-
-1. Counts rows in `config/samples.tsv` → `N`
-2. Estimates per-sample FASTQ size from `samples.seq_type` in `config.yaml` (TAGseq ≈ 0.5 GB, RNA-Seq ≈ 2 GB)
-3. Computes **max safe concurrency** = `floor((20 GB - 4 GB reserved) / avg_fastq_size)`
-4. Picks tier:
-   - `N ≤ 20` → small
-   - `N ≤ 200` → medium (concurrency capped by step 3)
-   - `N > 200` → large (concurrency capped by step 3, chunked)
-5. Writes decision to `gates/decisions.log`:
-   ```
-   [2026-04-18 14:22] STRATEGY: medium (N=87, avg_fastq=0.5GB, max_concurrent=20)
-   ```
-6. Launches `snakemake --profile profiles/<tier>/ ...`
-
----
-
-## Manual override
-
-If the auto-choice is wrong (e.g., you want to stress-test with 5 samples on the medium profile), pass `--profile` directly:
-
-```bash
-snakemake --profile profiles/medium/ --configfile config/config.yaml
-```
-
-This skips `submit.sh` entirely.
-
----
-
-## Edge cases the tiers handle
-
-| Situation | What happens |
-|---|---|
-| Sample FASTQ larger than remaining budget | `submit.sh` reduces `--jobs` until safe; logs warning |
-| Queue rejects submission | Snakemake retries with exponential backoff (built-in) |
-| Mid-run crash | `snakemake` picks up from last completed `quant.sf` — nothing re-runs |
-| One sample fails validation (mapping < 60%) | That sample is flagged in `gates/decisions.log`; downstream R scripts exclude it |
-| All samples finish before aggregate step | Aggregate stage (tximport + DE + GO + WGCNA) runs on login-node-friendly resources, not array |
+Use [README.md](README.md) for environment setup and launch commands, and [docs/RELEASE.md](docs/RELEASE.md) for validation evidence and limitations.

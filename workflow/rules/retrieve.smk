@@ -21,8 +21,8 @@ rule fetch_transcriptome:
     shell:
         """
         set -euo pipefail
-        bash {REPO_DIR}/workflow/scripts/fetch_reference_file.sh \
-            --url "{params.url}" --out {output.fa} --kind {params.kind}
+        bash {REPO_DIR:q}/workflow/scripts/fetch_reference_file.sh \
+            --url {params.url:q} --out {output.fa:q} --kind {params.kind}
         """
 
 rule fetch_gtf:
@@ -35,8 +35,8 @@ rule fetch_gtf:
     shell:
         """
         set -euo pipefail
-        bash {REPO_DIR}/workflow/scripts/fetch_reference_file.sh \
-            --url "{params.url}" --out {output.gtf} --kind {params.kind}
+        bash {REPO_DIR:q}/workflow/scripts/fetch_reference_file.sh \
+            --url {params.url:q} --out {output.gtf:q} --kind {params.kind}
         """
 
 rule salmon_index:
@@ -82,25 +82,25 @@ rule salmon_index:
     shell:
         """
         set -euo pipefail
-        source {REPO_DIR}/workflow/scripts/_tools.sh
+        source {REPO_DIR:q}/workflow/scripts/_tools.sh
         ensure_tools salmon
 
-        python3 {REPO_DIR}/workflow/scripts/build_salmon_index.py \
-            --transcriptome {input.fa} \
-            --gtf {input.gtf} \
-            --final-index {output.idx} \
-            --staging {params.staging} \
-            --lock-out {output.lock} \
+        python3 {REPO_DIR:q}/workflow/scripts/build_salmon_index.py \
+            --transcriptome {input.fa:q} \
+            --gtf {input.gtf:q} \
+            --final-index {output.idx:q} \
+            --staging {params.staging:q} \
+            --lock-out {output.lock:q} \
             --kmer {params.kmer} \
-            --decoys "{params.decoys}" \
+            --decoys={params.decoys:q} \
             --threads {threads} \
-            --key-inputs '{params.key_inputs}' \
-            --organism "{params.organism}" \
+            --key-inputs {params.key_inputs:q} \
+            --organism={params.organism:q} \
             --tax-id {params.tax_id} \
-            --accession "{params.accession}" \
-            --assembly-name "{params.assembly}" \
-            --transcriptome-url "{params.tx_url}" \
-            --gtf-url "{params.gtf_url}" \
-            --genome-url "{params.genome_url}" \
-            --helper {REPO_DIR}/workflow/scripts/reference_lock.py
+            --accession={params.accession:q} \
+            --assembly-name={params.assembly:q} \
+            --transcriptome-url={params.tx_url:q} \
+            --gtf-url={params.gtf_url:q} \
+            --genome-url={params.genome_url:q} \
+            --helper {REPO_DIR:q}/workflow/scripts/reference_lock.py
         """

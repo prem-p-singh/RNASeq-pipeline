@@ -19,13 +19,17 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import config_resolve as cr
 import metadata as md          # noqa: E402
+import reference_cache as rc
 import resources as rs         # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -102,10 +106,17 @@ def main():
                          if not Path(a.configfile).is_absolute()
                          else Path(a.configfile).read_text())
 
+    cfg, _, issues = cr.resolve(REPO, [("project", cfg)])
+    problems = cr.blocking(issues, REPO)
+    if problems:
+        raise SystemExit("Invalid planning configuration: " + "; ".join(f"{code}: {detail}" for code, detail in problems))
+
     seq_type = (cfg.get("samples", {}) or {}).get("seq_type", "")
     assay = ASSAY_OF_SEQ_TYPE.get(seq_type, "bulk")
     libs = n_libraries(proj, cfg)
     uris = input_uris(proj, cfg)
+    uris = [str((proj / u.removeprefix("file://")).resolve())
+            if "://" not in u or u.startswith("file://") else u for u in uris]
     inputs = rs.measure_inputs(uris)
 
     # Concurrency the scheduler would allow, before storage has its say.
@@ -117,11 +128,17 @@ def main():
         except (OSError, ValueError, AttributeError):
             requested = 1
 
+    configured_limit = (cfg.get("hpc") or {}).get("samples_in_flight")
+    if configured_limit is not None:
+        if isinstance(configured_limit, bool) or int(configured_limit) < 1:
+            raise SystemExit("hpc.samples_in_flight must be a positive integer")
+        requested = min(requested, int(configured_limit))
+
     out_dir = proj / (cfg.get("project", {}) or {}).get("output_dir", "results")
     ref_cache = (cfg.get("reference", {}) or {}).get("cache_dir")
     paths = {
         "results": out_dir,
-        "scratch": proj / "tmp",
+        "scratch": out_dir,  # Stage 1 stores downloads and trims in quant/<sample>
         "cache": Path(ref_cache).expanduser() if ref_cache else out_dir,
     }
     local_inputs = [u for u in uris if "://" not in u]
@@ -131,8 +148,27 @@ def main():
     quota_bytes, quota_notes = legacy_quota(cfg)
     quotas = {"results": quota_bytes} if quota_bytes is not None else {}
 
+    ref_cfg = cfg.get("reference") or {}
+    entry = (Path(ref_cache).expanduser() / rc.cache_key(ref_cfg, ref_cfg.get("kmer", 31), ref_cfg.get("decoys"))
+             if ref_cache else proj / "reference")
+    complete_reference = not rc.entry_problems(entry)
+    environment = os.environ.get("RNASEQ_ENV_PREFIX") or os.environ.get("CONDA_PREFIX")
+    if environment:
+        paths["environment"] = Path(environment)
+    cache_present = {"reference": complete_reference, "index_build": complete_reference,
+                     "environment": bool(environment and (Path(environment) / "conda-meta").is_dir())}
+    reference_sources = []
+    for field in ("transcriptome_fasta_url", "gtf_url"):
+        uri = ref_cfg.get(field) or ""
+        if uri.startswith("file://"):
+            source = Path(unquote(urlsplit(uri).path))
+            if source.is_file() and source.suffix not in {".gz", ".bz2", ".xz"}:
+                reference_sources.append(source.stat().st_size)
+    reference_source_bytes = sum(reference_sources) if len(reference_sources) == 2 else None
     kwargs = dict(repo_root=REPO, inputs=inputs, n_libraries=libs, assay=assay,
-                  concurrency=requested, paths=paths, quotas=quotas)
+                  concurrency=requested, paths=paths, quotas=quotas, cache_present=cache_present,
+                  reference_source_bytes=reference_source_bytes,
+                  retain_downloads=not (cfg.get("hpc") or {}).get("delete_fastq_after_quant", True))
     report = rs.plan_storage(**kwargs)
     report = rs.reduce_concurrency(report, **kwargs)
     report["legacy_notes"] = quota_notes

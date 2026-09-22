@@ -1,5 +1,7 @@
 # Handbook insights — pipeline assessment
 
+> Historical interpretation, retained for context. Current implementation and qualification are documented in [README.md](README.md) and [docs/RELEASE.md](docs/RELEASE.md). The earlier exclusions of RNA assay families and fixed-storage rationale below are superseded; they are not release guarantees.
+
 Source: `~/Desktop/sequencing handbook.pdf` (Sequencing Techniques — A Working Reference, April 2026).
 
 This doc captures what we took from the handbook and made part of the pipeline, what we examined and rejected, and what's still on the table for later. It's the "why" behind the choices that aren't obvious from the code alone.

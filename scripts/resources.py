@@ -128,7 +128,7 @@ class MountPlan:
 def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
                  concurrency: int, paths: dict, quotas: dict | None = None,
                  cache_present: dict | None = None,
-                 retain_alignments: bool = False) -> dict:
+                 retain_alignments: bool = False, retain_downloads: bool = False, reference_source_bytes: int | None = None) -> dict:
     """Build a per-filesystem plan.
 
     `paths` maps a role (inputs, results, scratch, cache) to a directory.
@@ -160,7 +160,16 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
     # RS04: scratch scales with CONCURRENT jobs, not with cohort size. RS13:
     # more libraries at the same concurrency grow retained data, not the peak.
     concurrent = max(1, min(concurrency, n_libraries))
-    temporary = concurrent * tmp_high * GB
+    # With measured inputs, bound each job by the two largest files (both
+    # mates) plus one GB for tool scratch. Include a raw download and a trimmed
+    # copy; these coefficients remain assumptions, explicitly reported below.
+    input_sizes = [v["bytes"] if v["bytes"] is not None else in_high * GB
+                   for v in inputs.values()]
+    largest_pair = sum(sorted(input_sizes, reverse=True)[:2])
+    per_job = (2 * largest_pair + GB) if inputs and not unknown else max(tmp_high * GB, 2 * largest_pair + GB)
+    temporary = concurrent * per_job
+    remote_bytes = sum(v["bytes"] if v["bytes"] is not None else in_high * GB
+                       for uri, v in inputs.items() if "://" in uri and not uri.startswith("file://"))
     retained = n_libraries * ret_high * GB + coh_high * GB
     if retain_alignments:
         # RS06: retained alignments are their own per-library cost and are not
@@ -170,6 +179,11 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
     ref_low, ref_high, _ = _band(models["cache"]["reference_bundle_gb"])
     idx_low, idx_high, _ = _band(models["cache"]["index_build_overhead_gb"])
     env_low, env_high, _ = _band(models["cache"]["conda_environment_gb"])
+    if reference_source_bytes is not None:
+        # Local, uncompressed source bytes are known. Index/output expansion
+        # remains an assumption, with fixed overhead for small references.
+        ref_high = 0.5 + 8 * reference_source_bytes / GB
+        idx_high = 0.5 + 6 * reference_source_bytes / GB
 
     # --- group the roles by filesystem (RS07) ---------------------------
     mounts: dict[str, MountPlan] = {}
@@ -194,10 +208,12 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
 
     if m_in is not None:
         # Inputs already on disk are existing bytes, not a new allocation.
-        m_in.existing += input_bytes
+        m_in.existing += sum(measured)
         m_in.notes.append(f"inputs: {uncertainty}")
     if m_res is not None:
-        m_res.retained_new += retained
+        m_res.retained_new += retained + (remote_bytes if retain_downloads else 0)
+        if retain_downloads:
+            m_res.notes.append(f"retained downloaded FASTQs: {remote_bytes / GB:g} GB")
         m_res.notes.append(
             f"{n_libraries} libraries x {ret_high:g} GB retained, plus "
             f"{coh_high:g} GB cohort outputs"
@@ -205,17 +221,21 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
     if m_scratch is not None:
         m_scratch.max_concurrent_temporary += temporary
         m_scratch.notes.append(
-            f"{concurrent} concurrent job(s) x {tmp_high:g} GB working set")
+            f"{concurrent} concurrent job(s) x {per_job / GB:g} GB working set; assumed 2 input copies + tool scratch")
+    m_environment = mp("environment") or m_cache
     if m_cache is not None:
         for label, hi, key in (("reference bundle", ref_high, "reference"),
                                ("index build workspace", idx_high, "index_build"),
                                ("conda environment", env_high, "environment")):
+            target_mount = m_environment if key == "environment" else m_cache
             if cache_present.get(key):
-                m_cache.existing += hi * GB
-                m_cache.notes.append(f"{label} already present, not charged (RS05)")
+                target_mount.existing += hi * GB
+                target_mount.notes.append(f"{label} already present, not charged (RS05)")
             else:
-                m_cache.cache_new += hi * GB
-                m_cache.notes.append(f"{label}: {hi:g} GB")
+                target_mount.cache_new += hi * GB
+                target_mount.notes.append(f"{label}: {hi:g} GB")
+        if reference_source_bytes is not None:
+            m_cache.notes.append("local reference bytes measured; bundle 8x + 0.5 GB and build 6x + 0.5 GB are assumed")
 
     # --- verdicts --------------------------------------------------------
     report = {
@@ -273,6 +293,7 @@ def reduce_concurrency(report: dict, **plan_kwargs) -> dict:
     rather than silently choosing a different route.
     """
     concurrency = plan_kwargs.get("concurrency", 1)
+    requested = concurrency
     while concurrency > 1:
         bad = [m for m in report["mounts"] if m["verdict"] == "insufficient"]
         if not bad:
@@ -283,6 +304,7 @@ def reduce_concurrency(report: dict, **plan_kwargs) -> dict:
         concurrency -= 1
         plan_kwargs["concurrency"] = concurrency
         report = plan_storage(**plan_kwargs)
+        report["requested_concurrency"] = requested
     return report
 
 

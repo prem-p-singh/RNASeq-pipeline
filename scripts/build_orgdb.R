@@ -3,8 +3,7 @@
 # build_orgdb.R — tiered OrgDb builder
 # ---------------------------------------------------------------------------
 # This script makes sure an OrgDb package (org.Xxx.eg.db) is available for
-# the GO enrichment stage. It uses a smart fallback chain so it Just Works
-# for any organism:
+# the GO enrichment stage. Annotation availability varies by organism:
 #
 #   Tier 1  Bioconductor package already installed in R          instant
 #   Tier 2  We built it before and cached it                      instant
@@ -85,6 +84,11 @@ log_msg <- function(stage, msg) {
 cache_path_for_organism <- function() {
   file.path(opt$cache_dir, paste0(opt$tax_id, "_", opt$assembly))
 }
+
+# Annotation packages are data products, installed outside the locked runtime.
+orgdb_lib <- file.path(cache_path_for_organism(), "R-library")
+dir.create(orgdb_lib, recursive = TRUE, showWarnings = FALSE)
+.libPaths(c(orgdb_lib, .libPaths()))
 
 # A successful install() call is not proof the package is usable. Check it
 # loads before any sentinel claims the build succeeded, otherwise a cached
@@ -170,7 +174,7 @@ if (opt$strategy != "force_build" && file.exists(cache_marker)) {
 
     if (!requireNamespace(pkg_name, quietly = TRUE)) {
       log_msg("tier2", paste0("installing cached package: ", pkg_name))
-      install.packages(pkg_dir, repos = NULL, type = "source")
+      install.packages(pkg_dir, repos = NULL, type = "source", lib = orgdb_lib)
     }
     verify_installed(pkg_name)
     log_msg("tier2", paste0("using cached ", pkg_name))
@@ -194,12 +198,8 @@ if (opt$strategy %in% c("auto", "force_build")) {
   log_msg("tier3a", paste0("attempting NCBI Gene build for tax_id=",
                             opt$tax_id, " (", opt$genus, " ", opt$species, ")"))
 
-  # Make sure AnnotationForge is available; install lazily if not
-  if (!requireNamespace("BiocManager", quietly = TRUE)) {
-    install.packages("BiocManager")
-  }
   if (!requireNamespace("AnnotationForge", quietly = TRUE)) {
-    BiocManager::install("AnnotationForge", ask = FALSE, update = FALSE)
+    stop("AnnotationForge is missing; repair the release runtime with scripts/bootstrap.sh")
   }
   library(AnnotationForge)
 
@@ -226,7 +226,7 @@ if (opt$strategy %in% c("auto", "force_build")) {
 
   if (!is.null(pkg_name)) {
     log_msg("tier3a", paste0("built ", pkg_name, " — installing from source"))
-    install.packages(pkg_name, repos = NULL, type = "source")
+    install.packages(pkg_name, repos = NULL, type = "source", lib = orgdb_lib)
     verify_installed(pkg_name)
 
     # Drop a marker so Tier 2 finds it next time
@@ -319,7 +319,7 @@ if (opt$strategy %in% c("auto", "force_build")) {
     goTable   = "go"
   )
 
-  install.packages(pkg_name, repos = NULL, type = "source")
+  install.packages(pkg_name, repos = NULL, type = "source", lib = orgdb_lib)
   verify_installed(pkg_name)
   file.create(cache_marker)
   log_msg("tier3b", paste0("cached at ", cache_dir_for_org))

@@ -39,17 +39,14 @@ if [ ! -d "$INBOX" ]; then
     exit 1
 fi
 
-# --- activate env (temp disable -u; these system scripts use unbound vars) -
+# Prepare the same locked runtime that submit.sh verifies.
+ENV_PREFIX=$(bash "$REPO/scripts/bootstrap.sh")
 set +u
-if [ -f /etc/profile.d/modules.sh ]; then
-    source /etc/profile.d/modules.sh
-    module load conda/base 2>/dev/null || true
-fi
-if command -v conda >/dev/null 2>&1; then
-    source "$(conda info --base)/etc/profile.d/conda.sh"
-    conda activate rnaseq-pipeline 2>/dev/null || true
-fi
+source "$(conda info --base)/etc/profile.d/conda.sh"
+conda activate "$ENV_PREFIX"
 set -u
+export PYTHONNOUSERSITE=1 R_ENVIRON_USER=/dev/null R_PROFILE_USER=/dev/null
+export R_LIBS_USER="$ENV_PREFIX/lib/R/library" R_LIBS_SITE="$ENV_PREFIX/lib/R/library"
 
 echo
 echo "╭──────────────────────────────────────────────────────────────╮"
@@ -203,7 +200,7 @@ fastq_pattern: null
 primary_factor: "$PRIMARY"
 model_fixed_effects: "~ $PRIMARY"
 model_random_effects: null
-storage_budget_gb: 20
+storage_budget_gb: null
 EOF
 
 echo
