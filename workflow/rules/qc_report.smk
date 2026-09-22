@@ -12,6 +12,8 @@ rule qc_report:
     input:
         quant = expand(str(QUANT / "{sample}/quant.sf"), sample=SAMPLES),
         sheet = config["samples"]["sheet"],
+        # R17c: the report states reference construction from this record only.
+        reference_lock = REF / "reference.lock.json",
     output:
         done = OUT / "qc_report/qc_report.done",
         tsv  = OUT / "qc_report/alignment_summary.tsv",
@@ -26,8 +28,7 @@ rule qc_report:
         project  = lambda wc: config["project"].get("name") or "",
         species  = lambda wc: (config.get("organism", {}).get("scientific_name")
                                or config.get("organism", {}).get("common_name") or ""),
-        ref      = lambda wc: config.get("reference", {}).get("accession") or "",
-        assembly = lambda wc: config.get("reference", {}).get("assembly_name") or "",
+
     threads: 2
     resources:
         mem_mb = 4000,
@@ -47,7 +48,6 @@ rule qc_report:
             --samples {input.sheet} \
             --project "{params.project}" \
             --species "{params.species}" \
-            --reference "{params.ref}" \
-            --assembly "{params.assembly}" >> {log} 2>&1
+            --reference-lock {input.reference_lock} >> {log} 2>&1
         touch {output.done}
         """
