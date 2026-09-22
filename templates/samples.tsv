@@ -1,0 +1,16 @@
+# samples.tsv - one row per biological specimen at one observation (master plan 6.1)
+#
+# sample_id            unique; the identifier every other table joins on
+# biological_unit_id   the specimen or subject. Repeated observations of the
+#                      same unit share this value and are NOT independent
+#                      replicates (IN04). For an unpaired design, set it equal
+#                      to sample_id.
+# condition            the primary factor level for this observation
+#
+# Any further columns are covariates and must match the names used in
+# config.yaml model.fixed_effects / model.random_effects.
+sample_id	biological_unit_id	condition	timepoint
+S1	P1	control	T0
+S2	P1	treated	T1
+S3	P2	control	T0
+S4	P2	treated	T1

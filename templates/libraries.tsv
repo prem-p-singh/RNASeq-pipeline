@@ -1,0 +1,17 @@
+# libraries.tsv - one row per prepared sequencing library (master plan 6.1)
+#
+# library_id     unique
+# sample_id      must exist in samples.tsv
+# layout         paired | single. A paired library requires both mates in
+#                reads.tsv and is never silently downgraded (IN02).
+# assay_family   bulk | bulk_end_tag | ... see config/spec.yaml scope.assays
+# strandedness   kit-declared value, e.g. ISR, SR, U. Compared with what
+#                Salmon detects; a disagreement is resolved by policy (PR05).
+# kit            exact kit and version. Required before an end-tag assay is
+#                qualified (H18, V05); leave blank if genuinely unknown.
+# prep_batch     library preparation batch, for QC06 batch diagnosis
+library_id	sample_id	layout	assay_family	strandedness	kit	platform	prep_batch
+S1_lib1	S1	paired	bulk	ISR		illumina	B1
+S2_lib1	S2	paired	bulk	ISR		illumina	B1
+S3_lib1	S3	paired	bulk	ISR		illumina	B2
+S4_lib1	S4	paired	bulk	ISR		illumina	B2
