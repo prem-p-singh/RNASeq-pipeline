@@ -145,18 +145,28 @@ downstream:
 # HPC / storage
 # -----------------------------------------------------------------------------
 hpc:
-  # submit.sh enforces this: it computes the peak per-sample working set from
-  # seq_type, caps --jobs so concurrent samples stay inside the budget, and
-  # refuses to launch a run that cannot fit at all.
-  storage_budget_gb: 20
-  # Upper bound on concurrent per-sample jobs. Only lowers the figure submit.sh
-  # derives from the budget; null means "let storage decide".
+  # There is NO default storage ceiling. Master plan 10.1: "There is no default
+  # 20 GB limit and no sample-count cutoff that rejects an analysis."
+  # scripts/plan_resources.py measures actual input sizes, retained outputs,
+  # cache and index build workspace, and per-filesystem free space, then caps
+  # concurrency to fit. gates/resource_plan.json records what it found.
+  #
+  # storage_budget_gb is intentionally absent. If your site enforces a real
+  # quota, set it here and it is applied as an explicit constraint on the
+  # results filesystem; a legacy value triggers a migration warning (RS12),
+  # because only you know whether it was a real limit or the old template
+  # default of 20.
+  #
+  # Recognised for migration, with NO default cap. Leave null unless your site
+  # enforces a real quota; a set value is applied as an explicit constraint on
+  # the results filesystem and preflight reports it as deprecated (RS12).
+  storage_budget_gb: null
+  # Upper bound on concurrent per-sample jobs. Only lowers the figure the
+  # storage plan derives; null means "let the plan and the profile decide".
   samples_in_flight: null
   # true: 01_qc_quant.sh removes the reads it downloaded and the trimmed reads
   # it wrote, once quant.sf is verified. FASTQs given as absolute local paths
   # are read in place and are never deleted either way.
-  # false: everything is retained, and submit.sh then requires the budget to
-  # hold the whole cohort at once.
   delete_fastq_after_quant: true
 
 # Removed from this block because nothing read them: `aligner` (only salmon is

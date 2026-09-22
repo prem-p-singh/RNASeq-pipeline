@@ -23,6 +23,7 @@ What must not break:
 Run:  python3 tests/check_config_resolve.py
 """
 import importlib.util
+import yaml
 import json
 import subprocess
 import sys
@@ -80,12 +81,22 @@ assert "CFG001" in codes, iss
 assert sum(1 for c in codes if c == "CFG001") == 1, iss
 
 _, _, iss = cr.resolve(
-    ROOT, [("project", {"hpc": {"storage_budget_gb": "twenty"}})])
+    ROOT, [("project", {"samples": {"min_reads_on_genes": "many"}})])
 assert "CFG003" in [c for c, _ in iss], iss
 
 # a legitimate override produces nothing
-_, _, iss = cr.resolve(ROOT, [("project", {"hpc": {"storage_budget_gb": 50}})])
+_, _, iss = cr.resolve(ROOT, [("project", {"samples": {"min_reads_on_genes": 5}})])
 assert iss == [], iss
+
+# RS12: a legacy storage cap is a deprecation warning, never a blocker. The
+# platform has no default ceiling any more (master plan 10.1), but a real site
+# quota must not be silently erased.
+_, _, iss = cr.resolve(ROOT, [("project", {"hpc": {"storage_budget_gb": 20}})])
+assert [c for c, _ in iss] == ["CFG005"], iss
+assert cr.blocking(iss, ROOT) == [], "a deprecation must not block a run"
+template = yaml.safe_load((ROOT / "config" / "config.template.yaml").read_text())
+assert template["hpc"]["storage_budget_gb"] is None, (
+    "the template must not reinstate a default storage cap")
 
 # user-defined subtrees are carried through, never flagged
 _, _, iss = cr.resolve(ROOT, [("project", {"contrasts": [
@@ -93,7 +104,6 @@ _, _, iss = cr.resolve(ROOT, [("project", {"contrasts": [
 assert iss == [], iss
 
 # --- 5. single source of defaults (master plan 5.2) -------------------
-import yaml
 template = yaml.safe_load((ROOT / "config" / "config.template.yaml").read_text())
 assert "thresholds" not in template, (
     "config.template.yaml has a thresholds block again; defaults must have one "

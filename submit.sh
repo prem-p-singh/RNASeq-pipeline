@@ -129,29 +129,20 @@ SHEET=$(python3 -c "import yaml; print(yaml.safe_load(open('$CONFIG'))['samples'
 # --- Count samples (strip comments + header) --------------------------
 N=$(grep -v '^#' "$SHEET" | awk 'NR>1 && NF>0' | wc -l | tr -d ' ')
 
-# --- Read tier thresholds + fastq size estimate -----------------------
-read TIER_SMALL TIER_MEDIUM RESERVED TAGSEQ_GB RNA_SE_GB RNA_PE_GB SEQ_TYPE <<< $(python3 - <<PY
+# --- Tier profile: cluster settings only ------------------------------
+# Master plan 10.7: "Replace small/medium/large sample tiers as the primary
+# scheduler logic with per-rule resources and dataset-aware concurrency.
+# Friendly size labels may remain in reports." The tier therefore still selects
+# the SLURM profile (account, partition, qos), but no longer decides how much
+# work runs at once: that comes from the storage plan below.
+read TIER_SMALL TIER_MEDIUM SEQ_TYPE <<< $(python3 - <<PYCFG
 import yaml
 t = yaml.safe_load(open("$THRESH"))["tiers"]
 c = yaml.safe_load(open("$CONFIG"))
-print(
-    t["small_max_samples"], t["medium_max_samples"], t["reserved_gb"],
-    t["fastq_size_estimate_gb"]["tagseq"],
-    t["fastq_size_estimate_gb"]["rnaseq_single"],
-    t["fastq_size_estimate_gb"]["rnaseq_paired"],
-    c["samples"]["seq_type"],
-)
-PY
+print(t["small_max_samples"], t["medium_max_samples"], c["samples"]["seq_type"])
+PYCFG
 )
 
-case "$SEQ_TYPE" in
-    tagseq)         FASTQ_GB=$TAGSEQ_GB ;;
-    rnaseq_single)  FASTQ_GB=$RNA_SE_GB ;;
-    rnaseq_paired)  FASTQ_GB=$RNA_PE_GB ;;
-    *) echo "Unknown seq_type: $SEQ_TYPE" >&2; exit 1 ;;
-esac
-
-# --- Pick tier --------------------------------------------------------
 if   [ "$N" -le "$TIER_SMALL"  ]; then TIER=small
 elif [ "$N" -le "$TIER_MEDIUM" ]; then TIER=medium
 else                                   TIER=large
@@ -161,72 +152,39 @@ if [ -n "$FORCE_PROFILE" ]; then
     TIER="$FORCE_PROFILE"
     echo "NOTE: tier overridden to '$TIER' by --profile"
 fi
-# Profiles ship with the workflow, so they come from the repo, not the project.
 PROFILE="$REPO/profiles/$TIER"
 if [ ! -d "$PROFILE" ]; then
     echo "No such profile: profiles/$TIER (expected small|medium|large)" >&2
     exit 1
 fi
 
-# --- Storage budget: cap concurrency, refuse impossible runs ----------
-# Assigned to a variable first, NOT piped straight into `read`: under `set -e`
-# a failed command substitution only aborts the script when it is the whole
-# assignment, so `read ... <<< $(python3 ...)` would print REFUSED and carry on.
-BUDGET=$(python3 - <<'PY' "$CONFIG" "$PROFILE" "$RESERVED" "$FASTQ_GB" "$N" "$SEQ_TYPE"
-import sys, yaml
-
-cfg_path, profile, reserved, fastq_gb, n, seq_type = sys.argv[1:7]
-reserved, fastq_gb, n = float(reserved), float(fastq_gb), int(n)
-
-hpc = yaml.safe_load(open(cfg_path))["hpc"]
-budget   = float(hpc["storage_budget_gb"])
-delete   = bool(hpc.get("delete_fastq_after_quant", True))
-inflight = hpc.get("samples_in_flight")
-prof_jobs = int(yaml.safe_load(open(f"{profile}/config.yaml")).get("jobs", 1))
-
-avail = budget - reserved
-
-# Peak on-disk working set for ONE sample. Paired-end holds raw and trimmed
-# reads at the same time (01_qc_quant.sh writes fastp output to disk so
-# --gcBias can re-read it), so its peak is twice the raw-pair estimate.
-# Single-end streams fastp into salmon, so only the raw file is on disk.
-peak = fastq_gb * (2 if seq_type == "rnaseq_paired" else 1)
-
-def refuse(msg):
-    sys.exit(f"REFUSED: {msg}")
-
-if avail <= 0:
-    refuse(f"storage_budget_gb={budget:g} leaves nothing after {reserved:g} GB reserved "
-           f"for the index and outputs")
-if peak > avail:
-    refuse(f"one {seq_type} sample peaks at ~{peak:g} GB but only {avail:g} GB is usable "
-           f"(budget {budget:g} minus {reserved:g} reserved); raise storage_budget_gb")
-if not delete:
-    total = peak * n
-    if total > avail:
-        refuse(f"delete_fastq_after_quant is false, so all {n} samples stay on disk "
-               f"(~{total:g} GB) but only {avail:g} GB is usable; set it to true")
-
-conc = max(1, int(avail // peak))
-if inflight:
-    conc = min(conc, int(inflight))
-print(f"{budget:g}", min(conc, prof_jobs), prof_jobs)
-PY
-)
-read BUDGET_GB MAX_CONC PROFILE_JOBS <<< "$BUDGET"
+# --- Storage plan: measured, per filesystem, no platform cap ----------
+# Replaces hpc.storage_budget_gb and the per-assay FASTQ guesses (R15, U07,
+# master plan 10.7). plan_resources.py exits non-zero when the run cannot fit,
+# after trying a lower concurrency first (RS08/RS09).
+PLAN_JSON="$PROJDIR/gates/resource_plan.json"
+if ! python3 "$REPO/scripts/plan_resources.py" \
+        --project-dir "$PROJDIR" --configfile "$CONFIG" \
+        --profile "$PROFILE" --out "$PLAN_JSON"; then
+    echo
+    echo "Storage planning blocked this run; nothing was submitted." >&2
+    exit 1
+fi
+MAX_CONC=$(python3 -c "import json;print(json.load(open('$PLAN_JSON'))['planned_concurrency'])")
+PROFILE_JOBS=$(python3 -c "import yaml;print(yaml.safe_load(open('$PROFILE/config.yaml')).get('jobs',1))")
 
 JOBS_FLAG=""
 if [ "$MAX_CONC" -lt "$PROFILE_JOBS" ]; then
     JOBS_FLAG="--jobs $MAX_CONC"
-    echo "NOTE: --jobs capped at $MAX_CONC (profile allows $PROFILE_JOBS) to stay under ${BUDGET_GB}GB"
+    echo "NOTE: --jobs capped at $MAX_CONC (profile allows $PROFILE_JOBS) by the storage plan"
 fi
 
 # --- Log decision -----------------------------------------------------
 mkdir -p gates
 {
     echo "[$(date -Iseconds)] STRATEGY: $TIER"
-    echo "    N=$N  seq_type=$SEQ_TYPE  avg_fastq=${FASTQ_GB}GB"
-    echo "    budget=${BUDGET_GB}GB  reserved=${RESERVED}GB  max_concurrent=$MAX_CONC"
+    echo "    N=$N  seq_type=$SEQ_TYPE  max_concurrent=$MAX_CONC"
+    echo "    storage plan: $PLAN_JSON"
     echo "    profile=$PROFILE"
 } >> gates/decisions.log
 

@@ -1,0 +1,62 @@
+# =============================================================================
+# resource_models.yaml — coefficients for storage and concurrency planning
+#
+# Master plan 10.2: "Store ordinary benchmark records; use conservative measured
+# coefficients or simple size bands before considering a predictive model."
+#
+# Every number below is an ASSUMPTION until a run replaces it. Each carries a
+# `source` so a plan can say which of its inputs were measured and which were
+# guessed, and RS02 requires that uncertainty be labelled rather than presented
+# as fact. Observations recorded in benchmarks/resource_observations.tsv should
+# supersede these.
+#
+# There is deliberately NO platform storage cap here. Master plan 10.1: "There
+# is no default 20 GB limit and no sample-count cutoff that rejects an
+# analysis." Capacity is a property of the filesystem the run lands on, which
+# is measured at plan time, not a constant.
+# =============================================================================
+schema_version: 1
+
+# ---------------------------------------------------------------------------
+# Per-library working set and retained output, by assay.
+# Used only when actual file sizes cannot be measured (RS02). Ranges are
+# low/high so the plan can report a band rather than a false point estimate.
+# ---------------------------------------------------------------------------
+assays:
+  bulk:
+    # Compressed FASTQ per library, both mates summed exactly once (RS01).
+    input_gb: {low: 2.0, high: 8.0, source: assumed}
+    # Everything the pipeline keeps for that library after the run: quant
+    # directory, QC JSON, logs.
+    retained_gb: {low: 0.05, high: 0.3, source: assumed}
+    # Peak extra space one running job needs beyond its input: trimmed reads
+    # and salmon scratch. Paired-end holds raw and trimmed together.
+    temporary_gb: {low: 2.0, high: 8.0, source: assumed}
+  bulk_end_tag:
+    input_gb: {low: 0.3, high: 2.0, source: assumed}
+    retained_gb: {low: 0.02, high: 0.1, source: assumed}
+    # Single-end streams fastp into salmon, so no trimmed copy lands on disk.
+    temporary_gb: {low: 0.1, high: 0.5, source: assumed}
+
+# ---------------------------------------------------------------------------
+# One-off costs, counted once per unique identity, not per library (RS03/RS05).
+# ---------------------------------------------------------------------------
+cache:
+  reference_bundle_gb: {low: 1.0, high: 6.0, source: assumed}
+  # Index construction peaks above the final index size (RS14).
+  index_build_overhead_gb: {low: 1.0, high: 4.0, source: assumed}
+  conda_environment_gb: {low: 3.0, high: 8.0, source: assumed}
+
+# ---------------------------------------------------------------------------
+# Cohort-level outputs that do not scale per library.
+# ---------------------------------------------------------------------------
+cohort:
+  aggregate_outputs_gb: {low: 0.05, high: 1.0, source: assumed}
+
+planning:
+  # Applied to the total, so a plan is not defeated by the first library that
+  # runs larger than assumed. Master plan 10.3 calls this uncertainty_margin.
+  uncertainty_margin_fraction: 0.25
+  # Headroom left on a filesystem that is never planned into (operational
+  # reserve in 10.3): logs, other users, filesystem overhead.
+  operational_reserve_gb: 2.0

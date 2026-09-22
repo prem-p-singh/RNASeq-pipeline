@@ -38,10 +38,14 @@ _project_layer = {k: v for k, v in config.items() if k != "repo_dir"}
 config, CONFIG_ORIGINS, _cfg_issues = _cr.resolve(_repo, [("project", _project_layer)])
 config["repo_dir"] = str(_repo)          # injected by submit.sh, not user-authored
 
-if _cfg_issues:
+_cfg_blocking = _cr.blocking(_cfg_issues, _repo)
+for _code, _detail in _cfg_issues:
+    if (_code, _detail) not in _cfg_blocking:
+        print(f"config warning {_code}: {_detail}")
+if _cfg_blocking:
     raise RuntimeError(
         "Configuration problems (preflight reports the same findings):\n  "
-        + "\n  ".join(f"{code}: {detail}" for code, detail in _cfg_issues))
+        + "\n  ".join(f"{code}: {detail}" for code, detail in _cfg_blocking))
 
 # --- Load sample sheet ---------------------------------------------------
 samples = pd.read_csv(
