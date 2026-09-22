@@ -92,16 +92,42 @@ if (!is.null(anno_path) && file.exists(anno_path)) {
 # the safe default is to keep every sample and only record the flag.
 sample_disposition <- function(qc, min_map, min_reads, policy_on) {
   qc$reads_mapped <- qc$reads_processed * qc$mapping_rate
-  low_map  <- !is.na(qc$mapping_rate) & qc$mapping_rate  < min_map
-  low_read <- !is.na(qc$reads_mapped) & qc$reads_mapped  < min_reads
+
+  # QC08: "Required QC metric unavailable | Mark missing and block dependent
+  # automatic decision if essential; never substitute zero."
+  #
+  # This previously read `!is.na(x) & x < threshold`, so a sample whose metric
+  # was missing produced FALSE, an empty flag, and include = TRUE. Absent was
+  # silently treated as passed, which is the one reading QC08 forbids. Missing
+  # is now its own outcome, and the automatic decision is withheld rather than
+  # guessed in either direction.
+  unavailable <- is.na(qc$mapping_rate) | is.na(qc$reads_processed)
+
+  low_map  <- !unavailable & qc$mapping_rate < min_map
+  low_read <- !unavailable & qc$reads_mapped < min_reads
+
   flag <- rep("", nrow(qc))
   flag[low_map] <- sprintf("mapping rate %.3f < %.2f",
                            qc$mapping_rate[low_map], min_map)
   only_read <- low_read & !low_map
   flag[only_read] <- sprintf("mapped reads %.0f < %.0f",
                              qc$reads_mapped[only_read], min_reads)
+  flag[unavailable] <- vapply(which(unavailable), function(i) {
+    absent <- c("mapping_rate", "num_reads_processed")[
+      c(is.na(qc$mapping_rate[i]), is.na(qc$reads_processed[i]))]
+    paste0("QC metric unavailable: ", paste(absent, collapse = ", "))
+  }, character(1))
+
   qc$flag <- flag
-  qc$include <- if (isTRUE(policy_on)) flag == "" else rep(TRUE, nrow(qc))
+  qc$status <- ifelse(unavailable, "unavailable",
+                      ifelse(flag == "", "ok", "flagged"))
+  # include is NA where no automatic decision may be made. Downstream must
+  # resolve that explicitly; it is not a silent TRUE.
+  qc$include <- if (isTRUE(policy_on)) {
+    ifelse(unavailable, NA, flag == "")
+  } else {
+    ifelse(unavailable, NA, TRUE)
+  }
   qc
 }
 
@@ -122,13 +148,44 @@ min_reads <- if (identical(seq_type, "tagseq")) {
 } else {
   cfg$thresholds$sample_qc$min_reads_on_genes_rnaseq
 }
+# Reconcile the cohort against its QC records before any decision is made.
+# qc_rows drops a sample whose metrics.json is absent, so without this a sample
+# could be analysed with no QC record at all: not flagged, not excluded, simply
+# unexamined. That is the same failure as QC08 in a different place.
+no_metrics <- setdiff(colnames(counts), qc$sample_id)
+if (length(no_metrics) > 0) {
+  qc <- rbind(qc, data.frame(
+    sample_id       = no_metrics,
+    mapping_rate    = NA_real_,
+    reads_processed = NA_real_,
+    stringsAsFactors = FALSE))
+  message("No metrics.json for ", length(no_metrics), " sample(s): ",
+          paste(no_metrics, collapse = ", "),
+          " - recorded as unavailable, not as passing")
+}
+
+policy_on <- isTRUE(cfg$sample_policy$exclude_failing_qc)
 disposition <- sample_disposition(qc,
                                   cfg$thresholds$sample_qc$mapping_rate_min,
                                   min_reads,
-                                  isTRUE(cfg$sample_policy$exclude_failing_qc))
+                                  policy_on)
 write_tsv(disposition, out_disposition)
 
-excluded <- disposition$sample_id[!disposition$include]
+# QC08: block the dependent automatic decision rather than guessing it. With
+# the exclusion policy on, inclusion depends on metrics that are missing, so
+# the cohort cannot be settled automatically.
+undecided <- disposition$sample_id[is.na(disposition$include)]
+if (policy_on && length(undecided) > 0) {
+  stop("sample_policy.exclude_failing_qc is on, but QC metrics are unavailable ",
+       "for ", length(undecided), " sample(s): ",
+       paste(undecided, collapse = ", "),
+       ". Inclusion cannot be decided automatically. Re-run Stage 1 for these ",
+       "samples, or set sample_policy.exclude_failing_qc to false to analyse ",
+       "the full cohort with the gap recorded in ", out_disposition, ".")
+}
+
+excluded <- disposition$sample_id[!is.na(disposition$include) &
+                                  !disposition$include]
 if (length(excluded) > 0) {
   counts <- counts[, !(colnames(counts) %in% excluded), drop = FALSE]
   for (i in which(!disposition$include)) {

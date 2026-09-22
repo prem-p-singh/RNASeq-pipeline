@@ -184,6 +184,76 @@ both <- data.frame(sample_id = "bad", mapping_rate = 0.1,
 d <- sample_disposition(both, min_map = 0.60, min_reads = 2e7, policy_on = TRUE)
 stopifnot(!d$include, grepl("mapping rate", d$flag))
 
+# QC08: an absent metric is not a metric that passed.
+#
+# This previously read `!is.na(x) & x < threshold`, so a missing mapping rate
+# gave FALSE, an empty flag and include = TRUE: the sample entered the analysis
+# as though it had cleared QC. The automatic decision is now withheld (NA)
+# instead of guessed, and the reason names the metric that is missing.
+gap <- data.frame(
+  sample_id       = c("ok", "no_map", "no_reads"),
+  mapping_rate    = c(0.90, NA,       0.90),
+  reads_processed = c(3e7,  3e7,      NA),
+  stringsAsFactors = FALSE
+)
+d <- sample_disposition(gap, min_map = 0.60, min_reads = 2e7, policy_on = TRUE)
+stopifnot(identical(d$status, c("ok", "unavailable", "unavailable")))
+stopifnot(isTRUE(d$include[1]))
+stopifnot(is.na(d$include[2]), is.na(d$include[3]))
+stopifnot(!isTRUE(d$include[2]))          # must never read as an implicit pass
+stopifnot(grepl("unavailable", d$flag[2]), grepl("mapping_rate", d$flag[2]))
+stopifnot(grepl("num_reads_processed", d$flag[3]))
+
+# with the policy off no automatic decision is being made, so the gap is
+# recorded but nothing is silently asserted about those samples either
+d <- sample_disposition(gap, min_map = 0.60, min_reads = 2e7, policy_on = FALSE)
+stopifnot(isTRUE(d$include[1]), is.na(d$include[2]))
+stopifnot(identical(d$status[2], "unavailable"))
+
+# status separates the three outcomes that used to share an empty flag
+d <- sample_disposition(qc, min_map = 0.60, min_reads = 2e7, policy_on = TRUE)
+stopifnot(identical(d$status, c("ok", "flagged", "flagged")))
+
+# ======================================================================
+# ST14: a cohort that QC has changed must be revalidated before fitting
+# ======================================================================
+# validate_design is what 03_de.R applies AFTER exclusion, using the replicate
+# count recomputed on the retained samples. A design that was estimable for the
+# full cohort can stop being estimable once QC removes samples, and that must
+# block rather than proceed.
+full <- data.frame(
+  sample_id = paste0("S", 1:6),
+  treatment = factor(rep(c("control", "treated"), each = 3)),
+  stringsAsFactors = FALSE
+)
+mm_full <- model.matrix(~ treatment, data = full)
+reps_full <- biological_replicates(full, "treatment", NULL)
+stopifnot(reps_full$n == 3)
+ok <- validate_design(mm_full, reps_full$n, "treatment", reps_full$unit)
+stopifnot(ok$residual_df == 4)
+
+# QC removes two treated samples: 3 vs 1 leaves one replicate in a group
+kept <- full[full$sample_id %in% c("S1", "S2", "S3", "S4"), ]
+mm_kept <- model.matrix(~ treatment, data = kept)
+reps_kept <- biological_replicates(kept, "treatment", NULL)
+stopifnot(reps_kept$n == 1)
+err <- tryCatch({
+  validate_design(mm_kept, reps_kept$n, "treatment", reps_kept$unit)
+  ""
+}, error = function(e) conditionMessage(e))
+stopifnot(grepl("biological replicate", err))
+
+# QC removes an entire level: the contrast has nothing left to compare
+one_level <- full[full$treatment == "control", ]
+stopifnot(length(unique(one_level$treatment[drop = TRUE])) == 1)
+err <- tryCatch({
+  mm <- model.matrix(~ treatment, data = droplevels(one_level))
+  validate_design(mm, biological_replicates(one_level, "treatment", NULL)$n,
+                  "treatment", "sample")
+  ""
+}, error = function(e) conditionMessage(e))
+stopifnot(nzchar(err))
+
 # ======================================================================
 # skip semantics: switched-off and unavailable must be distinguishable,
 # and neither may be reported as a completed analysis
