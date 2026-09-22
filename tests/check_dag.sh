@@ -25,14 +25,8 @@ set -uo pipefail
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 
-SMK="${SNAKEMAKE:-}"
-if [ -z "$SMK" ]; then
-    if command -v snakemake >/dev/null 2>&1; then SMK=$(command -v snakemake); fi
-fi
-if [ -z "$SMK" ] || ! "$SMK" --version >/dev/null 2>&1; then
-    echo "needs snakemake (set SNAKEMAKE=/path/to/snakemake)"
-    exit 77
-fi
+. "$REPO/tests/_gate.sh"
+gate_runtime
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT

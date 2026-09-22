@@ -21,29 +21,8 @@ set -uo pipefail
 
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 FIXTURE="$REPO/tests/fixtures/tiny_project.py"
-
-SMK="${SNAKEMAKE:-}"
-[ -z "$SMK" ] && command -v snakemake >/dev/null 2>&1 && SMK=$(command -v snakemake)
-if [ -z "$SMK" ] || ! "$SMK" --version >/dev/null 2>&1; then
-    echo "needs snakemake (set SNAKEMAKE=/path/to/snakemake)"
-    exit 77
-fi
-
-# 03_de.R attaches variancePartition unconditionally, so it is needed even on
-# the limma-voom path this fixture takes.
-R_PKGS="tximport GenomicFeatures edgeR limma variancePartition emmeans \
-        clusterProfiler dplyr readr jsonlite tibble"
-if ! command -v Rscript >/dev/null 2>&1; then
-    echo "needs Rscript on PATH"
-    exit 77
-fi
-MISSING=$(Rscript -e 'cat(paste(commandArgs(TRUE)[
-    !sapply(commandArgs(TRUE), requireNamespace, quietly = TRUE)], collapse = " "))' \
-    $R_PKGS 2>/dev/null)
-if [ -n "$MISSING" ]; then
-    echo "needs R packages: $MISSING"
-    exit 77
-fi
+. "$REPO/tests/_gate.sh"
+gate_runtime r
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
@@ -51,17 +30,9 @@ PROJ="$TMP/proj"
 
 python3 "$FIXTURE" build "$PROJ" "$REPO" || { echo "FAIL: fixture build" >&2; exit 1; }
 
-cd "$PROJ" || exit 1
-# --scheduler greedy: the default ILP scheduler shells out to a CBC binary that
-# pulp ships only for x86-64, so on arm64 it raises "Bad CPU type in
-# executable". Greedy needs no solver and makes the run deterministic.
-"$SMK" --snakefile "$REPO/Snakefile" \
-       --configfile config/config.yaml \
-       --config repo_dir="$REPO" \
-       --cores 2 --scheduler greedy \
-       results/counts.tsv results/de_done.flag \
-       results/enrichment_done.flag results/wgcna_done.flag \
-       > "$TMP/run.log" 2>&1
+run_workflow "$PROJ" "$REPO" "$TMP/run.log" \
+    results/counts.tsv results/de_done.flag \
+    results/enrichment_done.flag results/wgcna_done.flag
 rc=$?
 if [ $rc -ne 0 ]; then
     echo "FAIL: stages 2-5 did not complete (exit $rc)" >&2
