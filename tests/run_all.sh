@@ -83,9 +83,15 @@ else
     skip check_preflight.py "needs pyyaml, Rscript and jsonlite"
 fi
 
-# Needs snakemake. Skips cleanly until the runtime exists (WORKING_PLAN 3.2
-# item 3); set SNAKEMAKE=/path/to/snakemake to run it from a venv.
-run check_dag.sh             "bash tests/check_dag.sh"
+# Needs snakemake, which the environment of WORKING_PLAN 3.2 item 3 supplies and
+# this machine does not. Gated here rather than left to the check's own internal
+# skip, because that skip exits 0 and `run` would report it as a pass.
+# Set SNAKEMAKE=/path/to/snakemake to run it from a venv.
+if "${SNAKEMAKE:-snakemake}" --version >/dev/null 2>&1; then
+    run check_dag.sh "bash tests/check_dag.sh"
+else
+    skip check_dag.sh "needs snakemake (set SNAKEMAKE=... to point at one)"
+fi
 
 run check_storage_policy.sh  "bash tests/check_storage_policy.sh"
 
