@@ -8,6 +8,10 @@
 #   - maxBlockSize follows the memory allocation, so a small allocation splits
 #     the matrix into several blocks instead of forcing one
 #   - goodSamplesGenes runs before pickSoftThreshold and its drops are recorded
+#   - an unusable core count costs parallelism, not the analysis: WGCNA's
+#     enableWGCNAThreads calls detectCores() unconditionally and then evaluates
+#     `nThreads > nCores`, which aborts on NA. Guarded in 05_wgcna.R; run this
+#     file with parallel::detectCores() forced to NA to exercise that path.
 #
 # Run:  Rscript tests/check_wgcna.R
 suppressPackageStartupMessages({
@@ -92,7 +96,14 @@ if (m$n_blocks != 1)
   stop("900 genes at 8 GB should fit one block, got ", m$n_blocks)
 if (m$max_block_size < m$n_genes)
   stop("maxBlockSize ", m$max_block_size, " should cover all ", m$n_genes, " genes at 8 GB")
-if (m$n_threads != 2) stop("n_threads not taken from snakemake@threads: ", m$n_threads)
+# Threads: the request comes from snakemake@threads; what was USED may be
+# lower, because enableWGCNAThreads is skipped when parallel::detectCores()
+# cannot report a usable core count. Both are recorded so the metric describes
+# the run rather than the intent (R16).
+if (m$n_threads_requested != 2)
+  stop("n_threads_requested not taken from snakemake@threads: ", m$n_threads_requested)
+if (!(m$n_threads >= 1 && m$n_threads <= m$n_threads_requested))
+  stop("n_threads used (", m$n_threads, ") outside 1..", m$n_threads_requested)
 
 # --- 3. a small allocation must split into blocks, not force one ------
 # 5 MB admits only a few hundred genes, so the same matrix has to be blocked.
