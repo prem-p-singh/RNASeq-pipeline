@@ -92,15 +92,37 @@ if (n < min_samples) {
 # actually requested; blockwiseModules then pre-clusters genes into blocks.
 mem_mb    <- snakemake@resources[["mem_mb"]]
 if (is.null(mem_mb)) mem_mb <- 8000   # standalone run outside SLURM
-n_threads <- max(1L, as.integer(snakemake@threads))
+n_threads_requested <- max(1L, as.integer(snakemake@threads))
+n_threads <- n_threads_requested
 max_block <- WGCNA::blockSize(ncol(datExpr), rectangularBlocks = TRUE,
                               maxMemoryAllocation = mem_mb * 1024^2,
                               overheadFactor = 3)
 message("maxBlockSize = ", max_block, " genes (from mem_mb=", mem_mb,
         "), nThreads = ", n_threads)
 
+# --- Threading, guarded against an unknown core count -----------------
+# WGCNA::enableWGCNAThreads() calls parallel::detectCores() unconditionally,
+# before it looks at nThreads, and then evaluates `nThreads > nCores`. Where
+# detectCores() returns NA (restricted shells, some containers and schedulers)
+# that comparison is NA, and the call aborts with "missing value where
+# TRUE/FALSE needed" even though nThreads was supplied explicitly.
+#
+# Verified against WGCNA 1.73 by forcing detectCores() to NA: only
+# enableWGCNAThreads fails; disableWGCNAThreads() and
+# blockwiseModules(nThreads = 1) are unaffected. So an unusable core count
+# costs parallelism, not the analysis.
+n_cores <- suppressWarnings(parallel::detectCores())
+if (!is.na(n_cores) && n_cores >= 2L && n_threads >= 2L) {
+  n_threads <- min(n_threads, n_cores)
+  enableWGCNAThreads(nThreads = n_threads)
+} else {
+  disableWGCNAThreads()
+  message("WGCNA threading disabled (detectCores=", n_cores,
+          ", requested threads=", n_threads, "); running single-threaded")
+  n_threads <- 1L
+}
+
 # --- Adaptive soft-threshold power ------------------------------------
-enableWGCNAThreads(nThreads = n_threads)
 pow_scan <- pickSoftThreshold(datExpr,
                               networkType = "signed",
                               powerVector = 1:60,
@@ -175,7 +197,9 @@ metrics <- list(
   max_block_size     = max_block,
   n_blocks           = length(unique(net$blocks)),
   mem_mb             = mem_mb,
-  n_threads          = n_threads
+  n_threads_requested = n_threads_requested,
+  n_threads          = n_threads,
+  detected_cores     = if (is.na(n_cores)) NA_integer_ else as.integer(n_cores)
 )
 write_json(metrics, out_metrics, pretty = TRUE, auto_unbox = TRUE)
 file.create(out_done)
