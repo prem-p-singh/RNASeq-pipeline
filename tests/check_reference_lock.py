@@ -130,13 +130,24 @@ code_only = re.sub(r'""".*?"""', "", code_only, flags=re.S)
 assert "decoy-aware" not in code_only, (
     "qc_report.py asserts decoy-aware outside a comment; it must come from the lock")
 
+builder = (ROOT / "workflow" / "scripts" / "build_salmon_index.py").read_text()
+# The index build moved out of retrieve.smk into build_salmon_index.py when the
+# cache gained locking and atomic publication. The requirement is unchanged:
+# `-d` is passed only when a decoy file was supplied, so nothing can claim
+# decoys for a build that had none.
+assert '"salmon", "index"' in builder, "salmon index invocation not found"
+assert 'if a.decoys:' in builder and '"-d", a.decoys' in builder, (
+    "decoys must be added conditionally, so the recorded label matches the build")
+assert '"-d"' not in builder.split("if a.decoys:")[0], (
+    "a decoy flag is passed unconditionally; the label would then be a claim, "
+    "not a record")
+
+# retrieve.smk mentions the phrase only in a docstring explaining the rule, so
+# strip comments and docstrings before checking for an actual assertion.
 smk = (ROOT / "workflow" / "rules" / "retrieve.smk").read_text()
-index_cmd = [l for l in smk.splitlines() if "salmon index" in l and "-t" in l]
-assert index_cmd, "salmon index command not found in retrieve.smk"
-for line in index_cmd:
-    if " -d " in line or "--decoys" in line:
-        continue
-    # Transcriptome-only build: nothing may claim otherwise.
-    assert "decoy" not in line.lower(), line
+smk_code = "\n".join(l for l in smk.splitlines() if not l.strip().startswith("#"))
+smk_code = re.sub(r'"""i?.*?"""', "", smk_code, flags=re.S)
+assert "decoy-aware" not in smk_code, (
+    "retrieve.smk asserts decoy-aware outside a comment or docstring")
 
 print("check_reference_lock.py: all assertions passed")
