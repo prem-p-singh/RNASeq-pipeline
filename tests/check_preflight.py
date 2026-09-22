@@ -102,9 +102,12 @@ assert notplanned == {"wgcna": "downstream.run_wgcna is false"}, notplanned
 # --- 2. unknown and mistyped config keys ------------------------------
 expect("unknown key", project("badkey", BALANCED, extra="bogus_section: {a: 1}\n"),
        rc=1, has=["CFG001"])
+# storage_budget_gb now defaults to null (no default cap), and a null default
+# constrains no type, so the type case uses a key that still commits to one.
 expect("wrong type",
        project("badtype", BALANCED,
-               extra="hpc: {storage_budget_gb: \"twenty\"}\n"),
+               extra="samples: {sheet: config/samples.tsv, seq_type: tagseq, "
+                     "min_reads_on_genes: \"many\"}\n"),
        rc=1, has=["CFG003"])
 
 # --- 3. scope: an assay the pipeline does not implement ---------------

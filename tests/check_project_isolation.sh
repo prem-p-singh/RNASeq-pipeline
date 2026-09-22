@@ -37,7 +37,8 @@ samples: {sheet: config/samples.tsv, seq_type: $2}
 model: {fixed_effects: "~ treatment", random_effects: null, primary_factor: treatment}
 downstream: {run_go: false, run_kegg: false, run_wgcna: false}
 orgdb: {strategy: skip}
-hpc: {storage_budget_gb: 20, delete_fastq_after_quant: true, samples_in_flight: null}
+# No storage_budget_gb: the platform has no default cap (master plan 10.1).
+hpc: {delete_fastq_after_quant: true, samples_in_flight: null}
 EOF
     cp "$REPO/config/thresholds.yaml" "$1/config/thresholds.yaml"
     # Two levels with >=2 replicates each, so the design is estimable.

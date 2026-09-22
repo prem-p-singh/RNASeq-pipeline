@@ -115,6 +115,8 @@ issues:
   CFG002: {severity: error,   message: "Required configuration key missing"}
   CFG003: {severity: error,   message: "Configuration value has the wrong type"}
   CFG004: {severity: warning, message: "Configuration key present but has no effect for this assay"}
+  CFG005: {severity: warning, message: "Deprecated configuration key",
+           remedy: "hpc.storage_budget_gb is no longer a planning input (master plan 10.1). It is applied as an explicit site quota if set; remove it if it was only the old template default."}
 
   SCP001: {severity: error,   message: "Unsupported assay",
            remedy: "See scope.assays in config/spec.yaml."}

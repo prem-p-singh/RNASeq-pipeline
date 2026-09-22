@@ -142,6 +142,11 @@ def type_conflicts(cfg: dict, schema: dict) -> list[str]:
     return sorted(out)
 
 
+# Keys kept in the schema only so a legacy project is not rejected outright.
+# RS12: a legacy storage cap must raise a migration warning, not an error.
+DEPRECATED = {("hpc", "storage_budget_gb"): "CFG005"}
+
+
 def resolve(repo_root, layers):
     """Merge ordered layers over the schema defaults.
 
@@ -163,12 +168,31 @@ def resolve(repo_root, layers):
                               ("CFG003", type_conflicts(layer, schema))):
             for d in details:
                 issues.append((code, f"{d} (from {name})"))
+        for path, value in walk(layer):
+            code = DEPRECATED.get(path)
+            if code and value not in (None, ""):
+                issues.append((code, f"{'.'.join(path)}={value!r} (from {name})"))
         config = deep_merge(config, layer)
         for p, _ in walk(layer):
             if not _is_opaque(p):
                 origins[".".join(p)] = name
 
     return config, origins, issues
+
+
+def blocking(issues, repo_root) -> list:
+    """Issues whose severity in config/spec.yaml is `error`.
+
+    A deprecation is a warning and must not stop a run: RS12 requires a
+    migration warning for a legacy storage cap, not a rejection.
+    """
+    try:
+        catalog = yaml.safe_load(
+            (Path(repo_root) / "config" / "spec.yaml").read_text())["issues"]
+    except (OSError, KeyError, ValueError):
+        return list(issues)          # cannot classify: treat all as blocking
+    return [(c, d) for c, d in issues
+            if catalog.get(c, {}).get("severity", "error") == "error"]
 
 
 def demo():
