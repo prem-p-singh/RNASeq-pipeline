@@ -43,7 +43,8 @@ tx2gene <- AnnotationDbi::select(txdb, keys = k,
                                  columns = "GENEID", keytype = "TXNAME")
 
 # --- Read sample sheet -------------------------------------------------
-sheet <- read_tsv(sheet_path, comment = "#", show_col_types = FALSE)
+source(snakemake@params$design_lib)
+sheet <- read_sample_sheet(sheet_path)
 stopifnot("sample_id" %in% names(sheet))
 
 # --- Match quant files to samples --------------------------------------
@@ -273,7 +274,6 @@ has_random <- !is.null(cfg$model$random_effects) &&
 # Independent biological replicates, not rows. With a random-effects grouping
 # variable (e.g. "(1|vine)") one subject contributes several rows, and those
 # rows are not independent evidence about the primary factor.
-source(snakemake@params$design_lib)   # biological_replicates()
 reps <- biological_replicates(kept, primary, cfg$model$random_effects)
 de_backend <- if (has_random) "dream" else "limma_voom"
 

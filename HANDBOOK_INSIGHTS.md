@@ -87,7 +87,7 @@ Five concrete changes shipped on 2026-05-29:
 
 **Originally planned:** new rule `workflow/rules/multiqc.smk` running MultiQC standalone.
 
-**Replaced by:** ritu-farm contributed a richer implementation in `workflow/rules/qc_report.smk` + `workflow/scripts/qc_report.py`. Their rule does MultiQC **plus** generates:
+**Replaced by:** Ritu contributed a richer implementation in `workflow/rules/qc_report.smk` + `workflow/scripts/qc_report.py`. Their rule does MultiQC **plus** generates:
 - `comparative_charts.png` — before/after-clean read counts + alignment-fate stacked bars per sample
 - `qc_charts.html` — self-contained HTML embedding the PNG + per-sample alignment table
 - `alignment_summary.tsv` — flat table for ad-hoc analysis
@@ -115,9 +115,9 @@ Strictly more useful than MultiQC alone — kept their version, dropped the plan
 
 ---
 
-## Real-world hardening pulled from ritu-farm (parallel work, merged in)
+## Real-world hardening pulled from Ritu (parallel work, merged in)
 
-While I was implementing the handbook bundle locally, Ritu was actively running a 12-sample paired-end fungal RNA-seq dataset on FARM. Her version of the pipeline made several improvements I hadn't anticipated. Merged into local on 2026-05-30:
+While I was implementing the handbook bundle locally, Ritu was actively running a 12-sample paired-end fungal RNA-seq dataset on the validation cluster. Her version of the pipeline made several improvements I hadn't anticipated. Merged into local on 2026-05-30:
 
 - **Paired-end support** — `samples.tsv` gained a `fastq_url_r2` column; `common.smk` gained `get_fastq_url_r2()`; `per_sample.smk` passes `--url2`; `01_qc_quant.sh` runs fastp with `--detect_adapter_for_pe` and feeds R1+R2 to salmon. The pipeline now handles SE and PE in one rule.
 - **No-streaming for `--gcBias`** — discovered the hard way that salmon's `--gcBias` re-reads the input, which deadlocks if it comes from a pipe. PE branch writes trimmed reads to disk before salmon reads them. SE branch still streams (single-pass `--gcBias` is OK there).

@@ -5,9 +5,10 @@
 # role           R1 | R2 | single | index
 # uri            absolute local path, s3:// or http(s)://. Paths containing
 #                spaces are preserved literally (IN07); never shell-interpolate.
-# lane           lane or run identifier. Several lanes of one library may be
+# lane           lane identifier within a run. Several lanes of one library may be
 #                merged, but only within the same library and read structure,
-#                with mate order preserved (IN03). Mates are matched per lane.
+#                with mate order preserved (IN03). Mates match within run + lane.
+# run            sequencing run identifier; required to distinguish reused lanes.
 # bytes/checksum recorded when known; leave blank rather than guessing, so the
 #                storage estimate can mark it uncertain (RS02).
 read_unit_id	library_id	role	uri	lane	bytes	checksum
@@ -17,3 +18,7 @@ S1_lib1_L2_R1	S1_lib1	R1	/data/S1_L2_R1.fastq.gz	L2
 S1_lib1_L2_R2	S1_lib1	R2	/data/S1_L2_R2.fastq.gz	L2
 S2_lib1_L1_R1	S2_lib1	R1	/data/S2_L1_R1.fastq.gz	L1
 S2_lib1_L1_R2	S2_lib1	R2	/data/S2_L1_R2.fastq.gz	L1
+S3_lib1_L1_R1	S3_lib1	R1	/data/S3_L1_R1.fastq.gz	L1
+S3_lib1_L1_R2	S3_lib1	R2	/data/S3_L1_R2.fastq.gz	L1
+S4_lib1_L1_R1	S4_lib1	R1	/data/S4_L1_R1.fastq.gz	L1
+S4_lib1_L1_R2	S4_lib1	R2	/data/S4_L1_R2.fastq.gz	L1

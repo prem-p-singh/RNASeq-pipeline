@@ -247,7 +247,7 @@ if (opt$strategy %in% c("auto", "force_build")) {
 # ~50 GB database (downloaded once per machine).
 #
 # This tier is NOT yet runnable because eggnog-mapper is not installed in
-# the FARM conda env and the eggNOG database has not been downloaded. The
+# the analysis Conda environment and the eggNOG database has not been downloaded. The
 # code below is here so it's wired up and ready when those two prereqs
 # arrive. Until then, it prints a helpful error and exits.
 # ---------------------------------------------------------------------------

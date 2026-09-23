@@ -2,7 +2,7 @@
 # =============================================================================
 # 01_qc_quant.sh — Per-sample QC + trim + Salmon pseudoalignment.
 #
-# Merge of ritu-farm's real-data-tested implementation (paired-end, non-streaming
+# Merge of Ritu's real-data-tested implementation (paired-end, non-streaming
 # for --gcBias safety, NextSeq/NovaSeq poly-G trim) + handbook-driven additions
 # (Salmon --seqBias/--posBias, strandedness verification gate).
 #
@@ -32,6 +32,7 @@ fastp_version=$(fastp --version 2>&1 | head -1 | tr -d '"')
 sample=""
 url=""
 url2=""
+reads_json=""
 seq_type=""
 index=""
 outdir=""
@@ -45,6 +46,7 @@ while [[ $# -gt 0 ]]; do
         --sample)                sample=$2;               shift 2 ;;
         --url)                   url=$2;                  shift 2 ;;
         --url2)                  url2=$2;                 shift 2 ;;
+        --reads-json)            reads_json=$2;           shift 2 ;;
         --seq-type)              seq_type=$2;             shift 2 ;;
         --index)                 index=$2;                shift 2 ;;
         --outdir)                outdir=$2;               shift 2 ;;
@@ -76,6 +78,16 @@ fetch() {
 }
 
 # --- Locate / pull R1 ---------------------------------------------------
+if [[ -n "$reads_json" ]]; then
+    python3 "$(dirname "$0")/../../scripts/prepare_reads.py" \
+        --manifest-json "$reads_json" --outdir "$outdir"
+    url="$outdir/prepared_R1.fastq.gz"
+    owned+=("$url")
+    if [[ "$seq_type" == "rnaseq_paired" ]]; then
+        url2="$outdir/prepared_R2.fastq.gz"
+        owned+=("$url2")
+    fi
+fi
 # Absolute local paths are read in place (no copy, no deletion).
 # Remote sources are downloaded into the work dir and kept.
 if [[ "$url" != *://* || "$url" == file://* ]]; then

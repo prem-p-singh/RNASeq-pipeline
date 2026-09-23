@@ -4,7 +4,7 @@ The implemented release is a Linux bulk RNA-seq workflow. Broader RNA assay fami
 
 1. **Environment:** install the exact Linux package lock into a dedicated prefix; verify package metadata, versions, imports and runtime paths before analysis. Keep custom OrgDb packages outside that prefix.
 2. **Preflight:** resolve configuration defaults, validate sample identity and requested capability, test model/contrast estimability, and write issues and recommendation reasons. Reject unsupported requested methods.
-3. **Resources:** measure local inputs and available filesystem space; estimate unknown inputs, cache construction, retained outputs and concurrent working sets. Respect explicit remaining quotas; lower concurrency before refusing work. There is no platform storage ceiling.
+3. **Resources:** measure local inputs and available filesystem space; estimate unknown inputs, cache construction, retained outputs and concurrent working sets. Insufficient or unknown capacity only warns. Storage never blocks launch or reduces concurrency. Actual write failures remain errors.
 4. **Reference:** download through temporary files, validate format, check FASTA-to-GTF transcript/gene compatibility, build Salmon under a filesystem lock, and atomically publish the index. Record source checksums, construction settings and the actual builder version.
 5. **Quantification:** run fastp and Salmon per library. Keep seekable trimmed reads during quantification, validate quantitative outputs, record QC and input hashes, then clean only owned intermediates according to policy.
 6. **Aggregation:** apply the sample-disposition policy, verify the retained design, import counts with the route's length policy, and save counts, effective lengths, tximport data and provenance.

@@ -83,16 +83,15 @@ scope:
     splicing_fusions_variants: "Needs additional upstream outputs."
     generic_count_matrix_import: "Count origin and normalization history unknown."
     external_quant_import: "No reference/provenance validation implemented yet."
-    multi_lane_merge: >
-      One read pair per sample. Lanes must be merged before the pipeline runs;
-      merging them here would need an explicit, recorded policy.
+    multi_library_aggregation: >
+      Canonical bulk supports multiple runs/lanes within one library per sample.
+      Multiple prepared libraries per biological sample have no count adapter yet.
 
 # -----------------------------------------------------------------------------
 # Metadata contract (upgrade plan, Part IV)
 # -----------------------------------------------------------------------------
-# The current implementation has one table, samples.tsv. The plan's four-table
-# model (samples / libraries / reads / sample_policy) is a later phase; this
-# records what today's single table must satisfy so the gap is explicit.
+# Both legacy samples.tsv and canonical sample/library/read tables are supported
+# for non-UMI bulk. The shared sample-table contract is recorded here.
 metadata:
   samples_tsv:
     required_columns: [sample_id]
@@ -116,7 +115,7 @@ issues:
   CFG003: {severity: error,   message: "Configuration value has the wrong type"}
   CFG004: {severity: warning, message: "Configuration key present but has no effect for this assay"}
   CFG005: {severity: warning, message: "Deprecated configuration key",
-           remedy: "hpc.storage_budget_gb is no longer a planning input (master plan 10.1). It is applied as an explicit site quota if set; remove it if it was only the old template default."}
+           remedy: "hpc.storage_budget_gb is advisory quota information only; remove it if it was the old template default. It never blocks launch."}
 
   SCP001: {severity: error,   message: "Unsupported assay",
            remedy: "See scope.assays in config/spec.yaml."}
@@ -149,8 +148,8 @@ issues:
   DSN004: {severity: error,   message: "Requested contrast is not estimable"}
   DSN005: {severity: error,   message: "Random-effects term names a column absent from the sheet"}
 
-  RES001: {severity: error,   message: "Storage budget cannot hold one sample's working set"}
-  RES002: {severity: error,   message: "Storage budget cannot hold the cohort with retention on"}
+  RES001: {severity: warning, message: "Estimated storage may not hold one sample's working set"}
+  RES002: {severity: warning, message: "Estimated storage may not hold the retained cohort"}
 
   ENV001: {severity: error,   message: "Required executable not found"}
   ENV002: {severity: warning, message: "Optional dependency missing; dependent stage unavailable"}

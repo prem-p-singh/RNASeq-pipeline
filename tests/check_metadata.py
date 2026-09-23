@@ -115,8 +115,41 @@ t["reads"] += [
 ]
 assert md.validate(t) == [], md.validate(t)
 groups = md.lane_groups(t)
-assert sorted(groups["L1"]) == ["1", "2"], groups["L1"]
-assert sorted(groups["L1"]["2"]) == ["R1", "R2"]
+assert [g["lane"] for g in groups["L1"]] == ["1", "2"], groups["L1"]
+assert [r["role"] for r in groups["L1"][1]["reads"]] == ["R1", "R2"]
+
+# Lane 1 in distinct runs must survive grouping as separate read pairs.
+t_runs = base()
+for read in t_runs["reads"]:
+    read["run"] = "run_a"
+for read in t_runs["reads"][:2]:
+    t_runs["reads"].append(dict(read, read_unit_id=read["read_unit_id"] + "b",
+                                uri=read["uri"] + ".b", run="run_b"))
+assert md.validate(t_runs) == []
+groups = md.lane_groups(t_runs)["L1"]
+assert [(g["run"], g["lane"]) for g in groups] == [("run_a", "1"), ("run_b", "1")]
+assert sum(len(g["reads"]) for g in groups) == 4
+# Duplicate roles remain visible in grouping and fail validation.
+t_runs["reads"].append(dict(t_runs["reads"][0], read_unit_id="duplicate", uri="/other"))
+assert "MET013" in codes(t_runs)
+assert len(md.lane_groups(t_runs)["L1"][0]["reads"]) == 3
+
+for name in ("samples", "libraries", "reads"):
+    incomplete = base()
+    incomplete[name] = []
+    assert "MET001" in codes(incomplete), name
+for name, field in (("libraries", "sample_id"), ("libraries", "layout"),
+                    ("reads", "library_id"), ("reads", "uri"), ("reads", "role")):
+    incomplete = base()
+    incomplete[name][0][field] = ""
+    assert "MET003" in codes(incomplete), (name, field)
+t_empty = base()
+t_empty["reads"] = t_empty["reads"][2:]
+assert "MET013" in codes(t_empty)
+t_empty = base()
+t_empty["libraries"][0]["layout"] = "single"
+t_empty["reads"][1]["role"] = "single"
+assert "MET013" in codes(t_empty)
 
 # a lane missing its mate is caught, and the message names that lane
 t["reads"] = [r for r in t["reads"] if r["read_unit_id"] != "r6"]
@@ -219,5 +252,13 @@ assert r.returncode == 1
 plan = json.loads((p / "gates" / "preflight_plan.json").read_text())
 assert plan["metadata_tables"]["form"] == "three_table", plan["metadata_tables"]
 assert plan["metadata_tables"]["counts"]["reads"] == 4, plan["metadata_tables"]
+
+# Empty/header-only canonical files must not silently fall back to legacy.
+p = project(with_tables=False)
+(p / "metadata").mkdir()
+(p / "metadata/samples.tsv").write_text("sample_id\n")
+r = subprocess.run([sys.executable, str(ROOT / "scripts/preflight.py"), "-d", str(p)],
+                   capture_output=True, text=True)
+assert r.returncode == 1 and "MET001" in r.stdout + r.stderr
 
 print("check_metadata.py: all assertions passed")

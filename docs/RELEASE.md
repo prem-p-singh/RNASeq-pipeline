@@ -1,8 +1,16 @@
-# Release qualification
+# V2 release qualification
 
-**Final FARM gate: PASSED — 20 checks passed, 0 failed, 0 skipped; the public six-sample workflow also passed.**
+Release: **v2.0.0**, 2026-09-23. Scope: **Linux x86_64, annotated non-UMI bulk gene expression**. The user authorized publication of the current bulk release; full multi-assay coverage is not a v2 claim.
 
-Qualification date: 2026-09-22. Target: **Linux x86_64, annotated non-UMI bulk gene expression**. This is a release candidate, not certification of the broader multi-assay roadmap.
+## Current upgrade evidence
+
+- Canonical-intake candidate: Linux/SLURM job **38577940**, exit 0 in **14:02**, **22 passed, 0 failed, 0 skipped**. Includes two sequencing runs sharing a lane number, legacy single-end processing, quantitative recovery, changed-input detection and missing-provenance repair. Archive SHA256: `96916f31b70344a03e2260d9905daaa92b7c0997589369959cd096aa25e1c715`.
+- Final retained-intermediate storage correction: Linux job **38578300**, exit 0; later TSV example changes passed local metadata checks.
+- Declared-model preservation: focused Linux job **38577830**, exit 0; also included in the passing strict suite above.
+- The first canonical candidate failed because empty shell arguments were lost. It was repaired and the corrected full raw-read workflow passed; the failed run is not qualification evidence.
+- The **release-validation** GitHub workflow installs the locked runtime, verifies it, runs all 22 strict checks and the public smoke test on the release source. Publication requires its success on the tagged commit. Consult the [scientific runs](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml) and release notes for the exact run and commit; historical worker evidence alone does not establish current GitHub status.
+
+Workbook source/parser/generator consistency, external and inline setup, text identifiers and rejected invalid inputs are tested. Excel reference-service lookups are mocked in intake tests; raw-read processing is tested separately through the actual scientific tools. Live automatic reference/annotation service behavior is not certified by those mocks.
 
 ## Runtime contract
 
@@ -16,11 +24,11 @@ The validated runtime includes Python 3.12.14, Snakemake 9.19.0, Salmon 1.10.3, 
 
 The environment verifier compares installed Conda records with the lock, imports required libraries and checks executable/library locations. It is not a byte-for-byte integrity audit of every installed file. Do not install unrelated packages into the qualified prefix. Project annotation packages belong in the configured OrgDb cache.
 
-## Evidence and reproducibility
+## Historical environment and deployment evidence
 
-Linux validation is executed on UC Davis FARM compute nodes under SLURM, using the `publicgrp` account and `low` partition. Some allocated hosts have GPU names, but these jobs request and use CPUs only. Full local evidence is retained by the maintainer; concise outcomes below describe what was actually exercised.
+Linux validation is executed on Linux x86_64 compute nodes under SLURM with site-specific account and partition settings. Some allocated hosts have GPU names, but these jobs request and use CPUs only. Full local evidence is retained by the maintainer; concise outcomes below describe what was actually exercised.
 
-- Initial environment build: FARM job **38516117**.
+- Initial environment build: SLURM job **38516117**.
 - Independent clean recreation from the explicit lock and offline reuse: job **38516428**, completed with exit 0 in 5 minutes 52 seconds; all 579 package records and required imports verified.
 - GO enrichment qualification: job **38516721**, passed with a locally constructed AnnotationForge OrgDb. Tests retain positive and negative enrichment directions, verify real output paths, recognize valid empty results and unavailable KEGG configuration, and fail on a missing ranking statistic.
 - Raw FASTQ qualification: job **38516701** passed its single-end and paired-end end-to-end checks and restart/report recovery checks. That older combined run failed its earlier GO fixture and public reference fixture; it is **not** a passing full release run.
@@ -32,7 +40,7 @@ Linux validation is executed on UC Davis FARM compute nodes under SLURM, using t
 
 - **Final combined release gate: job 38517266**, completed with **exit 0** on gpu-5-58 in **15 minutes 20 seconds**. It verified the locked runtime, passed **20 strict checks with zero failures/skips**, and passed the corrected six-sample public workflow in the same invocation. Recorded peak RSS was approximately 1.62 GiB for this small qualification workload, not a cohort-sizing benchmark.
 
-All 87 runtime/configuration/test files in the frozen FARM snapshot were checked against the local source manifest with zero differences. The publication archive includes that manifest as `SOURCE_SHA256.json`. Its SHA256 is `4960694928ab5708b3fbc9141172ac77d7491925bc0bb4b58f4d124c1498d98f`. Earlier failed/superseded runs remain diagnostic history; the final candidate is qualified by the successful combined gate above. A release must not be tagged from a skipped or failed scientific suite.
+All 87 runtime/configuration/test files in that historical frozen snapshot matched its source manifest. That manifest is not the v2 source identity. V2 is identified by its Git tag, exact commit and release checksums. Historical failed/superseded runs remain diagnostic history. A release must not be tagged from a skipped or failed scientific suite.
 
 ### Test data
 
@@ -42,15 +50,15 @@ All 87 runtime/configuration/test files in the frozen FARM snapshot were checked
 
 The public smoke test uses **GSE110004**, accessions **SRR6357070–SRR6357075**, with three wild-type and three uninduced Rap1-AID biological samples. These are chromosome-I-filtered, downsampled yeast reads from the [pinned nf-core test-data revision](https://github.com/nf-core/test-datasets/tree/626c8fab639062eade4b10747e919341cbf9b41a). [The dataset's metadata and sampling procedure](https://raw.githubusercontent.com/nf-core/test-datasets/626c8fab639062eade4b10747e919341cbf9b41a/README.md) establish the sample identities. The original transcriptome additionally contains `Gfp_transgene_gene`, which is absent from its GTF. The fixture removes that one artificial entry and records original/derived hashes in `inputs/reference_derivation.json`; production reference checks remain strict. This smoke test does not reproduce the study's genome-wide conclusions.
 
-### Reproduce on FARM
+### Reproduce on a SLURM cluster
 
 From the source checkout, run:
 
 ```bash
-sbatch scripts/validate_farm.sbatch
+sbatch scripts/validate_slurm.sbatch
 ```
 
-That job builds a fresh locked runtime in worker-local temporary space, verifies it, runs `tests/run_all.sh --strict`, runs the public smoke test and checks offline reuse. Evidence is saved under `docs/evidence/farm-JOBID/`. Cluster-specific account/partition settings are explicit in the script. This tests local execution inside a worker allocation; distributed launcher-to-worker qualification is a separate check.
+That job builds a fresh locked runtime in worker-local temporary space, verifies it, runs `tests/run_all.sh --strict`, runs the public smoke test and checks offline reuse. Evidence is saved under `docs/evidence/slurm-JOBID/`. Supply account, partition and QoS through sbatch options when required by your site. This tests local execution inside a worker allocation; distributed launcher-to-worker qualification is a separate check.
 
 For an already activated qualified Linux environment:
 
@@ -60,7 +68,7 @@ bash tests/run_all.sh --strict
 bash tests/check_public.sh
 ```
 
-The scientific GitHub Actions workflow repeats these checks. Its status has not been observed on GitHub until the candidate is pushed and CI runs. The lightweight workflow permits reported dependency skips and cannot certify a release.
+The scientific GitHub Actions workflow repeats these checks. The lightweight workflow permits reported dependency skips and cannot certify a release.
 
 ## Repairs in this candidate
 
@@ -84,11 +92,11 @@ The scientific GitHub Actions workflow repeats these checks. Its status has not 
 | Statistical generalization | Synthetic fixtures and a small public smoke dataset do not validate every organism, design or contrast. The suite checks repeated-measures design/replication logic but does not qualify an end-to-end dream fit; mixed-model inference remains provisional. |
 | Annotation | GO has a local fixture. Live NCBI annotation construction, live KEGG results, annotation snapshot reproducibility and the eggNOG fallback are not certified by that fixture. Missing prerequisites and failures must remain visible in status files. |
 | Sample policy | QC inclusion/exclusion is implemented; a complete review/override ledger and mandatory action on library-type mismatch remain planned. Review recorded mismatches before biological interpretation. |
-| Metadata | The current execution model is one row/biological measurement and one read file/pair. Separate sample/library/read validation is not multi-lane execution. |
+| Metadata | Canonical execution supports multiple run/lane units within one non-UMI bulk library per sample. Multiple prepared libraries per sample remain unavailable. Legacy sheets retain one file/pair per row. |
 | Reference/cache | Index publication is atomic, but the entire multi-file bundle is not published in one transaction. Mutable remote URLs are not re-fetched solely to detect changes. Full simultaneous multi-project cache stress qualification remains open. |
-| Storage and scale | Estimates remain labelled assumptions; no continuous capacity monitor or calibrated large-cohort resource benchmark. Account quota discovery is site-specific. A real quota is a constraint, never a pipeline-wide default. |
-| Platforms and deployment | Linux x86_64/FARM is the tested target. Other clusters require site configuration; macOS, ARM and a container deployment are not qualified. |
-| Intake and optional integrations | The explicit TSV/YAML route is the release interface. Convenience spreadsheet/URL-list intake and n8n are not equivalent end-to-end qualified interfaces. |
+| Storage and scale | Estimates remain labelled assumptions; no continuous capacity monitor or calibrated large-cohort benchmark. Capacity/quota concerns warn only. Actual failed writes still fail tasks. |
+| Platforms and deployment | Linux x86_64 with SLURM is the tested target. Other clusters require site configuration; macOS, ARM and a container deployment are not qualified. |
+| Intake and optional integrations | Excel supports independent bulk with optional batch and inline/external records. Setup-to-config tests mock live reference lookup; the scientific DAG is tested separately. Advanced models and reference choices need YAML. Optional upload/wizard and n8n integrations are not equivalent qualified interfaces. |
 
 ## Publication procedure
 
@@ -96,6 +104,6 @@ The scientific GitHub Actions workflow repeats these checks. Its status has not 
 2. Keep handbook PDFs, private audit/upgrade plans, working trackers and raw local evidence out of the public source tree. Public operational documentation must remain readable without those files.
 3. Push the reviewed source changes and require the **release-validation** scientific job, including the public smoke test, to pass without skips. Configure this as a required branch check in the hosting repository.
 4. Publish with the supported scope and limitations above. Do not describe this candidate as an implemented universal RNA-seq platform or as a qualified TAG-seq kit workflow.
-5. Record the actual tag/revision in the release notes and citation metadata. No tag, public release or push is performed by preparing this candidate.
+5. Record the actual tag/revision in release notes and citation metadata; publish only the reviewed scope. Preserve repository visibility unless the owner separately requests a change.
 
 For a runtime upgrade, solve `environment.yml` into a new prefix, export `conda list --explicit --sha256`, review the exact lock changes and repeat the qualification gates before changing the supported release environment.

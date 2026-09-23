@@ -4,8 +4,7 @@
 Master plan 10.1 removes the fixed ceiling outright: "There is no default 20 GB
 limit and no sample-count cutoff that rejects an analysis." 10.7 requires
 hpc.storage_budget_gb and the fixed per-assay FASTQ assumptions to be replaced
-by measured planning, and any real site quota to be preserved as an explicit
-constraint rather than an implicit default.
+by measured planning. Quotas are advisory information, never launch gates.
 
 What was there before: one number for the whole platform, per-assay FASTQ sizes
 guessed from a label, and a concurrency cap derived from sample count. None of
@@ -79,20 +78,20 @@ def filesystem_id(path) -> str:
     RS07: paths that share a filesystem must be accounted once. Walks up to the
     nearest existing ancestor, since a planned directory may not exist yet.
     """
-    p = Path(path).resolve()
-    while not p.exists() and p != p.parent:
-        p = p.parent
     try:
+        p = Path(path).resolve()
+        while not p.exists() and p != p.parent:
+            p = p.parent
         return str(os.stat(p).st_dev)
     except OSError:
         return "unknown"
 
 
 def free_bytes(path) -> int | None:
-    p = Path(path).resolve()
-    while not p.exists() and p != p.parent:
-        p = p.parent
     try:
+        p = Path(path).resolve()
+        while not p.exists() and p != p.parent:
+            p = p.parent
         return shutil.disk_usage(p).free
     except OSError:
         return None
@@ -128,6 +127,7 @@ class MountPlan:
 def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
                  concurrency: int, paths: dict, quotas: dict | None = None,
                  cache_present: dict | None = None,
+                 library_uris: list[list[str]] | None = None,
                  retain_alignments: bool = False, retain_downloads: bool = False, reference_source_bytes: int | None = None) -> dict:
     """Build a per-filesystem plan.
 
@@ -166,7 +166,13 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
     input_sizes = [v["bytes"] if v["bytes"] is not None else in_high * GB
                    for v in inputs.values()]
     largest_pair = sum(sorted(input_sizes, reverse=True)[:2])
+    if library_uris:
+        # All lanes in a library share one job; never size scratch from one lane.
+        largest_pair = max(sum(inputs[u]["bytes"] if inputs[u]["bytes"] is not None else in_high * GB
+                               for u in group) for group in library_uris)
     per_job = (2 * largest_pair + GB) if inputs and not unknown else max(tmp_high * GB, 2 * largest_pair + GB)
+    if library_uris:
+        per_job += largest_pair  # additional owned merged FASTQ copy
     temporary = concurrent * per_job
     remote_bytes = sum(v["bytes"] if v["bytes"] is not None else in_high * GB
                        for uri, v in inputs.items() if "://" in uri and not uri.startswith("file://"))
@@ -208,12 +214,17 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
 
     if m_in is not None:
         # Inputs already on disk are existing bytes, not a new allocation.
-        m_in.existing += sum(measured)
+        m_in.existing += sum(v["bytes"] for uri, v in inputs.items()
+                             if v["bytes"] is not None and ("://" not in uri or uri.startswith("file://")))
         m_in.notes.append(f"inputs: {uncertainty}")
     if m_res is not None:
-        m_res.retained_new += retained + (remote_bytes if retain_downloads else 0)
+        # The workflow's retention switch keeps trimmed reads as well as raw
+        # downloads. Canonical preparation retains a merged copy instead of
+        # per-lane downloads. Compressed copy sizes are conservative estimates.
+        retained_reads = (2 * input_bytes if library_uris else input_bytes + remote_bytes) if retain_downloads else 0
+        m_res.retained_new += retained + retained_reads
         if retain_downloads:
-            m_res.notes.append(f"retained downloaded FASTQs: {remote_bytes / GB:g} GB")
+            m_res.notes.append(f"retained raw/merged and trimmed FASTQs: {retained_reads / GB:g} GB (assumed copy sizes)")
         m_res.notes.append(
             f"{n_libraries} libraries x {ret_high:g} GB retained, plus "
             f"{coh_high:g} GB cohort outputs"
@@ -239,7 +250,9 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
 
     # --- verdicts --------------------------------------------------------
     report = {
-        "schema_version": 1,
+        "schema_version": 2,
+        "storage_policy": "advisory",
+        "units": "GiB",
         "basis": ("conservative upper bound: retained_new + cache_new + "
                   "max_concurrent_temporary, per master plan 10.3; these "
                   "maxima need not coincide"),
@@ -249,7 +262,7 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
         "requested_concurrency": concurrency,
         "planned_concurrency": concurrent,
         "mounts": [],
-        "blocking": [],
+        "warnings": [],
     }
 
     for fid, m in sorted(mounts.items()):
@@ -270,13 +283,17 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
         }
         if avail is None:
             entry["verdict"] = "unknown_capacity"
-            report["blocking"].append(
+            report["warnings"].append(
                 f"{fid}: free space could not be determined for "
                 f"{', '.join(m.paths)}; capacity is recorded unknown, never "
                 f"assumed unlimited")
         elif need > avail:
             entry["verdict"] = "insufficient"
             entry["shortfall_gb"] = round((need - avail) / GB, 2)
+            report["warnings"].append(
+                f"{', '.join(m.paths)}: estimated shortfall "
+                f"{entry['shortfall_gb']:g} GiB; free space, choose another "
+                "location, or lower concurrency. Continuing as requested.")
         else:
             entry["verdict"] = "ok"
         report["mounts"].append(entry)
@@ -284,35 +301,11 @@ def plan_storage(*, repo_root, inputs: dict, n_libraries: int, assay: str,
     return report
 
 
-def reduce_concurrency(report: dict, **plan_kwargs) -> dict:
-    """RS08: reduce concurrency before abandoning the scientific route.
-
-    Only scratch scales with concurrency, so this is retried downward while a
-    scratch shortfall is the reason. RS09: if even one job, or the final
-    retained data, cannot fit, the caller must block and report the requirement
-    rather than silently choosing a different route.
-    """
-    concurrency = plan_kwargs.get("concurrency", 1)
-    requested = concurrency
-    while concurrency > 1:
-        bad = [m for m in report["mounts"] if m["verdict"] == "insufficient"]
-        if not bad:
-            return report
-        # only worth retrying if scratch is what is over
-        if not any(m["max_concurrent_temporary_gb"] > 0 for m in bad):
-            return report
-        concurrency -= 1
-        plan_kwargs["concurrency"] = concurrency
-        report = plan_storage(**plan_kwargs)
-        report["requested_concurrency"] = requested
-    return report
-
-
 def format_report(report: dict) -> str:
-    lines = [f"Storage plan: {report['n_libraries']} librar"
+    lines = [f"Advisory storage plan (GiB): {report['n_libraries']} librar"
              f"{'y' if report['n_libraries'] == 1 else 'ies'}, assay "
              f"{report['assay']}, concurrency {report['planned_concurrency']}"
-             + (f" (reduced from {report['requested_concurrency']})"
+             + (f" (limited to library count from {report['requested_concurrency']})"
                 if report["planned_concurrency"] != report["requested_concurrency"] else ""),
              f"  inputs: {report['uncertainty']}"]
     for m in report["mounts"]:
@@ -325,6 +318,7 @@ def format_report(report: dict) -> str:
         for n in m["notes"]:
             lines.append(f"      - {n}")
     lines.append(f"  basis: {report['basis']}")
+    lines.extend(f"  CAUTION: {warning}" for warning in report["warnings"])
     return "\n".join(lines)
 
 

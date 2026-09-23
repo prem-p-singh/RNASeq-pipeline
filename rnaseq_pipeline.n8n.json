@@ -39,7 +39,7 @@
       "type": "n8n-nodes-base.noOp",
       "typeVersion": 1,
       "position": [720, 540],
-      "notes": "Counts samples -> picks small (<=20) / medium (21-200) / large (201+) SLURM profile, then launches Snakemake on FARM."
+      "notes": "Counts samples -> picks small (<=20) / medium (21-200) / large (201+) SLURM profile, then launches Snakemake on the configured SLURM cluster."
     },
 
     {
@@ -141,7 +141,7 @@
     },
     {
       "parameters": {
-        "content": "### FRONT DOOR\nFill a form, run one command. Turns your answers into the two files the engine needs, then submits to FARM.",
+        "content": "### FRONT DOOR\nFill a form, run one command. Turns your answers into the two files the engine needs, then submits to the configured SLURM cluster.",
         "height": 360,
         "width": 920,
         "color": 4

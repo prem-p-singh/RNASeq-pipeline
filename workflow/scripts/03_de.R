@@ -3,7 +3,7 @@
 #
 # Reads aggregate.json to decide:
 #   - which backend (limma-voom, or dream when the model has random effects)
-#   - whether to auto-add a batch covariate (PCA-based)
+# PCA-based batch diagnostics never change the declared model.
 # Validates that the design is estimable and stops if it is not; there is no
 # automatic fallback to a simpler test.
 # Then fits the model from config$model, generates contrasts via emmeans
@@ -45,7 +45,8 @@ message("DE backend: ", de_backend)
 # --- Load data ---------------------------------------------------------
 counts <- read_tsv(counts_path, show_col_types = FALSE) %>%
   as.data.frame() %>% tibble::column_to_rownames("gene_id") %>% as.matrix()
-sheet  <- read_tsv(sheet_path, comment = "#", show_col_types = FALSE)
+source(snakemake@params$design_lib)
+sheet <- read_sample_sheet(sheet_path)
 sheet  <- sheet[match(colnames(counts), sheet$sample_id), ]
 stopifnot(all(sheet$sample_id == colnames(counts)))
 
@@ -63,30 +64,29 @@ keep <- filterByExpr(d0, mm_for_filter)
 d <- d0[keep, ]
 message("Kept ", nrow(d), " / ", nrow(d0), " genes after filterByExpr")
 
-# --- Batch detection gate ---------------------------------------------
+# --- Batch diagnostic: never mutate the scientific model ---------------
 batch_col <- "batch"
 auto_batch_added <- FALSE
+batch_diagnostic <- list(status = "not_available", reason = "No varying batch column")
 if (batch_col %in% names(sheet) && length(unique(sheet[[batch_col]])) > 1) {
   logcpm <- cpm(d, log = TRUE, prior.count = 2)
-  pcs <- prcomp(t(logcpm), scale. = TRUE)
-  var_by_batch <- sapply(1:2, function(i) {
-    summary(lm(pcs$x[, i] ~ sheet[[batch_col]]))$r.squared
-  })
-  message(sprintf("PC1 var explained by batch: %.2f  PC2: %.2f",
-                  var_by_batch[1], var_by_batch[2]))
-  if (max(var_by_batch) > thr$batch_correction$pc_var_fraction_trigger) {
-    # Not confounded with primary factor?
-    tab <- table(sheet[[batch_col]], sheet[[primary]])
-    if (min(rowSums(tab > 0)) > 1) {
-      model_fixed <- gsub("^~\\s*", "~ batch + ", model_fixed)
-      auto_batch_added <- TRUE
-      cat(sprintf("[%s] BATCH_ADD: auto-added 'batch' covariate (max R^2=%.2f)\n",
-                  format(Sys.time(), "%FT%T"), max(var_by_batch)),
+  variable <- apply(logcpm, 1, var) > 0
+  if (any(variable) && !anyNA(sheet[[batch_col]])) {
+    pcs <- prcomp(t(logcpm[variable, , drop = FALSE]), scale. = TRUE)
+    var_by_batch <- vapply(seq_len(min(2L, ncol(pcs$x))), function(i) {
+      summary(lm(pcs$x[, i] ~ sheet[[batch_col]]))$r.squared
+    }, numeric(1))
+    needs_review <- any(var_by_batch > thr$batch_correction$pc_var_fraction_trigger, na.rm = TRUE)
+    batch_diagnostic <- list(status = "available", pc_r_squared = var_by_batch,
+                             review_suggested = needs_review,
+                             included_in_declared_model = batch_col %in% design_vars)
+    if (needs_review) {
+      cat(sprintf("[%s] BATCH_REVIEW: batch association detected; fitting declared model unchanged: %s\n",
+                  format(Sys.time(), "%FT%T"), model_fixed),
           file = "gates/decisions.log", append = TRUE)
-      message("Auto-added batch covariate. New formula: ", model_fixed)
-    } else {
-      message("Batch is confounded with ", primary, " — not auto-adding")
     }
+  } else {
+    batch_diagnostic <- list(status = "not_available", reason = "Constant expression or missing batch values")
   }
 }
 
@@ -148,7 +148,6 @@ if (file.exists(prov_file)) {
           "; count semantics are unrecorded and no offsets will be added")
 }
 
-source(snakemake@params$design_lib)   # validate_design()
 design <- validate_design(
   mm, agg$n_bio_replicates_min, primary,
   if (is.null(agg$biological_unit)) "sample" else agg$biological_unit)
@@ -367,6 +366,9 @@ if (length(too_many) > 0) {
 metrics <- list(
   backend            = de_backend,
   auto_batch_added   = auto_batch_added,
+  model_fixed        = model_fixed,
+  model_random       = model_random,
+  batch_diagnostic   = batch_diagnostic,
   contrast_sig_counts = contrast_sig_counts,
   flagged_too_many    = as.list(too_many),
   flagged_zero_sig    = as.list(zero_sig)

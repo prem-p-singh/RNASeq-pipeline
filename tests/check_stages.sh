@@ -29,6 +29,23 @@ trap 'rm -rf "$TMP"' EXIT
 PROJ="$TMP/proj"
 
 python3 "$FIXTURE" build "$PROJ" "$REPO" || { echo "FAIL: fixture build" >&2; exit 1; }
+python3 - "$PROJ" <<'BATCH'
+import csv, sys, yaml
+from pathlib import Path
+p = Path(sys.argv[1])
+sheet = p / 'config/samples.tsv'
+with sheet.open() as f:
+    rows = list(csv.DictReader(f, delimiter='\t'))
+for i, row in enumerate(rows):
+    row['batch'] = 'a' if i % 2 else 'b'
+with sheet.open('w') as f:
+    writer = csv.DictWriter(f, fieldnames=list(rows[0]), delimiter='\t')
+    writer.writeheader(); writer.writerows(rows)
+c = p / 'config/config.yaml'
+cfg = yaml.safe_load(c.read_text())
+cfg.setdefault('thresholds', {})['batch_correction'] = {'pc_var_fraction_trigger': 0}
+c.write_text(yaml.safe_dump(cfg))
+BATCH
 
 run_workflow "$PROJ" "$REPO" "$TMP/run.log" \
     results/counts.tsv results/de_done.flag \
@@ -41,4 +58,15 @@ if [ $rc -ne 0 ]; then
 fi
 
 python3 "$FIXTURE" verify "$PROJ" || exit 1
+python3 - "$PROJ" <<'CHECK_BATCH'
+import json, sys, yaml
+from pathlib import Path
+p = Path(sys.argv[1])
+metrics = json.loads((p / 'metrics/de.json').read_text())
+cfg = yaml.safe_load((p / 'config/config.yaml').read_text())
+assert metrics['model_fixed'] == cfg['model']['fixed_effects'], 'PCA changed the declared model'
+assert metrics['auto_batch_added'] is False
+assert metrics['batch_diagnostic']['review_suggested'] is True
+assert 'BATCH_REVIEW' in (p / 'gates/decisions.log').read_text()
+CHECK_BATCH
 echo "check_stages.sh: stages 2-5 ran and every expected answer held"

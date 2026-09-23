@@ -99,7 +99,14 @@ REQUIRED_FIELDS = [
 ]
 
 def gather_inputs(args) -> dict:
-    if args.inputs_file and Path(args.inputs_file).exists():
+    if getattr(args, "intake", None):
+        from intake import read_intake, setup_inputs
+        record = read_intake(args.intake, args.intake_sheet)
+        inputs = setup_inputs(record)
+        args.intake_record = record
+        for warning in record["limitations"]:
+            log("INTAKE", warning, "WARNING")
+    elif args.inputs_file and Path(args.inputs_file).exists():
         inputs = load_yaml(Path(args.inputs_file))
         log("INPUTS", f"loaded from {args.inputs_file}")
     # The project's own inputs file, not the checkout's: one shared
@@ -111,7 +118,9 @@ def gather_inputs(args) -> dict:
     else:
         inputs = prompt_inputs()
 
-    missing = [f for f in REQUIRED_FIELDS if not inputs.get(f)]
+    required = [f for f in REQUIRED_FIELDS if not inputs.get("metadata_tables")
+                or f not in ("fastq_source", "metadata_file", "sample_id_column")]
+    missing = [f for f in required if not inputs.get(f)]
     if missing:
         sys.exit(f"Missing required fields: {', '.join(missing)}")
     return inputs
@@ -412,17 +421,22 @@ def build_samples_tsv(inputs: dict, out_path: Path):
             import openpyxl  # noqa: F401
         except ImportError:
             sys.exit("openpyxl + pandas required to read .xlsx")
-        mdf = pd.read_excel(mpath)
+        mdf = pd.read_excel(mpath, dtype={inputs["sample_id_column"]: str}, keep_default_na=False)
+        for column in mdf.columns:
+            if column != inputs["sample_id_column"]:
+                mdf[column] = mdf[column].replace({"": None, "NA": None})
     elif suffix in {".tsv", ".tab", ".txt"}:
-        mdf = pd.read_csv(mpath, sep="\t")
+        mdf = pd.read_csv(mpath, sep="\t", converters={inputs["sample_id_column"]: str})
     else:
-        mdf = pd.read_csv(mpath)
+        mdf = pd.read_csv(mpath, converters={inputs["sample_id_column"]: str})
 
     sid_col = inputs["sample_id_column"]
     if sid_col not in mdf.columns:
         sys.exit(f"Column '{sid_col}' not found in {mpath}. "
                  f"Available: {list(mdf.columns)}")
 
+    if mdf[sid_col].isna().any() or mdf[sid_col].str.strip().eq("").any():
+        sys.exit(f"Blank sample IDs in {mpath}")
     mdf[sid_col] = mdf[sid_col].astype(str)
     dups = mdf[sid_col][mdf[sid_col].duplicated()].unique().tolist()
     if dups:
@@ -456,11 +470,7 @@ def build_samples_tsv(inputs: dict, out_path: Path):
             if len(m1) != 1 or len(m2) != 1:
                 extra = ""
                 if len(m1) > 1 or len(m2) > 1:
-                    # ponytail: one read pair per sample. Multi-lane merging is
-                    # a sample-sheet schema change (one row per read unit);
-                    # until then, merge lanes before running.
-                    extra = (" — multiple lanes are not supported; "
-                             "concatenate them into one pair first")
+                    extra = (" — use workbook tables for explicit run/lane assignments")
                 problems.append(
                     f"{sid}: expected exactly one R1 and one R2, found "
                     f"{len(m1)} R1 and {len(m2)} R2{extra}")
@@ -525,7 +535,7 @@ def build_contrast_specs(inputs: dict, sheet_path: Path) -> list:
     """
     import pandas as pd
 
-    sheet = pd.read_csv(sheet_path, sep="\t", comment="#")
+    sheet = pd.read_csv(sheet_path, sep="\t", comment="#", converters={"sample_id": str})
     cols = set(sheet.columns)
     primary = inputs["primary_factor"]
     fixed = inputs["model_fixed_effects"]
@@ -543,6 +553,13 @@ def build_contrast_specs(inputs: dict, sheet_path: Path) -> list:
                          f"a column in {sheet_path}")
     if primary not in cols:
         sys.exit(f"primary_factor '{primary}' is not a column in {sheet_path}")
+    if "expected_min_samples" in inputs:
+        if sheet[primary].isna().any() or sheet[primary].astype(str).str.strip().eq("").any():
+            sys.exit(f"Missing primary factor values: {primary}")
+        observed = int(sheet.groupby(primary).size().min())
+        if observed != inputs["expected_min_samples"]:
+            sys.exit(f"Intake smallest group size is {inputs['expected_min_samples']}, "
+                     f"but metadata has {observed}; reconcile biological sample records")
     if sheet[primary].nunique() < 2:
         sys.exit(f"primary_factor '{primary}' has fewer than 2 levels; "
                  f"there is nothing to compare")
@@ -567,6 +584,8 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
     cfg = load_yaml(TEMPLATE_CFG)
 
     cfg["project"]["name"] = inputs["project_name"]
+    if "description" in inputs:
+        cfg["project"]["description"] = inputs["description"]
     cfg["project"]["output_dir"] = f"results/{inputs['project_name']}/"
 
     cfg["organism"].update({
@@ -589,6 +608,16 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
     cfg["reference"].pop("ncbi_to_ensembl", None)
 
     cfg["samples"]["seq_type"] = inputs["seq_type"]
+    if inputs.get("metadata_tables"):
+        cfg["samples"].update(metadata_dir="metadata", sheet="metadata/samples.tsv")
+    if "expected_libtype" in inputs:
+        cfg["samples"]["expected_libtype"] = inputs["expected_libtype"]
+    if "run_enrichment" in inputs:
+        cfg["downstream"].update(run_go=inputs["run_enrichment"], run_kegg=inputs["run_enrichment"],
+                                 run_wgcna=inputs["run_wgcna"])
+        cfg["orgdb"]["strategy"] = inputs["orgdb_strategy"]
+        if inputs.get("orgdb_cache_dir"):
+            cfg["orgdb"]["cache_dir"] = inputs["orgdb_cache_dir"]
 
     cfg["model"]["fixed_effects"] = inputs["model_fixed_effects"]
     cfg["model"]["random_effects"] = inputs["model_random_effects"]
@@ -596,7 +625,10 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
 
     # Replace the template's contrasts outright. Inheriting them is how a
     # treatment-only project ended up testing grape's group/stage variables.
-    cfg["contrasts"] = build_contrast_specs(inputs, CONFIG_DIR / "samples.tsv")
+    cfg["contrasts"] = build_contrast_specs(inputs, PROJECT / cfg["samples"]["sheet"])
+    if inputs.get("metadata_tables"):
+        import metadata
+        metadata.execution_inputs(PROJECT, cfg)
 
     cfg["hpc"]["storage_budget_gb"] = inputs.get("storage_budget_gb")
 
@@ -609,11 +641,17 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("inputs_file", nargs="?", default=None)
     ap.add_argument("--interactive", action="store_true")
+    ap.add_argument("--intake", help="completed intake_template.xlsx (independent bulk first release)")
+    ap.add_argument("--intake-sheet", help="explicit assay worksheet to import")
     ap.add_argument("--project-dir", default=".",
                     help="project directory to write config/ and reference/ into "
                          "(default: current directory). Must not be the pipeline "
                          "checkout, so projects cannot overwrite each other.")
     args = ap.parse_args()
+    if args.intake and (args.inputs_file or args.interactive):
+        ap.error("--intake cannot be combined with YAML inputs or --interactive")
+    if args.intake_sheet and not args.intake:
+        ap.error("--intake-sheet requires --intake")
 
     proj = set_project(args.project_dir)
     if proj == ROOT:
@@ -621,6 +659,9 @@ def main():
             f"--project-dir must not be the pipeline checkout ({ROOT}).\n"
             f"Give the project its own directory, e.g.\n"
             f"  python {Path(__file__).name} --project-dir ~/rnaseq_projects/<name> ...")
+    if args.intake and (CONFIG_DIR / "config.yaml").exists():
+        raise SystemExit("Intake setup will not overwrite an existing project configuration. "
+                         "Resume with submit.sh, or create a new project for revised intake.")
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
 
     # The Snakefile opens config/thresholds.yaml relative to its working
@@ -633,14 +674,30 @@ def main():
     else:
         log("CONFIG", f"kept existing {proj_thresholds}")
 
-    inputs = gather_inputs(args)
+    try:
+        inputs = gather_inputs(args)
+    except ValueError as exc:
+        raise SystemExit(str(exc)) from exc
+    if args.intake:
+        snapshot = PROJECT / "intake" / args.intake_record["workbook_sha256"]
+        snapshot.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(args.intake_record["source"], snapshot / "intake.xlsx")
+        (snapshot / "source_map.json").write_text(json.dumps(args.intake_record, indent=2) + "\n")
+        dump_yaml(inputs, snapshot / "setup_inputs.yaml")
     org = resolve_organism(int(inputs["tax_id"]))
     ref = resolve_reference_urls(int(inputs["tax_id"]))
 
     REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
     fetch_annotation_info(ref.get("gene_info_url"), REFERENCE_DIR / "annotation_info.tsv")
 
-    build_samples_tsv(inputs, CONFIG_DIR / "samples.tsv")
+    if inputs.get("metadata_tables"):
+        import metadata
+        problems = metadata.validate(inputs["metadata_tables"])
+        if problems:
+            raise SystemExit(str(problems))
+        metadata.write_tables(inputs["metadata_tables"], PROJECT / "metadata")
+    else:
+        build_samples_tsv(inputs, CONFIG_DIR / "samples.tsv")
     render_config(inputs, org, ref, CONFIG_DIR / "config.yaml")
     orgdb_status = setup_orgdb(org)
 
@@ -651,7 +708,8 @@ def main():
     print(f"  project:  {PROJECT}")
     print(f"  workflow: {ROOT}")
     print(f"  config/config.yaml          ✓")
-    print(f"  config/samples.tsv          ✓")
+    sample_sheet = "metadata/samples.tsv" if inputs.get("metadata_tables") else "config/samples.tsv"
+    print(f"  {sample_sheet}          ✓")
     print(f"  config/thresholds.yaml      ✓")
     print(f"  reference/annotation_info.tsv   "
           f"{'✓' if (REFERENCE_DIR/'annotation_info.tsv').exists() else '⚠ skipped'}")
@@ -675,7 +733,7 @@ def main():
         sys.exit(1)
 
     print("\nNext:")
-    print(f"  1. Review {CONFIG_DIR / 'config.yaml'} and {CONFIG_DIR / 'samples.tsv'}")
+    print(f"  1. Review {CONFIG_DIR / 'config.yaml'} and {PROJECT / sample_sheet}")
     print(f"  2. Launch:  {ROOT / 'submit.sh'} -d {PROJECT}")
 
 

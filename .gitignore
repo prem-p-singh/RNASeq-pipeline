@@ -39,8 +39,9 @@ AUDIT.md
 REPAIR_UPGRADE_REAUDIT.md
 PIPELINE_AUDIT_REPAIRS_AND_UPGRADE_PLAN.md
 
-# Local audit trackers and raw FARM evidence are not public documentation.
+# Local audit trackers and raw cluster evidence are not release documentation.
 docs/WORKING_PLAN.md
+docs/INTAKE_HANDBOOK_IMPLEMENTATION_PLAN.md
 docs/evidence/
 HANDBOOK_COVERAGE_MAP.md
 RNA_SEQ_RECOMMENDATION_RULES.md

@@ -7,9 +7,8 @@ Master plan 6.1 defines three input records where the pipeline has one sheet:
   libraries  a prepared library, with assay, layout, strandedness, kit, batch
   reads      a read unit or lane, with role, URI, mate relationship, lane
 
-Why this matters beyond tidiness. With one row per sample there is nowhere to
-put a second lane, so multi-lane libraries are currently rejected outright, and
-nothing can express that two libraries came from the same specimen. Master plan
+With one row per sample there is nowhere to put a second lane. The canonical
+tables preserve run/lane identity and link libraries to specimens. Master plan
 6.1: "Multiple lanes may merge only within the same compatible library and read
 structure, with order/mate integrity preserved. Multiple libraries from a
 biological unit do not create independent replicates."
@@ -26,8 +25,10 @@ migration report"). Nothing here rewrites a project on disk.
 from __future__ import annotations
 
 import csv
+import re
 from collections import Counter, defaultdict
 from pathlib import Path
+from urllib.parse import unquote, urlsplit
 
 # Layouts a library may declare. `paired` is the only one that requires mates.
 LAYOUTS = ("paired", "single")
@@ -45,7 +46,7 @@ SCHEMAS = {
     "libraries": {
         "key": "library_id",
         "required": ("library_id", "sample_id", "layout"),
-        "recommended": ("assay_family", "strandedness", "kit", "platform",
+        "recommended": ("assay_family", "strandedness", "umi", "kit", "platform",
                         "prep_batch"),
         "foreign_keys": {"sample_id": "samples"},
     },
@@ -69,7 +70,13 @@ def read_tsv(path) -> list[dict]:
                  if l.strip() and not l.lstrip().startswith("#")]
     if not lines:
         return []
-    for row in csv.DictReader(lines, delimiter="\t"):
+    reader = csv.DictReader(lines, delimiter="\t")
+    headers = [c.strip() for c in reader.fieldnames or []]
+    if not all(headers) or len(headers) != len(set(headers)):
+        raise ValueError(f"{path}: blank or duplicate column names")
+    for row in reader:
+        if None in row:
+            raise ValueError(f"{path}: row {reader.line_num} has more fields than the header")
         rows.append({(k or "").strip(): (v or "").strip()
                      for k, v in row.items()})
     return rows
@@ -79,6 +86,76 @@ def load_tables(metadata_dir) -> dict:
     """Load whichever of the three tables are present."""
     d = Path(metadata_dir)
     return {name: read_tsv(d / f"{name}.tsv") for name in SCHEMAS}
+
+
+def local_path(uri):
+    """Decode file URIs consistently for validation and DAG dependencies."""
+    parsed = urlsplit(uri)
+    if parsed.scheme == "file":
+        if parsed.netloc not in ("", "localhost"):
+            raise ValueError(f"Non-local file URI: {uri}")
+        return Path(unquote(parsed.path)).expanduser()
+    return Path(uri).expanduser() if not parsed.scheme else None
+
+
+def execution_inputs(project, cfg):
+    """Compile explicit canonical bulk inputs without inventing replicate units.
+
+    Returns None for legacy projects. Each sample currently selects one library;
+    lanes/runs within that library are processed together. Other structures fail
+    explicitly until their count adapter is implemented.
+    """
+    directory = cfg.get("samples", {}).get("metadata_dir")
+    if not directory:
+        return None
+    root = (Path(project) / Path(directory).expanduser()).resolve()
+    sheet = (Path(project) / cfg["samples"]["sheet"]).resolve()
+    if sheet != root / "samples.tsv":
+        raise ValueError("With samples.metadata_dir, samples.sheet must point to that directory's samples.tsv")
+    tables = load_tables(root)
+    for read in tables["reads"]:
+        path = local_path(read.get("uri", ""))
+        if path is not None and read.get("uri"):
+            read["uri"] = str((root / path).resolve())
+    problems = validate(tables)
+    if problems:
+        raise ValueError("Canonical execution inputs:\n" + "\n".join(f"{c}: {d}" for c, d in problems))
+    seq = cfg["samples"]["seq_type"]
+    if seq not in ("rnaseq_single", "rnaseq_paired"):
+        raise ValueError("Canonical read execution currently requires the bulk RNA-seq route")
+    layout = "paired" if seq == "rnaseq_paired" else "single"
+    groups = lane_groups(tables)
+    result = {}
+    for lib in tables["libraries"]:
+        sid, lid = lib["sample_id"], lib["library_id"]
+        if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", sid):
+            raise ValueError(f"Unsafe sample ID for output paths: {sid!r}")
+        if lib.get("assay_family") != "bulk" or lib["layout"] != layout:
+            raise ValueError(f"{lid}: assay_family=bulk and layout={layout} are required by this analysis")
+        if lib.get("umi", "").lower() != "no":
+            raise ValueError(f"{lid}: explicit umi=no is required; UMI processing is not implemented")
+        strand = lib.get("strandedness", "")
+        strand_types = ({"forward": "ISF", "reverse": "ISR", "unstranded": "IU"}
+                        if layout == "paired" else {"forward": "SF", "reverse": "SR", "unstranded": "U"})
+        expected = strand_types.get(strand, strand)
+        allowed = ({"IU", "ISF", "ISR", "OU", "OSF", "OSR", "MU", "MSF", "MSR"}
+                   if layout == "paired" else {"U", "SF", "SR"})
+        if expected not in allowed | {"unknown"}:
+            raise ValueError(f"{lid}: declare forward, reverse, unstranded or unknown strandedness")
+        expected = "" if expected == "unknown" else expected
+        global_expected = cfg["samples"].get("expected_libtype")
+        if global_expected and global_expected != expected:
+            raise ValueError(f"{lid}: library strandedness conflicts with samples.expected_libtype")
+        units = []
+        for group in groups[lid]:
+            roles = {r["role"]: r for r in group["reads"]}
+            if "index" in roles:
+                raise ValueError(f"{lid}: index/barcode read processing is not implemented in the bulk route")
+            units.append({"run": group["run"], "lane": group["lane"],
+                          "r1": roles.get("R1", roles.get("single")), "r2": roles.get("R2")})
+        result[sid] = {"library_id": lid, "layout": layout,
+                       "expected_libtype": expected, "units": units}
+    return result
 
 
 # --------------------------------------------------------------- validation
@@ -101,9 +178,17 @@ def validate(tables: dict) -> list[tuple[str, str]]:
     for name, schema in SCHEMAS.items():
         rows = tables.get(name) or []
         if not rows:
+            issues.append(("MET001", f"{name}.tsv is missing or empty; all three tables are required"))
             continue
         for col in _missing_columns(rows, schema["required"]):
             issues.append(("MET001", f"{name}.tsv missing required column {col}"))
+
+        for col in schema["required"]:
+            if col == schema["key"]:
+                continue
+            for i, row in enumerate(rows, 2):
+                if not str(row.get(col, "")).strip():
+                    issues.append(("MET003", f"{name}.tsv row {i}: blank {col}"))
 
         key = schema["key"]
         if rows and key in rows[0]:
@@ -125,7 +210,7 @@ def validate(tables: dict) -> list[tuple[str, str]]:
         rows = tables.get(name) or []
         for col, parent in schema["foreign_keys"].items():
             parent_rows = tables.get(parent) or []
-            if not rows or not parent_rows:
+            if not rows:
                 continue
             known = {r.get(SCHEMAS[parent]["key"], "") for r in parent_rows}
             for i, r in enumerate(rows):
@@ -166,18 +251,26 @@ def validate(tables: dict) -> list[tuple[str, str]]:
                            f"libraries.tsv {lib_id}: layout={layout!r}; "
                            f"expected one of {', '.join(LAYOUTS)}"))
 
-    # group this library's reads by lane, so mates are checked per lane
+    # Lane numbers repeat across sequencing runs. Never collapse those units.
     per_lib_lane = defaultdict(lambda: defaultdict(list))
     for r in reads:
-        per_lib_lane[r.get("library_id", "")][r.get("lane", "") or "-"].append(r)
+        per_lib_lane[r.get("library_id", "")][_run_lane(r)].append(r)
+
+    for lib_id in layout_of:
+        if lib_id not in per_lib_lane:
+            issues.append(("MET013", f"library {lib_id}: no read units are present"))
+    prepared_samples = {lib.get("sample_id", "") for lib in libraries}
+    for sample in tables.get("samples") or []:
+        if sample.get("sample_id") not in prepared_samples:
+            issues.append(("MET007", f"sample {sample.get('sample_id')}: no library is present"))
 
     for lib_id, lanes in sorted(per_lib_lane.items()):
         layout = layout_of.get(lib_id)
         if layout is None:
             continue
-        for lane, rows in sorted(lanes.items()):
+        for (run, lane), rows in sorted(lanes.items()):
             roles = [r.get("role", "") for r in rows]
-            where = f"library {lib_id}" + (f", lane {lane}" if lane != "-" else "")
+            where = f"library {lib_id}, run {run or '(unspecified)'}, lane {lane or '(unspecified)'}"
             if layout == "paired":
                 # IN02: never downgrade a paired library to single-end.
                 for need in ("R1", "R2"):
@@ -194,6 +287,8 @@ def validate(tables: dict) -> list[tuple[str, str]]:
                     issues.append(("MET013",
                                    f"{where}: role 'single' in a paired library"))
             elif layout == "single":
+                if roles.count("R1") + roles.count("single") != 1:
+                    issues.append(("MET013", f"{where}: single layout requires exactly one R1 or single read unit"))
                 if "R2" in roles:
                     issues.append(("MET013",
                                    f"{where}: R2 present in a single-end library"))
@@ -212,6 +307,10 @@ def validate(tables: dict) -> list[tuple[str, str]]:
     return issues
 
 
+def _run_lane(row):
+    return (row.get("run", ""), row.get("lane", ""))
+
+
 def lane_groups(tables: dict) -> dict:
     """Read units per library per lane, in mate order.
 
@@ -219,13 +318,15 @@ def lane_groups(tables: dict) -> dict:
     structure, with order/mate integrity preserved". This is the grouping a
     merge step would consume; nothing here merges anything.
     """
-    out: dict = {}
-    per_lib = defaultdict(lambda: defaultdict(dict))
+    out = {}
+    per_lib = defaultdict(lambda: defaultdict(list))
     for r in tables.get("reads") or []:
-        per_lib[r.get("library_id", "")][r.get("lane", "") or "-"][r.get("role", "")] = r
+        per_lib[r.get("library_id", "")][_run_lane(r)].append(r)
     for lib, lanes in per_lib.items():
-        out[lib] = {lane: {role: rows[role]["uri"] for role in sorted(rows)}
-                    for lane, rows in sorted(lanes.items())}
+        # Preserve conflicting records; a role-keyed dict would overwrite them.
+        out[lib] = [{"run": run, "lane": lane,
+                     "reads": sorted(rows, key=lambda r: (r.get("role", ""), r.get("read_unit_id", "")))}
+                    for (run, lane), rows in sorted(lanes.items())]
     return out
 
 
@@ -303,7 +404,7 @@ def write_tables(tables: dict, out_dir):
             continue
         lead = list(SCHEMAS[name]["required"]) + list(SCHEMAS[name]["recommended"])
         cols = [c for c in lead if any(c in r for r in rows)]
-        cols += [c for c in rows[0] if c not in cols]
+        cols += list(dict.fromkeys(c for row in rows for c in row if c not in cols))
         path = out / f"{name}.tsv"
         with open(path, "w", newline="") as fh:
             w = csv.DictWriter(fh, fieldnames=cols, delimiter="\t",
@@ -341,7 +442,7 @@ def demo():
          "uri": "/d/S1_L2_R2.fq.gz", "lane": "L2"},
     ]
     assert validate(tables) == [], validate(tables)
-    assert sorted(lane_groups(tables)["S1_lib1"]) == ["L1", "L2"]
+    assert [g["lane"] for g in lane_groups(tables)["S1_lib1"]] == ["L1", "L2"]
 
     # dropping one mate of one lane is caught, and names the lane
     tables["reads"] = [r for r in tables["reads"] if r["read_unit_id"] != "f"]

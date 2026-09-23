@@ -18,6 +18,17 @@
 # =============================================================================
 
 
+# Keep identifier spelling while retaining missing-value and numeric semantics
+# for model covariates. Shared by preflight, aggregation and differential testing.
+read_sample_sheet <- function(path) {
+  sheet <- read.delim(path, comment.char = "#", colClasses = "character",
+                     na.strings = NULL, check.names = FALSE)
+  for (name in setdiff(names(sheet), "sample_id")) {
+    sheet[[name]] <- type.convert(sheet[[name]], as.is = TRUE, na.strings = c("", "NA"))
+  }
+  sheet
+}
+
 #' Independent biological replicates in the smallest level of `primary`.
 #'
 #' Rows are not replicates. When a random-effects term names a grouping unit

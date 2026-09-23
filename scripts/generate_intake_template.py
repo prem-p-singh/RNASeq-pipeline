@@ -100,6 +100,7 @@ def column_widths():
         "B": 55,   # question text
         "C": 30,   # answer cell
         "D": 55,   # help / example
+        "E": 26,   # stable machine field ID
     }
 
 
@@ -116,39 +117,11 @@ def write_readme_tab(workbook):
         ws.column_dimensions[col].width = width
 
     # Write each line into rows. Plain text, one line per row.
-    lines = [
-        ("This workbook is a PLANNING AID, not an input file", "title"),
-        ("", "blank"),
-        ("Nothing reads this file. It exists so you can think through, and write", "body"),
-        ("down, every decision the pipeline will ask you about, before you start a", "body"),
-        ("run. You then type those answers into the prompts.", "body"),
-        ("", "blank"),
-        ("How to actually start a run", "section"),
-        ("1. Fill in the tab that matches your assay, for your own reference.", "body"),
-        ("2. From your Mac, upload the metadata spreadsheet and start the wizard:", "body"),
-        ("       scripts/start_new.sh <project_name> <metadata_file> [fastq_dir]", "code"),
-        ("   That drops you into an interactive session on FARM running", "body"),
-        ("       scripts/new_project.sh <project_name>", "code"),
-        ("   which auto-detects the sample-ID and factor columns from the", "body"),
-        ("   metadata file and prompts you for the rest.", "body"),
-        ("3. Read the plan it prints. Type 'y' to launch.", "body"),
-        ("", "blank"),
-        ("Note: the metadata spreadsheet in step 2 is your OWN sample table", "body"),
-        ("(.xlsx/.csv/.tsv, one row per sample). It is not this workbook.", "body"),
-        ("", "blank"),
-        ("Tips", "section"),
-        ("- Use the Help column on the right of each question for examples.", "body"),
-        ("- Only fill in ONE tab per project. Leave the other tabs empty.", "body"),
-        ("- You can edit the questions themselves: see config/intake_questions.yaml.", "body"),
-        ("- If you change the questions, re-run scripts/generate_intake_template.py.", "body"),
-        ("", "blank"),
-        ("Questions marked 'don't know'", "section"),
-        ("Strandedness and library type do not have to be answered by you: Salmon", "body"),
-        ("auto-detects the library type during quantification, and the pipeline", "body"),
-        ("records what it found and warns you if it disagrees with what you", "body"),
-        ("declared in config (samples.expected_libtype).", "body"),
-        ("There is no separate probe job; detection happens inside the normal run.", "body"),
-    ]
+    definition = load_questions()
+    lines = [("RNA-seq intake — development template", "title"),
+             ("Template schema version", "body"), ("", "blank")]
+    lines += [(line, "body") for line in definition["readme"]]
+    ws.cell(row=2, column=2, value=definition["schema_version"])
 
     for row_idx, (text, kind) in enumerate(lines, start=1):
         cell = ws.cell(row=row_idx, column=1, value=text)
@@ -161,6 +134,8 @@ def write_readme_tab(workbook):
         else:
             cell.font = Font(name="Calibri", size=11)
         cell.alignment = Alignment(vertical="top", wrap_text=True)
+        if row_idx >= 4:
+            ws.row_dimensions[row_idx].height = 48
 
 
 # ===========================================================================
@@ -248,11 +223,15 @@ def write_questionnaire_tab(workbook, tab_name, tab_description, questions):
         cell_help.alignment = Alignment(vertical="top", wrap_text=True)
         cell_help.border = THIN_BORDER
 
+        ws.cell(row=row, column=5, value=question["id"])
+        cell_answer.number_format = "0" if question["type"] == "number" else "@"
+
         # Row height: enough for ~2 lines of wrapped text
-        ws.row_dimensions[row].height = 35
+        ws.row_dimensions[row].height = 51
 
     # Freeze the top 4 rows so they stay visible when scrolling
     ws.freeze_panes = "A5"
+    ws.cell(row=4, column=5, value="Field ID (do not edit)")
 
 
 # ===========================================================================
@@ -288,12 +267,34 @@ def main():
         print(f"  Writing tab '{tab_name}' ({len(all_questions)} questions)")
         write_questionnaire_tab(wb, tab_name, tab_description, all_questions)
 
+    for name, definition in config.get("record_tables", {}).items():
+        ws = wb.create_sheet(name)
+        ws.cell(1, 1, name).font = Font(name="Calibri", size=16, bold=True)
+        ws.merge_cells(start_row=2, start_column=1, end_row=2, end_column=len(definition["columns"]))
+        ws.cell(2, 1, definition["help"]).alignment = Alignment(wrap_text=True)
+        ws.row_dimensions[2].height = 48
+        for column, heading in enumerate(definition["columns"], 1):
+            letter = get_column_letter(column)
+            ws.column_dimensions[letter].width = 22
+            cell = ws.cell(4, column, heading)
+            cell.fill = HEADER_FILL
+            cell.font = HEADER_FONT
+            for row in range(5, 105):
+                ws.cell(row, column).number_format = "@"
+                ws.cell(row, column).fill = REQUIRED_FILL
+            if heading in definition.get("options", {}):
+                choices = ",".join(definition["options"][heading])
+                validation = DataValidation(type="list", formula1=f'"{choices}"', allow_blank=True)
+                ws.add_data_validation(validation)
+                validation.add(f"{letter}5:{letter}104")
+        ws.freeze_panes = "A5"
+        ws.sheet_view.showGridLines = False
+
     # Save
     wb.save(OUTPUT_XLSX)
     print(f"\nWrote: {OUTPUT_XLSX}")
-    print("\nThis workbook is a planning aid: nothing parses it.")
-    print("Fill in the tab for your assay to decide your answers, then start a run with")
-    print("  scripts/start_new.sh <project_name> <metadata_file> [fastq_dir]")
+    print("\nBulk intake: python scripts/setup.py --intake intake_template.xlsx --project-dir /path/new_project")
+    print("Other assay tabs are planning-only. See docs/INTAKE_TEMPLATE_AUDIT.md.")
 
 
 if __name__ == "__main__":

@@ -34,6 +34,16 @@ load_fns <- function(path, names) {
 # _design.R is a plain sourceable file, so it loads directly.
 source(file.path("workflow", "scripts", "_design.R"))
 
+# Identifiers are literal text; missing covariates must stay missing, not become
+# an extra treatment level while fixing a sample named NA.
+id_sheet <- tempfile(fileext = ".tsv")
+writeLines(c("sample_id\ttreatment\tdose", "001\tcontrol\t1",
+             "002\tNA\t2", "NA\ttreated\t3"), id_sheet)
+id_data <- read_sample_sheet(id_sheet)
+unlink(id_sheet)
+stopifnot(identical(id_data$sample_id, c("001", "002", "NA")),
+          is.na(id_data$treatment[2]), is.numeric(id_data$dose))
+
 load_fns(file.path("workflow", "scripts", "03_de.R"),
          c("build_contrasts", "assert_no_double_correction"))
 load_fns(file.path("workflow", "scripts", "02_aggregate.R"),

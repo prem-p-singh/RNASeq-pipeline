@@ -72,7 +72,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# The storage plan owns concurrency; passthrough must not override its cap.
+# Keep one explicit concurrency setting; storage never imposes a cap.
 for arg in ${PASSTHRU[@]+"${PASSTHRU[@]}"}; do
     case "$arg" in
         --jobs|--jobs=*|-j|-j[0-9]*)
@@ -148,7 +148,7 @@ N=$(grep -v '^#' "$SHEET" | awk 'NR>1 && NF>0' | wc -l | tr -d ' ')
 # scheduler logic with per-rule resources and dataset-aware concurrency.
 # Friendly size labels may remain in reports." The tier therefore still selects
 # the SLURM profile (account, partition, qos), but no longer decides how much
-# work runs at once: that comes from the storage plan below.
+# work runs at once: the explicit job limit is bounded by the library count.
 read TIER_SMALL TIER_MEDIUM SEQ_TYPE <<< $(python3 - "$THRESH" "$CONFIG" <<'PYCFG'
 import sys, yaml
 t = yaml.safe_load(open(sys.argv[1]))["tiers"]
@@ -174,21 +174,21 @@ fi
 
 # --- Storage plan: measured, per filesystem, no platform cap ----------
 # Replaces hpc.storage_budget_gb and the per-assay FASTQ guesses (R15, U07,
-# master plan 10.7). plan_resources.py exits non-zero when the run cannot fit,
-# after trying a lower concurrency first (RS08/RS09).
+# Capacity estimates are advisory. Nonzero means invalid configuration or a
+# real reporting/I/O failure, not a forecast shortage.
 PLAN_JSON="$PROJDIR/gates/resource_plan.json"
 if ! python3 "$REPO/scripts/plan_resources.py" \
         --project-dir "$PROJDIR" --configfile "$CONFIG" \
         --profile "$PROFILE" --out "$PLAN_JSON"; then
     echo
-    echo "Storage planning blocked this run; nothing was submitted." >&2
+    echo "Resource planner failed to read inputs or write its report; see the error above." >&2
     exit 1
 fi
 MAX_CONC=$(python3 -c 'import sys,json;print(json.load(open(sys.argv[1]))["planned_concurrency"])' "$PLAN_JSON")
 PROFILE_JOBS=$(python3 -c 'import sys,yaml;print(yaml.safe_load(open(sys.argv[1])).get("jobs",1))' "$PROFILE/config.yaml")
 
 if [ "$MAX_CONC" -lt "$PROFILE_JOBS" ]; then
-    echo "NOTE: --jobs capped at $MAX_CONC (profile allows $PROFILE_JOBS) by the storage plan"
+    echo "NOTE: --jobs=$MAX_CONC (profile allows $PROFILE_JOBS; configured limit/library count)"
 fi
 
 # --- Log decision -----------------------------------------------------

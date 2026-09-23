@@ -6,6 +6,7 @@ known fragment counts. This is technical qualification, not a real-data benchmar
 """
 import csv
 import gzip
+from contextlib import ExitStack
 import json
 from pathlib import Path
 import random
@@ -27,7 +28,8 @@ def build(dest, repo, layout):
     expected = {}
     sheet = []
     for sample in range(6):
-        sid = f"S{sample+1}"
+        # Exercise numeric-looking IDs through the entire single-end workflow.
+        sid = f"{sample+1:03d}" if layout == "single" else f"S{sample+1}"
         condition = "control" if sample < 3 else "treated"
         r1, r2 = source / f"{sid}_R1.fq.gz", source / f"{sid}_R2.fq.gz"
         expected[sid] = {}
@@ -71,6 +73,34 @@ def build(dest, repo, layout):
     (dest / "expected.json").write_text(json.dumps(expected))
 
 
+def canonicalize(dest, repo):
+    """Use two sequencing runs per library, each reusing lane number 1."""
+    sys.path.insert(0, str(repo / "scripts"))
+    import metadata
+    cfg = yaml.safe_load((dest / "config/config.yaml").read_text())
+    tables, _ = metadata.from_legacy(metadata.read_tsv(dest / "config/samples.tsv"), cfg["samples"]["seq_type"])
+    reads = []
+    for record in tables["reads"]:
+        source = Path(record["uri"])
+        with ExitStack() as stack:
+            outputs = [source.with_name(f"run{run}_{source.name}") for run in (1, 2)]
+            handles = [stack.enter_context(gzip.open(p, "wt")) for p in outputs]
+            with gzip.open(source, "rt") as handle:
+                i = 0
+                while header := handle.readline():
+                    handles[i % 2].write(header + ''.join(handle.readline() for _ in range(3)))
+                    i += 1
+        for run, path in enumerate(outputs, 1):
+            reads.append(dict(record, read_unit_id=f"run{run}_{record['read_unit_id']}",
+                              uri=str(path), run=str(run), lane="1"))
+    tables["reads"] = reads
+    for lib in tables["libraries"]:
+        lib.update(umi="no", strandedness="unknown")
+    metadata.write_tables(tables, dest / "metadata")
+    cfg["samples"].update(metadata_dir="metadata", sheet="metadata/samples.tsv")
+    (dest / "config/config.yaml").write_text(yaml.safe_dump(cfg))
+
+
 def verify(dest):
     expected = json.loads((dest / "expected.json").read_text())
     for sample, counts in expected.items():
@@ -87,6 +117,8 @@ def verify(dest):
     for rel in ("counts.tsv", "de_manifest.tsv", "enrichment_status.tsv", "wgcna_manifest.tsv",
                 "qc_report/qc_charts.html", "qc_report/multiqc/multiqc_report.html"):
         assert (dest / "results" / rel).stat().st_size > 0, rel
+    with open(dest / "results/counts.tsv") as f:
+        assert next(csv.reader(f, delimiter="\t"))[1:] == list(expected), "sample IDs changed in counts"
     with open(dest / "results/de_manifest.tsv") as f:
         manifest = list(csv.DictReader(f, delimiter="\t"))
     with open(dest / "results" / manifest[0]["analysis_table"]) as f:
@@ -102,5 +134,7 @@ if __name__ == "__main__":
     mode, dest = sys.argv[1], Path(sys.argv[2]).resolve()
     if mode == "build":
         build(dest, Path(sys.argv[3]).resolve(), sys.argv[4])
+    elif mode == "canonicalize":
+        canonicalize(dest, Path(sys.argv[3]).resolve())
     else:
         verify(dest)
