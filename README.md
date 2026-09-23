@@ -350,7 +350,7 @@ bash tests/check_public.sh      # separate networked six-sample public smoke tes
 
 The strict suite has **22 checks** for input contracts, read preparation, reference/cache safety, count agreement, DE directions, declared-model preservation, enrichment, WGCNA, storage and recovery. Scientific CI installs the lock and also runs the public smoke test. [Release qualification](docs/RELEASE.md) separates current source evidence from historical environment/SLURM checks. Synthetic tests and a downsampled public study do not establish validity for every organism or design.
 
-For clean installation on a SLURM worker, run `sbatch scripts/validate_slurm.sbatch` with your site's scheduler options. Developer mode (`bash tests/run_all.sh`) permits reported dependency skips; it is not the release gate. See [v2 changes](CHANGELOG.md), [input contracts](INPUTS.md), [design](DESIGN.md) and [limitations](docs/RELEASE.md).
+For clean installation on a SLURM worker, run `sbatch scripts/validate_slurm.sbatch` with your site's scheduler options. Developer mode (`bash tests/run_all.sh`) permits reported dependency skips; it is not the release gate. See [v2 changes](CHANGELOG.md), [input contracts](INPUTS.md) and [limitations](docs/RELEASE.md).
 
 <details>
 <summary><strong>Optional remote setup helper</strong></summary>
@@ -361,7 +361,7 @@ export RNASEQ_REMOTE_REPO=/absolute/shared/path/RNASeq-pipeline
 bash scripts/start_new.sh my_study /path/to/metadata.tsv
 ```
 
-The remote checkout defaults to `RNASeq_pipeline` under the remote home directory if unset. No host is selected automatically. The wizard expects `~/new_project_inbox/PROJECT_NAME`. This uploader/wizard and n8n are convenience integrations, not equivalent to the qualified core workflow.
+The remote checkout defaults to `RNASeq_pipeline` under the remote home directory if unset. No host is selected automatically. The wizard expects `~/new_project_inbox/PROJECT_NAME`. This uploader/wizard is a convenience integration, not equivalent to the qualified core workflow.
 
 </details>
 

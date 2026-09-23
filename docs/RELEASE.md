@@ -96,7 +96,7 @@ The scientific GitHub Actions workflow repeats these checks. The lightweight wor
 | Reference/cache | Index publication is atomic, but the entire multi-file bundle is not published in one transaction. Mutable remote URLs are not re-fetched solely to detect changes. Full simultaneous multi-project cache stress qualification remains open. |
 | Storage and scale | Estimates remain labelled assumptions; no continuous capacity monitor or calibrated large-cohort benchmark. Capacity/quota concerns warn only. Actual failed writes still fail tasks. |
 | Platforms and deployment | Linux x86_64 with SLURM is the tested target. Other clusters require site configuration; macOS, ARM and a container deployment are not qualified. |
-| Intake and optional integrations | Excel supports independent bulk with optional batch and inline/external records. Setup-to-config tests mock live reference lookup; the scientific DAG is tested separately. Advanced models and reference choices need YAML. Optional upload/wizard and n8n integrations are not equivalent qualified interfaces. |
+| Intake and optional integrations | Excel supports independent bulk with optional batch and inline/external records. Setup-to-config tests mock live reference lookup; the scientific DAG is tested separately. Advanced models and reference choices need YAML. The optional upload/wizard is not an equivalent qualified interface. |
 
 ## Publication procedure
 

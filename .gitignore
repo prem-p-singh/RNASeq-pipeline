@@ -18,8 +18,7 @@ setup_inputs.yaml
 
 # --- Third-party documents --------------------------------------------
 # Kept out of version control so the repo can be pushed without
-# redistributing someone else's handbook. HANDBOOK_INSIGHTS.md records what
-# the pipeline actually takes from them.
+# redistributing third-party handbooks.
 *.pdf
 
 # --- Local editor / tooling state -------------------------------------
@@ -32,9 +31,7 @@ __pycache__/
 
 # --- Internal working documents ---------------------------------------
 # Audit and upgrade-planning notes. Kept on disk, deliberately not published:
-# they are candid internal assessments naming specific defects, and one of them
-# was supplied rather than authored here. Removed from git history before the
-# repo was made public.
+# they are not required to install or run the pipeline.
 AUDIT.md
 REPAIR_UPGRADE_REAUDIT.md
 PIPELINE_AUDIT_REPAIRS_AND_UPGRADE_PLAN.md
