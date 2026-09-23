@@ -20,7 +20,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install python dependencies
-        run: python3 -m pip install --quiet pyyaml openpyxl
+        run: python3 -m pip install --quiet pyyaml openpyxl pandas
 
       - name: Install base R (preflight's estimability check shells out to it)
         run: |

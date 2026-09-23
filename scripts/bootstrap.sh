@@ -5,11 +5,11 @@ set -euo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 LOCK="$REPO/environments/linux-64.explicit.txt"
 [ "$(uname -sm)" = "Linux x86_64" ] || {
-    echo "Use a Linux x86_64 host (e.g. FARM) for this release environment." >&2; exit 1;
+    echo "Use a Linux x86_64 host for this release environment." >&2; exit 1;
 }
 [ -s "$LOCK" ] || { echo "Release lock missing: $LOCK" >&2; exit 1; }
 command -v conda >/dev/null || {
-    echo "Conda is required. On FARM: module load conda/latest" >&2; exit 1;
+    echo "Conda is required. Activate your installation or load your site's Conda module." >&2; exit 1;
 }
 digest=$(sha256sum "$LOCK" | cut -d ' ' -f1)
 prefix=${RNASEQ_ENV_PREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/rnaseq/environments/$digest}

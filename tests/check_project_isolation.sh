@@ -37,8 +37,8 @@ samples: {sheet: config/samples.tsv, seq_type: $2}
 model: {fixed_effects: "~ treatment", random_effects: null, primary_factor: treatment}
 downstream: {run_go: false, run_kegg: false, run_wgcna: false}
 orgdb: {strategy: skip}
-# No storage_budget_gb: the platform has no default cap (master plan 10.1).
-hpc: {delete_fastq_after_quant: true, samples_in_flight: null}
+# Deliberately inadequate legacy quota must only warn.
+hpc: {delete_fastq_after_quant: true, samples_in_flight: null, storage_budget_gb: 0.001}
 EOF
     cp "$REPO/config/thresholds.yaml" "$1/config/thresholds.yaml"
     # Two levels with >=2 replicates each, so the design is estimable.
@@ -60,8 +60,9 @@ mkproject "$A" tagseq 6            # -> small tier
 mkproject "$B" rnaseq_paired 40    # -> medium tier
 BEFORE_A_CFG=$(cat "$A/config/config.yaml")
 
-"$REPO/submit.sh" --plan-only -d "$A" > "$TMP/a.log" 2>&1
-"$REPO/submit.sh" --plan-only -d "$B" > "$TMP/b.log" 2>&1
+"$REPO/submit.sh" --plan-only -d "$A" > "$TMP/a.log" 2>&1 || fail "A planning failed"
+"$REPO/submit.sh" --plan-only -d "$B" > "$TMP/b.log" 2>&1 || fail "B planning failed"
+grep -q "CAUTION" "$TMP/a.log" || fail "inadequate quota did not emit a caution"
 
 grep -q "project dir:   $A" "$TMP/a.log" || fail "A did not run in its own dir; see $TMP/a.log"
 grep -q "project dir:   $B" "$TMP/b.log" || fail "B did not run in its own dir"

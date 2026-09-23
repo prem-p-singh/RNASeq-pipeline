@@ -29,11 +29,11 @@
 
   <text x="176" y="74" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
         font-size="40" font-weight="700" fill="#F2F5F3" letter-spacing="0.4">
-    RNA-Seq Pipeline
+    RNA-Seq Pipeline / v2
   </text>
   <text x="176" y="108" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
         font-size="17" fill="#A9BEB4">
-    Config-driven Snakemake workflow for bulk RNA-seq and 3' TAGseq on SLURM
+    Excel-driven bulk RNA-seq analysis on Linux and SLURM
   </text>
 
   <rect x="176" y="126" width="880" height="2" fill="url(#rule)"/>
@@ -68,10 +68,10 @@
 
   <text x="176" y="212" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
         font-size="13.5" fill="#B9CCC2">
-    The design is checked for estimability before any data is fetched, so an unfittable model costs seconds, not a cohort of compute.
+    Checked study design, traceable inputs, reproducible analysis — from raw reads to interpretable results.
   </text>
   <text x="176" y="234" font-family="Helvetica Neue, Helvetica, Arial, sans-serif"
         font-size="12.5" fill="#93AFA1">
-    Green stages have run on real data. Blue stages are implemented and not yet executed end to end.
+    V2 / BULK RNA-SEQ     Excel intake · checked lane merging · reproducible results · advisory storage
   </text>
 </svg>

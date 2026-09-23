@@ -1,7 +1,7 @@
 # Maintainer solve specification; installations use the exact release lock in
 # environments/linux-64.explicit.txt (579 packages, URLs/builds/SHA256 hashes).
 # On Linux x86_64 with Conda: bash scripts/bootstrap.sh
-# FARM: module load conda/latest first. See README.md and docs/RELEASE.md.
+# Make Conda available using your installation or site module first. See README.md and docs/RELEASE.md.
 # Do not update a qualified runtime in place. To upgrade, solve this file into
 # a separate prefix, export `conda list --explicit --sha256`, inspect the diff,
 # and rerun the complete Linux release checks before replacing the lock.

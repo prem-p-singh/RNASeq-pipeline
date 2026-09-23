@@ -1,5 +1,7 @@
 cff-version: 1.2.0
-title: "RNASeq-pipeline: a configuration-driven Snakemake workflow for bulk RNA-seq and 3' TAGseq differential expression"
+title: "RNASeq-pipeline: Excel-driven, reproducible bulk RNA-seq analysis"
+version: "2.0.0"
+date-released: "2026-09-23"
 message: "If this workflow contributes to published work, please cite it as below."
 type: software
 authors:
@@ -12,14 +14,15 @@ url: "https://github.com/prem-p-singh/RNASeq-pipeline"
 license: MIT
 keywords:
   - RNA-seq
-  - TAGseq
   - differential expression
   - Snakemake
   - reproducible research
   - bioinformatics workflow
 abstract: >-
-  A configuration-driven Snakemake workflow for bulk RNA-seq and 3' TAGseq
-  differential expression on SLURM clusters. Species, experimental design and
+  An Excel- and configuration-driven Snakemake workflow for annotated non-UMI
+  bulk RNA-seq on Linux x86_64, locally or on SLURM clusters. Canonical sample,
+  library and read records support checked within-library lane merging.
+  Species, experimental design and
   downstream analyses are set in configuration rather than in code. Study design
   is validated for estimability before compute is committed, unsupported
   assay, design and backend combinations are rejected at preflight, and each

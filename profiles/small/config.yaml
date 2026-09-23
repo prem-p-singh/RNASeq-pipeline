@@ -10,11 +10,10 @@ latency-wait: 30
 
 # Default per-rule SLURM resources. Rules override via `resources:` blocks.
 default-resources:
-  # Cluster-specific: these are UC Davis FARM values. Change them for your
-  # site, or the scheduler will reject every job.
-  - slurm_account=publicgrp
-  - slurm_partition=low
-  - slurm_qos=publicgrp-low-qos
+  # Uses scheduler defaults. Uncomment and set values required by your site.
+  # - slurm_account=YOUR_ACCOUNT
+  # - slurm_partition=YOUR_PARTITION
+  # - slurm_qos=YOUR_QOS
   - requeue=true
   # Email notifications are off by default: a hardcoded address would mail
   # this pipeline's author about YOUR jobs. Uncomment and set your own.

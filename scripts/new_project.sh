@@ -2,7 +2,7 @@
 # =============================================================================
 # new_project.sh <project_name>
 #
-# Run on FARM. Expects ~/new_project_inbox/<project_name>/ to contain:
+# Run on the analysis host. Expects ~/new_project_inbox/<project_name>/ to contain:
 #     - a metadata file (.xlsx / .csv / .tsv)  [required]
 #     - FASTQ files (*.fastq.gz) OR fastq_urls.txt  [optional — can point elsewhere]
 #

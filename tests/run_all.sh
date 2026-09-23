@@ -88,8 +88,14 @@ run check_config_resolve.py  "python3 tests/check_config_resolve.py"
 run check_artifacts.py       "python3 tests/check_artifacts.py"
 run check_reference_cache.py "python3 tests/check_reference_cache.py"
 run check_metadata.py        "python3 tests/check_metadata.py"
+run check_read_units.py      "python3 tests/check_read_units.py"
 run check_resources.py       "python3 tests/check_resources.py"
 run check_recommend.py       "python3 tests/check_recommend.py"
+if have_py_mods openpyxl pandas yaml; then
+    run check_intake.py "python3 tests/check_intake.py"
+else
+    skip check_intake.py "needs openpyxl, pandas and pyyaml"
+fi
 
 if have_py_mods yaml && command -v Rscript >/dev/null 2>&1 \
    && have_r_pkgs jsonlite; then

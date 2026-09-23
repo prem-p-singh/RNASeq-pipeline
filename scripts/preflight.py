@@ -185,6 +185,8 @@ def check_metadata(cfg: dict, spec: dict, sheet_path: Path, iss: Issues) -> dict
     header, rows = read_sheet(sheet_path)
 
     for col in contract["required_columns"]:
+        if cfg.get("samples", {}).get("metadata_dir") and col in ("fastq_url", "fastq_url_r2"):
+            continue
         if col not in header:
             iss.add("MET001", "samples.tsv", col)
 
@@ -236,7 +238,7 @@ def check_metadata(cfg: dict, spec: dict, sheet_path: Path, iss: Issues) -> dict
 R_DESIGN = r'''
 args <- commandArgs(trailingOnly = TRUE)
 source(args[1])
-sheet <- read.delim(args[2], comment.char = "#", stringsAsFactors = TRUE)
+sheet <- read_sample_sheet(args[2])
 fixed <- args[3]; primary <- args[4]
 random <- if (length(args) >= 5 && nzchar(args[5])) args[5] else NULL
 
@@ -253,16 +255,20 @@ cat(jsonlite::toJSON(res, auto_unbox = TRUE))
 '''
 
 
-def check_metadata_tables(proj: Path, iss: Issues) -> dict | None:
+def check_metadata_tables(proj: Path, iss: Issues, cfg=None) -> dict | None:
     """Validate the three-table contract when a project uses it.
 
     Master plan 6.1 defines samples / libraries / reads. A project that still
     has only samples.tsv keeps working: this returns None and the caller falls
     back to the single-sheet checks, which the legacy form is all that supports.
     """
-    mdir = proj / "metadata"
-    tables = metadata_tables.load_tables(mdir)
-    if not any(tables.values()):
+    mdir = proj / ((cfg or {}).get("samples", {}).get("metadata_dir") or "metadata")
+    try:
+        tables = metadata_tables.load_tables(mdir)
+    except (OSError, ValueError) as exc:
+        iss.add("MET001", "metadata", str(exc))
+        return None
+    if not any((mdir / f"{name}.tsv").exists() for name in metadata_tables.SCHEMAS):
         return None
 
     present = [n for n, rows in tables.items() if rows]
@@ -270,7 +276,8 @@ def check_metadata_tables(proj: Path, iss: Issues) -> dict | None:
         iss.add(code, "metadata", detail)
 
     lanes = metadata_tables.lane_groups(tables)
-    multi_lane = {lib: sorted(l) for lib, l in lanes.items() if len(l) > 1}
+    multi_lane = {lib: [{"run": g["run"], "lane": g["lane"]} for g in groups]
+                  for lib, groups in lanes.items() if len(groups) > 1}
     return {
         "form": "three_table",
         "tables_present": present,
@@ -389,7 +396,11 @@ def main():
     design: dict = {"checked": False, "reason": "sample sheet unreadable"}
     # Three-table form takes precedence when present (master plan 6.1); the
     # single sheet remains supported so existing projects still run.
-    tables_meta = check_metadata_tables(proj, iss)
+    tables_meta = check_metadata_tables(proj, iss, cfg)
+    try:
+        metadata_tables.execution_inputs(proj, cfg)
+    except (OSError, ValueError) as exc:
+        iss.add("MET013", "execution inputs", str(exc))
 
     if not sheet_path.is_file():
         iss.add("MET001", "samples.tsv", f"file not found: {sheet_path}")

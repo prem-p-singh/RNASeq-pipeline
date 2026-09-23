@@ -55,10 +55,13 @@ if RECOMMENDATION["issues"]:
     raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
 
 # --- Load sample sheet ---------------------------------------------------
+import metadata as _metadata
+CANONICAL_INPUTS = _metadata.execution_inputs(Path.cwd(), config)
 samples = pd.read_csv(
     config["samples"]["sheet"],
     sep="\t",
     comment="#",
+    converters={"sample_id": str},
 ).set_index("sample_id", drop=False)
 
 SAMPLES = samples.index.tolist()
@@ -156,6 +159,7 @@ def all_targets():
     targets = [
         # Stage 1 — one quant.sf per sample
         *expand(str(QUANT / "{sample}/quant.sf"), sample=SAMPLES),
+        *(expand(str(QUANT / "{sample}/read_preparation.json"), sample=SAMPLES) if CANONICAL_INPUTS is not None else []),
         # Stage 1b — comparative QC report (before/after-clean charts + MultiQC)
         OUT / "qc_report/qc_report.done",
         OUT / "qc_report/qc_charts.html",

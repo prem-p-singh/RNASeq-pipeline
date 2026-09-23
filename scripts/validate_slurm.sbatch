@@ -1,18 +1,15 @@
 #!/bin/bash -l
-# Submit from the checkout: sbatch scripts/validate_farm.sbatch
-# Site defaults below are FARM-specific. Override with sbatch options elsewhere.
+# Submit from the checkout: sbatch [site options] scripts/validate_slurm.sbatch
+# Supply your site's --account, --partition and --qos options when required.
 #SBATCH --job-name=rnaseq-release
-#SBATCH --account=publicgrp
-#SBATCH --partition=low
-#SBATCH --qos=publicgrp-low-qos
 #SBATCH --cpus-per-task=4
 #SBATCH --mem=16G
 #SBATCH --time=03:00:00
 set -eo pipefail
-module load conda/latest
+# Make Conda available using your site's setup before submitting this job.
 TASK_REPO="$SLURM_SUBMIT_DIR"
 TASK_WORK=$(mktemp -d /tmp/rnaseq-release.XXXXXX)
-TASK_EVIDENCE="$TASK_REPO/docs/evidence/farm-$SLURM_JOB_ID"
+TASK_EVIDENCE="$TASK_REPO/docs/evidence/slurm-$SLURM_JOB_ID"
 mkdir -p "$TASK_EVIDENCE"
 printf 'Worker: %s\nJob: %s\nUTC: %s\n' "$(hostname)" "$SLURM_JOB_ID" "$(date -u +%FT%TZ)" > "$TASK_EVIDENCE/worker.txt"
 export TMPDIR="$TASK_WORK" CONDA_PKGS_DIRS="$TASK_WORK/pkgs"

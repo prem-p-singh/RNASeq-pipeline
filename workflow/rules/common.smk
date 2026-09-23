@@ -32,7 +32,7 @@ def read_metrics(stage: str) -> dict:
 
 def get_fastq_url(wildcards):
     """Look up the (R1 / single-end) FASTQ URL for a given sample from the sheet."""
-    return samples.loc[wildcards.sample, "fastq_url"]
+    return "" if CANONICAL_INPUTS is not None else samples.loc[wildcards.sample, "fastq_url"]
 
 
 def get_fastq_url_r2(wildcards):
@@ -41,7 +41,7 @@ def get_fastq_url_r2(wildcards):
     Returns "" when there is no fastq_url_r2 column (single-end / TAGseq) or
     when the cell is blank, so the per-sample script can stay single-end.
     """
-    if "fastq_url_r2" not in samples.columns:
+    if CANONICAL_INPUTS is not None or "fastq_url_r2" not in samples.columns:
         return ""
     val = samples.loc[wildcards.sample, "fastq_url_r2"]
     return "" if pd.isna(val) else val
@@ -49,9 +49,13 @@ def get_fastq_url_r2(wildcards):
 
 def local_read_inputs(wildcards):
     """Declare local FASTQs to Snakemake so an edited file invalidates its quant."""
-    sources = [get_fastq_url(wildcards), get_fastq_url_r2(wildcards)]
-    return [str(Path(str(s).removeprefix("file://")).expanduser()) for s in sources
-            if s and not pd.isna(s) and ("://" not in str(s) or str(s).startswith("file://"))]
+    if CANONICAL_INPUTS is not None:
+        sources = [unit[role]["uri"] for unit in CANONICAL_INPUTS[wildcards.sample]["units"]
+                   for role in ("r1", "r2") if unit[role]]
+    else:
+        sources = [get_fastq_url(wildcards), get_fastq_url_r2(wildcards)]
+    return [str(_metadata.local_path(str(s))) for s in sources
+            if s and not pd.isna(s) and _metadata.local_path(str(s)) is not None]
 
 
 def sample_metadata_col(sample: str, col: str):

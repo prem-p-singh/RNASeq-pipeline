@@ -17,9 +17,8 @@ What must not break:
   - a cache already present is reported but not charged again (RS05)
   - paths sharing a filesystem are accounted once (RS07)
   - unknown capacity is never reported as unlimited
-  - concurrency is reduced before the run is refused (RS08), and a genuinely
-    impossible run is refused with the shortfall (RS09)
-  - a legacy storage_budget_gb warns and acts as an explicit quota (RS12)
+  - capacity estimates only warn and never reduce concurrency or block launch
+  - a legacy storage_budget_gb warns and supplies advisory quota information
   - no default cap is reintroduced anywhere
 
 Run:  python3 tests/check_resources.py
@@ -29,6 +28,7 @@ import json
 import subprocess
 import sys
 import tempfile
+from unittest.mock import patch
 from pathlib import Path
 
 import yaml
@@ -131,23 +131,29 @@ m = rep["mounts"][0]
 assert m["available_gb"] is None or m["verdict"] in ("ok", "insufficient")
 if m["available_gb"] is None:
     assert m["verdict"] == "unknown_capacity", m
-    assert rep["blocking"], "unknown capacity must be recorded as blocking"
+    assert rep["warnings"], "unknown capacity must be recorded as advisory"
 
 # --- 6. a quota below free space wins (master plan 10.3) --------------
+with patch.object(rs, "free_bytes", return_value=None):
+    unknown = plan(4, 3)
+assert unknown["warnings"] and unknown["mounts"][0]["verdict"] == "unknown_capacity"
+assert unknown["planned_concurrency"] == 3 and "blocking" not in unknown
+
 tight = plan(4, 2, quotas={"results": 1 * GB})
 m = tight["mounts"][0]
 assert m["available_gb"] == 1.0, m
 assert m["verdict"] == "insufficient" and m["shortfall_gb"] > 0, m
 
-# --- 7. RS08 reduces concurrency before refusing ----------------------
+# --- 7. Capacity estimates warn without reducing concurrency ----------
 base = tmpdir(); (base / "res").mkdir(); (base / "scr").mkdir()
 kwargs = dict(repo_root=ROOT, inputs={}, n_libraries=32, assay="bulk",
               concurrency=16,
               paths={"results": base / "res", "scratch": base / "scr"},
               quotas={"results": 40 * GB})
 first = rs.plan_storage(**kwargs)
-reduced = rs.reduce_concurrency(first, **kwargs)
-assert reduced["planned_concurrency"] <= first["planned_concurrency"], reduced
+reduced = first
+assert reduced["planned_concurrency"] == 16, reduced
+assert reduced["warnings"] and "blocking" not in reduced
 # the route is unchanged: same assay, same library count
 assert reduced["assay"] == first["assay"] and reduced["n_libraries"] == first["n_libraries"]
 
@@ -196,10 +202,10 @@ rep = json.loads(out_json.read_text())
 assert rep["legacy_notes"], "RS12: a legacy cap must produce a migration note"
 joined = " ".join(rep["legacy_notes"])
 assert "no longer" in joined and "NOT a planning input" in joined, joined
-assert "must not be silently erased" in joined, joined
+assert "never blocks launch" in joined, joined
 # and it is applied, not ignored: 1 GB cannot hold even the operational reserve
 assert any(m["quota_known"] for m in rep["mounts"]), rep["mounts"]
-assert r.returncode == 1, "an unsatisfiable quota must block (RS09)"
+assert r.returncode == 0, "an unsatisfiable quota is advisory"
 assert "short by" in (r.stdout + r.stderr)
 
 # Retained remote reads are new allocation, never existing input bytes.
@@ -208,7 +214,13 @@ base_args = dict(repo_root=ROOT, inputs=remote, n_libraries=1, assay="bulk", con
                  paths={"results": d2 / "res", "scratch": d2 / "res"})
 kept = rs.plan_storage(**base_args, retain_downloads=True)
 dropped = rs.plan_storage(**base_args, retain_downloads=False)
-assert abs(kept["mounts"][0]["retained_new_gb"] - dropped["mounts"][0]["retained_new_gb"] - 2) < 1e-9
+assert abs(kept["mounts"][0]["retained_new_gb"] - dropped["mounts"][0]["retained_new_gb"] - 4) < 1e-9
+local_lanes = {f"/data/lane{i}.fq.gz": {"bytes": GB, "source": "measured"} for i in range(4)}
+laned_args = dict(base_args, inputs=local_lanes, library_uris=[list(local_lanes)])
+merged = rs.plan_storage(**laned_args, retain_downloads=True)
+cleaned = rs.plan_storage(**laned_args, retain_downloads=False)
+assert merged["mounts"][0]["retained_new_gb"] - cleaned["mounts"][0]["retained_new_gb"] == 8
+assert merged["mounts"][0]["max_concurrent_temporary_gb"] == 13
 small_reads = rs.plan_storage(**dict(base_args, inputs={str(f): {"bytes": 1024, "source": "measured"}}))
 assert small_reads["mounts"][0]["max_concurrent_temporary_gb"] < kept["mounts"][0]["max_concurrent_temporary_gb"]
 assert reduced["requested_concurrency"] == 16

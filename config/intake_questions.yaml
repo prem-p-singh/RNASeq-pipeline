@@ -23,7 +23,55 @@
 # -----------------------------------------------------------------------------
 # Questions that appear on EVERY assay tab (project basics, paths, design)
 # -----------------------------------------------------------------------------
+schema_version: 3
+readme:
+  - "Fill the Bulk RNA-seq tab for the currently implemented Excel intake. Yellow cells are required; gray cells are optional. Enter literal values, not formulas."
+  - "Current execution: annotated, non-UMI bulk gene expression and differential expression; independent groups, optionally including a batch column."
+  - "TAGseq and sRNA-seq tabs are planning questionnaires only. They cannot launch from this workbook. Other planned RNA families have no executable intake yet."
+  - "Choose external files or workbook tables. For workbook tables, fill Samples, Libraries and Reads; clear the FASTQ folder and external metadata path."
+  - "Keep identifiers as Text before entry. One library per sample is executable; multiple run/lane read pairs within that library are checked and merged."
+  - "Confirm input stage and whether the library uses UMIs. Unknown UMI status must be resolved; UMI libraries are unsupported by the current bulk route."
+  - "Copy the completed workbook, metadata and reads to the analysis host. Relative input paths resolve beside the workbook; file names must match sample IDs."
+  - "Prepare the Linux runtime as described in README.md. Setup requires Python with pandas, openpyxl and PyYAML."
+  - "Run: python3 scripts/setup.py --intake /path/completed.xlsx --project-dir /path/new_project"
+  - "Setup saves your original workbook, its checksum, the sheet/cell source map and normalized inputs under the new project. It will not overwrite an existing project configuration."
+  - "Review config/config.yaml and the selected sample sheet: config/samples.tsv for external files, metadata/samples.tsv for workbook tables. Verify the resolved reference and model."
+  - "For SLURM, configure your site's profile and run: bash submit.sh -d /path/new_project. See README.md for local Linux execution."
+  - "Storage estimates only warn. Actual input, software, scientific-design and filesystem write errors remain failures."
+  - "Contact, tissue, platform and kit answers are recorded context. They do not configure notifications, platform-specific trimming or kit-specific processing."
+  - "The current model compares all levels of the primary factor. Advanced contrasts, subject effects, reference overrides and execution settings still require configuration outside this workbook."
+  - "Blank strandedness knowledge is not a reverse-stranded assumption: choose don't know. Salmon detects library type and reports disagreement with declared expectations."
+  - "Do not change the field IDs in column E. Sorting complete rows and editing display labels do not change the field identities."
+  - "Full intake and route coverage remains incomplete. See docs/INTAKE_TEMPLATE_AUDIT.md for required fields, implementation gaps and the v2 publication gate."
+
+record_tables:
+  Samples:
+    columns: [sample_id, biological_unit_id, treatment, batch]
+    help: "One biological sample per row. Add or rename covariate columns to match your primary factor and batch answers. Keep IDs as Text. Rows start at 5; append as needed."
+  Libraries:
+    columns: [library_id, sample_id, assay_family, layout, strandedness, umi, kit, platform, prep_batch]
+    help: "One prepared library per sample in the current executable bulk route. Required: library_id, sample_id, assay_family=bulk, layout, strandedness, umi=no. Other columns record context."
+    options:
+      assay_family: [bulk]
+      layout: [single, paired]
+      strandedness: [unknown, unstranded, forward, reverse]
+      umi: ['no', 'yes', unknown]
+  Reads:
+    columns: [read_unit_id, library_id, role, uri, run, lane, bytes, checksum]
+    help: "One gzip FASTQ file per row. Paired reads need R1 and R2 for each run/lane. URI is a path or URL; relative paths resolve beside this workbook. Bytes and SHA256 checksum are optional."
+    options:
+      role: [single, R1, R2]
+
 common_questions:
+
+  - id: metadata_source
+    text: "Sample and read records"
+    help: "External files: one read pair per sample. Workbook tables: fill Samples, Libraries, Reads; supports multiple runs/lanes. Clear external paths in table mode."
+    type: dropdown
+    options: [external files, workbook tables]
+    default: external files
+    required: true
+    introduced_in: 3
 
   - id: project_name
     text: "Project name"
@@ -33,13 +81,13 @@ common_questions:
 
   - id: contact_email
     text: "Contact email"
-    help: "Where SLURM job notifications go. Example: you@example.edu"
+    help: "Recorded contact only; does not configure SLURM notifications. Example: you@example.edu"
     type: text
-    required: true
+    required: false
 
   - id: biological_question
     text: "Biological question (one sentence)"
-    help: "Used in the Methods paragraph. Example: How does drought affect root transcriptome at 0/3/6 hours?"
+    help: "Saved as the project description. State the comparison you intend to make."
     type: text
     required: true
 
@@ -51,13 +99,13 @@ common_questions:
 
   - id: tissue_type
     text: "Tissue type"
-    help: "Example: leaf, root, blood, tumor. Used in Methods paragraph + plant-vs-animal QC thresholds."
+    help: "Example: leaf, root, blood, tumor. Recorded context; does not select tissue-specific QC thresholds."
     type: text
     required: false
 
   - id: platform
     text: "Sequencing platform"
-    help: "Determines fastp poly-G trimming and read-length defaults."
+    help: "Recorded context. Platform-specific preprocessing selection is not implemented."
     type: dropdown
     options: ["NovaSeq", "NextSeq", "MiSeq", "Other Illumina", "don't know"]
     required: true
@@ -70,13 +118,13 @@ common_questions:
 
   - id: min_samples_per_group
     text: "Smallest group size (how many biological replicates in your smallest condition?)"
-    help: "Drives DE backend choice. 3 = minimum; 5+ much better; 12+ for subtle effects."
+    help: "Checked against metadata group sizes. Sample count does not switch the current backend; scientific eligibility is checked separately."
     type: number
     required: true
 
   - id: repeated_measures
     text: "Same subject measured at multiple timepoints / conditions?"
-    help: "Yes = adds random effect (DREAM). No = standard limma-voom."
+    help: "Yes blocks workbook setup: subject/model fields are not available here yet. Explicit repeated-measures models use YAML setup."
     type: dropdown
     options: ["yes", "no"]
     required: true
@@ -90,13 +138,13 @@ common_questions:
     default: "none"
 
   - id: fastq_path
-    text: "FASTQ folder path (on FARM)"
-    help: "Full path. Example: /group/kliebengrp/yourname/projects/myproject/fastq"
+    text: "FASTQ folder path (on analysis host)"
+    help: "Folder on the analysis host. Example: /shared/projects/myproject/fastq"
     type: text
     required: true
 
   - id: metadata_file
-    text: "Metadata file (CSV or Excel) — full path on FARM"
+    text: "Metadata file (CSV or Excel) — full path on analysis host"
     help: "One row per sample. Must contain a sample-ID column and your primary_factor column."
     type: text
     required: true
@@ -130,7 +178,7 @@ common_questions:
 
   - id: orgdb_strategy
     text: "How should the system get the OrgDb (for GO enrichment)?"
-    help: "auto = try Bioconductor → cache → NCBI Gene → eggNOG-mapper (in order). force_build = always rebuild from reference (slow, ~2 hr, works for any genome). use_existing = name a Bioconductor package below. skip = no enrichment."
+    help: "auto tries available annotation sources; force_build requests a build without guaranteeing coverage. use_existing requires explicit YAML configuration. skip requires enrichment=no. eggNOG is outside the qualified runtime."
     type: dropdown
     options: ["auto", "force_build", "use_existing", "skip"]
     required: true
@@ -138,7 +186,7 @@ common_questions:
 
   - id: orgdb_cache_dir
     text: "Where should built OrgDb packages be cached?"
-    help: "Full path on FARM. Default ~/orgdb_cache/ is fine and per-user. For a lab-shared cache, use /group/<lab>/orgdb_cache/. Leave blank for default."
+    help: "Full path on the analysis host. Default ~/orgdb_cache/ is fine and per-user. For a lab-shared cache, use /group/<lab>/orgdb_cache/. Leave blank for default."
     type: text
     required: false
     default: "~/orgdb_cache"
@@ -181,18 +229,40 @@ tabs:
 
       - id: strandedness
         text: "Strandedness"
-        help: "Modern kits (NEBNext Ultra II Directional, TruSeq Stranded) are reverse-stranded. Pre-2015 kits are usually unstranded."
+        help: "Use the protocol's declared orientation. If unresolved, choose don't know; do not infer orientation from kit age."
         type: dropdown
         options: ["reverse", "forward", "unstranded", "don't know"]
         required: true
-        default: "reverse"
+        default: "don't know"
+
+      - id: input_stage
+        text: "Input processing stage"
+        help: "Only raw FASTQ input is implemented. Counts/objects and instrument-level input need separate producers/import adapters."
+        type: dropdown
+        options: ["raw FASTQ", "counts or processed objects", "instrument raw data"]
+        required: true
+        introduced_in: 2
+
+      - id: umi
+        text: "Does the library contain UMIs?"
+        help: "UMI extraction and deduplication are not implemented. Select no only after checking the protocol. Unknown status must be resolved."
+        type: dropdown
+        options: ["no", "yes", "don't know"]
+        required: true
+        introduced_in: 2
+
+      - id: library_kit
+        text: "Exact library kit and version"
+        help: "Recorded context for reproducibility; it does not configure kit-specific processing in the current release."
+        type: text
+        required: false
+        introduced_in: 2
 
   # ============================ TAGseq / 3'-tag ============================
   - name: "TAGseq"
     description: |
-      3'-tag RNA-seq (QuantSeq, Lexogen). Single-end, short reads (~5-10M),
-      sequences only the 3' end of each polyadenylated transcript.
-      Good for large-cohort DE studies. NOT for splicing or isoforms.
+      PLANNING ONLY: end-tag RNA-seq requires a qualified exact-kit route.
+      This tab cannot execute through Excel intake. Do not substitute the bulk route.
     extra_questions:
 
       - id: kit
@@ -201,15 +271,15 @@ tabs:
         type: dropdown
         options: ["Lexogen QuantSeq FWD", "Lexogen QuantSeq REV", "other", "don't know"]
         required: true
-        default: "Lexogen QuantSeq FWD"
+        default: "don't know"
 
       - id: strandedness
-        text: "Strandedness (TAGseq is almost always reverse-stranded)"
-        help: "QuantSeq FWD = forward-stranded; QuantSeq REV = reverse. Leave as default if you don't know."
+        text: "Protocol-declared strandedness"
+        help: "Confirm orientation from the exact kit documentation. No direction is assumed; this tab is not executable."
         type: dropdown
         options: ["reverse", "forward", "don't know"]
         required: true
-        default: "reverse"
+        default: "don't know"
 
   # ============================ sRNA-seq ============================
   - name: "sRNA-seq"
@@ -221,7 +291,7 @@ tabs:
 
       - id: adapter_kit
         text: "Small-RNA library kit (determines adapter sequence)"
-        help: "NEXTflex v4 is the plant sRNA standard (reduces ligation bias). NEBNext is more biased but cheaper."
+        help: "Record the actual kit. Adapter, random-base and UMI handling still require a qualified small-RNA route."
         type: dropdown
         options: ["NEXTflex Small RNA v4", "NEBNext Multiplex Small RNA", "QIAseq miRNA", "don't know"]
         required: true
