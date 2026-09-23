@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/readme-banner.svg" alt="RNASeq pipeline v2 — raw reads to traceable bulk RNA-seq results" width="100%" />
+  <img src="assets/readme-banner.svg" alt="RNASeq pipeline v2: raw reads to traceable bulk RNA-seq results" width="100%" />
   <h1>RNASeq pipeline · v2</h1>
   <p><strong>Your study design. Your reads. A traceable analysis.</strong></p>
   <p>Excel-driven intake · Snakemake execution · Locked Linux runtime</p>
@@ -19,68 +19,145 @@
 
 Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and differential-expression results. Fill an Excel intake or provide explicit TSV/YAML inputs, review the study configuration, and run locally on Linux or through SLURM. Every project has its own configuration, logs and results.
 
-**V2 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. The workbook's **schema version 3** describes its file format; the software release is **v2.0.0**.
+> [!NOTE]
+> **V2 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. The workbook's **schema version 3** describes its file format; the software release is **v2.0.0**.
 
 ## What you can run
 
+<img src="assets/section-capabilities.svg" alt="What you can run" width="100%" />
+
 | Capability | V2 status | Boundary |
 |---|---|---|
-| Single-end and paired-end bulk RNA-seq | **Tested** | Annotated, non-UMI raw FASTQ input |
-| Multiple sequencing runs/lanes | **Tested** | Merge within one compatible library per sample using canonical records |
-| Independent groups and fixed-effect contrasts | **Tested** | Estimable declared model and biological replication required |
-| Excel intake | **Tested** | Independent bulk designs, optional batch; external files or inline records |
-| GO enrichment | **Fixture-tested** | Compatible OrgDb and gene-ID mapping required |
-| WGCNA | **Fixture-tested** | Eligible cohort and expression; no large-cohort sizing guarantee |
-| Random effects with `dream` | **Provisional** | YAML configuration; full mixed-model qualification remains open |
-| TAG-seq / 3′ end-tag | **Provisional** | No named kit qualified; Excel execution blocked |
-| KEGG enrichment | **Conditional** | Network and organism mapping required; live results need separate qualification |
+| Single-end and paired-end bulk RNA-seq | 🟢 **Tested** | Annotated, non-UMI raw FASTQ input |
+| Multiple sequencing runs/lanes | 🟢 **Tested** | Merge within one compatible library per sample using canonical records |
+| Independent groups and fixed-effect contrasts | 🟢 **Tested** | Estimable declared model and biological replication required |
+| Excel intake | 🟢 **Tested** | Independent bulk designs, optional batch; external files or inline records |
+| GO enrichment | 🔵 **Fixture-tested** | Compatible OrgDb and gene-ID mapping required |
+| WGCNA | 🔵 **Fixture-tested** | Eligible cohort and expression; no large-cohort sizing guarantee |
+| Random effects with `dream` | 🟡 **Provisional** | YAML configuration; full mixed-model qualification remains open |
+| TAG-seq / 3′ end-tag | 🟡 **Provisional** | No named kit qualified; Excel execution blocked |
+| KEGG enrichment | 🟠 **Conditional** | Network and organism mapping required; live results need separate qualification |
 
-**Not implemented:** UMI processing; multiple prepared libraries per sample; small/viral RNA; single-cell/nucleus; spatial; long-read; dual-organism and specialized RNA assays; STAR counting, DESeq2/edgeR inference adapters; splicing/fusions/variants; generic count-matrix, processed-object or instrument-data imports.
+> [!WARNING]
+> **Not implemented:** UMI processing; multiple prepared libraries per sample; small/viral RNA; single-cell/nucleus; spatial; long-read; dual-organism and specialized RNA assays; STAR counting, DESeq2/edgeR inference adapters; splicing/fusions/variants; generic count-matrix, processed-object or instrument-data imports.
 
 Salmon is the implemented quantifier. The [recommendation rules](config/recommendation_rules.yaml) record this selection and reject unsupported choices. Dependence structure selects limma-voom or provisional dream. Sample count does not silently change the model. PCA may flag a batch association, but it does **not** add model terms automatically.
 
 ## How the workflow runs
 
+<img src="assets/section-workflow.svg" alt="How the workflow runs" width="100%" />
+
+<p align="center"><img src="assets/workflow-map.svg" alt="Workflow map: six stages from study description to reviewed results; dashed boxes are optional analyses" width="100%" /></p>
+
+<details>
+<summary><strong>Exact DAG as a Mermaid diagram</strong></summary>
+
 ```mermaid
 flowchart TD
-    A["Study details + raw gzip FASTQs"] --> B{"Choose intake"}
-    B --> C["Excel questionnaire + Samples / Libraries / Reads"]
-    B --> D["Explicit YAML + TSV records"]
-    C --> E["Setup: save workbook, source map and configuration"]
-    E --> F["Review references, model, contrasts and QC policy"]
+    A(["Study details + raw gzip FASTQs"])
+
+    subgraph S1["① Describe the study"]
+        B{"Choose intake"}
+        C["Excel questionnaire + Samples / Libraries / Reads"]
+        D["Explicit YAML + TSV records"]
+    end
+
+    subgraph S2["② Prepare and review"]
+        E["Setup: save workbook, source map and configuration"]
+        F["Review references, model, contrasts and QC policy"]
+    end
+
+    subgraph S3["③ Check before analysis"]
+        G["Verify runtime and preflight scientific inputs"]
+        H["Estimate storage: cautions only"]
+    end
+
+    subgraph S4["④ Process and quantify"]
+        I["Validate reference; build Salmon index"]
+        J{"Prepare reads per sample"}
+        K["Canonical: verify mates and hashes; merge library lanes"]
+        L["Legacy: one FASTQ or mate pair"]
+        M["fastp: trimming + before/after QC"]
+        N["Salmon: transcript quantification + metrics"]
+        O["MultiQC + comparative QC report"]
+    end
+
+    subgraph S5["⑤ Build the cohort"]
+        P["tximport: gene counts + provenance"]
+        Q["Apply sample policy; record inclusion/exclusion"]
+    end
+
+    subgraph S6["⑥ Analyze and report"]
+        R["Fit declared model and contrasts"]
+        S["DE tables + direction/output manifests"]
+        T["Optional GO / KEGG enrichment"]
+        U["Optional WGCNA on eligible gene counts"]
+    end
+
+    V(["Review reports, diagnostics and provenance"])
+
+    A --> B
+    B --> C
+    B --> D
+    C --> E
+    E --> F
     D --> F
-    F --> G["Verify runtime and preflight scientific inputs"]
-    G --> H["Estimate storage: cautions only"]
-    H --> I["Validate reference; build Salmon index"]
-    I --> J{"Prepare reads per sample"}
-    J --> K["Canonical: verify mates and hashes; merge library lanes"]
-    J --> L["Legacy: one FASTQ or mate pair"]
-    K --> M["fastp: trimming + before/after QC"]
+    F --> G
+    G --> H
+    H --> I
+    I --> J
+    J --> K
+    J --> L
+    K --> M
     L --> M
-    M --> N["Salmon: transcript quantification + metrics"]
-    N --> O["MultiQC + comparative QC report"]
-    N --> P["tximport: gene counts + provenance"]
-    P --> Q["Apply sample policy; record inclusion/exclusion"]
-    Q --> R["Fit declared model and contrasts"]
-    R --> S["DE tables + direction/output manifests"]
-    S --> T["Optional GO / KEGG enrichment"]
-    R --> U["Optional WGCNA on eligible gene counts"]
-    O --> V["Review reports, diagnostics and provenance"]
+    M --> N
+    N --> O
+    N --> P
+    P --> Q
+    Q --> R
+    R --> S
+    S --> T
+    R --> U
+    O --> V
     S --> V
     T --> V
     U --> V
+
+    classDef default fill:#FFFFFF,stroke:#8A94A6,color:#1F2937
+    classDef io fill:#285F47,stroke:#1B4332,color:#FFFFFF,font-weight:bold
+    classDef choice fill:#FFF4D6,stroke:#B7791F,color:#5C3D00
+    classDef optional fill:#F4F6FB,stroke:#46567D,color:#46567D,stroke-dasharray:5 4
+    class A,V io
+    class B,J choice
+    class T,U optional
+
+    style S1 fill:#EAF4EE,stroke:#285F47,color:#1B4332
+    style S2 fill:#EEF1F8,stroke:#46567D,color:#2E3A57
+    style S3 fill:#FDF3E7,stroke:#B7791F,color:#5C3D00
+    style S4 fill:#E8F3F6,stroke:#2B6C80,color:#1D4A58
+    style S5 fill:#F3EEF8,stroke:#6B4E8C,color:#45325C
+    style S6 fill:#FBEDEE,stroke:#9B3D48,color:#5E232A
 ```
 
-1. **Describe the study.** Samples identify biological observations; libraries describe preparation; reads identify each file, mate, run and lane. Lanes do not become biological replicates.
-2. **Prepare and review.** Excel setup saves the original workbook and cell-level source map. Automatic reference lookup needs network access; review the exact reference before launching.
-3. **Check before analysis.** The launcher verifies software, validates metadata/design and records recommendations. Unsupported scientific inputs stop here. Low/unknown storage generates a caution and execution continues.
-4. **Process and quantify.** Canonical inputs undergo FASTQ/mate/checksum checks and within-library merging. fastp cleans reads, then Salmon quantifies transcripts. Local source FASTQs are preserved.
-5. **Build the cohort.** tximport produces bulk gene counts using `lengthScaledTPM`. Effective lengths and count provenance are saved. The configured QC exclusion policy determines retained samples.
-6. **Analyze and report.** Fit the declared model, record contrast directions and produce requested optional results. Empty, skipped, unavailable and failed are distinct outcomes.
+</details>
 
-The diagram reflects the current DAG: QC reporting follows quantification; WGCNA currently waits for DE completion although it uses gene counts. Independent raw-QC execution and broader assay-specific processing remain future work.
+| | Stage | What happens |
+|:-:|---|---|
+| **①** | **Describe the study** | Samples identify biological observations; libraries describe preparation; reads identify each file, mate, run and lane. Lanes do not become biological replicates. |
+| **②** | **Prepare and review** | Excel setup saves the original workbook and cell-level source map. Automatic reference lookup needs network access; review the exact reference before launching. |
+| **③** | **Check before analysis** | The launcher verifies software, validates metadata/design and records recommendations. Unsupported scientific inputs stop here. Low/unknown storage generates a caution and execution continues. |
+| **④** | **Process and quantify** | Canonical inputs undergo FASTQ/mate/checksum checks and within-library merging. fastp cleans reads, then Salmon quantifies transcripts. Local source FASTQs are preserved. |
+| **⑤** | **Build the cohort** | tximport produces bulk gene counts using `lengthScaledTPM`. Effective lengths and count provenance are saved. The configured QC exclusion policy determines retained samples. |
+| **⑥** | **Analyze and report** | Fit the declared model, record contrast directions and produce requested optional results. Empty, skipped, unavailable and failed are distinct outcomes. |
+
+> [!NOTE]
+> The diagram reflects the current DAG: QC reporting follows quantification; WGCNA currently waits for DE completion although it uses gene counts. Independent raw-QC execution and broader assay-specific processing remain future work.
 
 ## Quick start
+
+<img src="assets/section-quickstart.svg" alt="Quick start" width="100%" />
+
+**[Get v2](#1-get-v2-and-choose-paths) → [Install](#2-install-and-verify-the-environment) → [Fill the intake](#3-fill-the-excel-intake) → [Review](#4-review-the-study-configuration) → [Run](#5-plan-run-and-resume)**
 
 ### 1. Get v2 and choose paths
 
@@ -210,11 +287,14 @@ Repeat the Snakemake command to resume. Dry-run DAG construction can update reso
 
 ### Storage and cleanup
 
-There is **no 20 GB limit**. Estimates use measurable input sizes, all library lanes, retained outputs/intermediates, reference/runtime costs and concurrent working space. More libraries increase retained storage; fixed concurrency can keep peak temporary storage similar. Unknown remote sizes and expansion coefficients remain labelled estimates.
+> [!IMPORTANT]
+> There is **no 20 GB limit**. Estimates use measurable input sizes, all library lanes, retained outputs/intermediates, reference/runtime costs and concurrent working space. More libraries increase retained storage; fixed concurrency can keep peak temporary storage similar. Unknown remote sizes and expansion coefficients remain labelled estimates.
 
 Low/unknown capacity is a **caution only**; it does not block launch or change the route. Actual failed writes still fail the affected task: restore capacity and resume. Legacy `hpc.storage_budget_gb` supplies advisory quota information. Local source FASTQs are preserved. When `hpc.delete_fastq_after_quant` is enabled, successful cleanup removes workflow-owned downloads, merged reads and trims; failed work keeps intermediates for diagnosis.
 
 ## Find and interpret results
+
+<img src="assets/section-results.svg" alt="Find and interpret results" width="100%" />
 
 `project.output_dir` controls the result root. Manual templates default to `results/`; Excel setup normally uses `results/<project_name>/`.
 
@@ -233,11 +313,14 @@ Low/unknown capacity is a **caution only**; it does not block launch or change t
 | `metrics/`, `logs/` | Stage summaries and diagnostic logs |
 | Reference directory/cache | Index and `reference.lock.json` with source checksums |
 
-Start with QC, sample disposition and `DE_Results/contrast_directions.tsv`. Interpret positive logFC using its recorded numerator/denominator. Review library-type disagreements. Workflow completion may include optional analyses marked skipped or unavailable; inspect their manifests.
+> [!TIP]
+> Start with QC, sample disposition and `DE_Results/contrast_directions.tsv`. Interpret positive logFC using its recorded numerator/denominator. Review library-type disagreements. Workflow completion may include optional analyses marked skipped or unavailable; inspect their manifests.
 
 Preserve the project, original inputs, reference identity, runtime lock and exact source version. Local input, configuration and runtime-lock changes participate in rerun decisions. Missing tracked report/provenance outputs are regenerated. Remote content changes require explicit refresh.
 
 ## Troubleshooting
+
+<img src="assets/section-troubleshooting.svg" alt="Troubleshooting" width="100%" />
 
 | Symptom | Action |
 |---|---|
@@ -252,9 +335,12 @@ Preserve the project, original inputs, reference identity, runtime lock and exac
 | Space caution/disk-full | Review the estimate, restore capacity or choose another filesystem; resume |
 | Optional output absent | Inspect enrichment/WGCNA statuses and annotation prerequisites |
 
-For an issue, include the commit/tag, command, relevant configuration, preflight findings and failing rule log. Remove credentials and private participant metadata before sharing.
+> [!CAUTION]
+> For an issue, include the commit/tag, command, relevant configuration, preflight findings and failing rule log. Remove credentials and private participant metadata before sharing.
 
 ## Validation and development
+
+<img src="assets/section-validation.svg" alt="Validation and development" width="100%" />
 
 ```bash
 python3 scripts/environment_check.py --out environment_report.json
@@ -280,6 +366,8 @@ The remote checkout defaults to `RNASeq_pipeline` under the remote home director
 </details>
 
 ## License and citation
+
+<img src="assets/section-license.svg" alt="License and citation" width="100%" />
 
 Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.0.0**, references and tool versions in your methods.
 
