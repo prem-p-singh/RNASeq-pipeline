@@ -1,0 +1,100 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1135" width="1200" height="1135" role="img" aria-label="Workflow map: six stages from study description to reviewed results">
+<defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+<stop offset="0%" stop-color="#1D2621"/><stop offset="55%" stop-color="#22302A"/><stop offset="100%" stop-color="#285F47"/></linearGradient><linearGradient id="pipe" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#397C68"/><stop offset="100%" stop-color="#9C482D"/></linearGradient></defs>
+<style>
+.flow{stroke-dasharray:4 14;animation:flow 1.6s linear infinite}
+@keyframes flow{to{stroke-dashoffset:-36}}
+@media (prefers-reduced-motion:reduce){.flow{animation:none}}
+</style>
+<rect width="1200" height="1135" rx="14" fill="url(#bg)"/>
+<path d="M20 96 H1172 C1192 96 1192 326.0 1166 326.0 H44 C18 326.0 18 420 36 420 H1172 C1192 420 1192 721.0 1166 721.0 H44 C18 721.0 18 815 36 815 H1172 C1192 815 1192 1076 1166 1076 H770" fill="none" stroke="#10181A" stroke-width="16" stroke-linecap="round" opacity=".55"/>
+<path d="M20 96 H1172 C1192 96 1192 326.0 1166 326.0 H44 C18 326.0 18 420 36 420 H1172 C1192 420 1192 721.0 1166 721.0 H44 C18 721.0 18 815 36 815 H1172 C1192 815 1192 1076 1166 1076 H770" fill="none" stroke="url(#pipe)" stroke-width="6" stroke-linecap="round" opacity=".6"/>
+<path class="flow" d="M20 96 H1172 C1192 96 1192 326.0 1166 326.0 H44 C18 326.0 18 420 36 420 H1172 C1192 420 1192 721.0 1166 721.0 H44 C18 721.0 18 815 36 815 H1172 C1192 815 1192 1076 1166 1076 H770" fill="none" stroke="#F2F5F3" stroke-width="3" stroke-linecap="round" opacity=".85"/>
+<rect x="45" y="34" width="540" height="260" rx="12" fill="#1A2420" stroke="#4E8F78" stroke-width="1.8"/>
+<rect x="45" y="34" width="540" height="7" rx="3" fill="#4E8F78"/>
+<circle cx="81" cy="86" r="21" fill="#4E8F78"/>
+<text x="81" y="94" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#10181A" text-anchor="middle">1</text>
+<text x="115" y="94" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#F2F5F3">Describe the study</text>
+<g transform="translate(513,62)" fill="none" stroke="#4E8F78" stroke-width="2.2" stroke-linejoin="round"><rect x="4" y="6" width="40" height="36" rx="4"/><line x1="4" y1="16" x2="44" y2="16"/><line x1="4" y1="25" x2="44" y2="25"/><line x1="4" y1="34" x2="44" y2="34"/><line x1="17" y1="6" x2="17" y2="42"/></g><rect x="517" y="68" width="40" height="10" rx="3" fill="#4E8F78" opacity=".35"/>
+<line x1="65" y1="130" x2="565" y2="130" stroke="#4E8F78" stroke-opacity=".35"/>
+<circle cx="73" cy="163" r="4" fill="#4E8F78"/>
+<text x="89" y="169" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Study details + raw gzip FASTQs</text>
+<circle cx="73" cy="194" r="4" fill="#4E8F78"/>
+<text x="89" y="200" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Choose intake:</text>
+<rect x="89" y="214" width="4" height="18" rx="2" fill="#4E8F78" opacity=".7"/>
+<text x="103" y="229" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" fill="#B9CCC2">Excel questionnaire + Samples / Libraries / Reads</text>
+<text x="103" y="249" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="15" font-style="italic" fill="#93AFA1">or</text>
+<rect x="89" y="265" width="4" height="18" rx="2" fill="#4E8F78" opacity=".7"/>
+<text x="103" y="280" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" fill="#B9CCC2">Explicit YAML + TSV records</text>
+<rect x="615" y="34" width="540" height="260" rx="12" fill="#1A2420" stroke="#6C7DA6" stroke-width="1.8"/>
+<rect x="615" y="34" width="540" height="7" rx="3" fill="#6C7DA6"/>
+<circle cx="651" cy="86" r="21" fill="#6C7DA6"/>
+<text x="651" y="94" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#10181A" text-anchor="middle">2</text>
+<text x="685" y="94" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#F2F5F3">Prepare and review</text>
+<g transform="translate(1083,62)" fill="none" stroke="#6C7DA6" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="7" width="32" height="38" rx="4"/><rect x="17" y="3" width="14" height="8" rx="2" fill="#22302A"/><polyline points="15,26 21,32 33,19"/><line x1="15" y1="39" x2="33" y2="39" opacity=".6"/></g>
+<line x1="635" y1="130" x2="1135" y2="130" stroke="#6C7DA6" stroke-opacity=".35"/>
+<circle cx="643" cy="163" r="4" fill="#6C7DA6"/>
+<text x="659" y="169" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Setup: save workbook, source map and configuration</text>
+<circle cx="643" cy="194" r="4" fill="#6C7DA6"/>
+<text x="659" y="200" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Review references, model, contrasts and QC policy</text>
+<rect x="45" y="358" width="540" height="331" rx="12" fill="#1A2420" stroke="#C0613F" stroke-width="1.8"/>
+<rect x="45" y="358" width="540" height="7" rx="3" fill="#C0613F"/>
+<circle cx="81" cy="410" r="21" fill="#C0613F"/>
+<text x="81" y="418" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#10181A" text-anchor="middle">3</text>
+<text x="115" y="418" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#F2F5F3">Check before analysis</text>
+<g transform="translate(513,386)" fill="none" stroke="#C0613F" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M24 3 L42 10 V24 C42 35 34 42 24 46 C14 42 6 35 6 24 V10 Z"/><polyline points="15,24 22,31 34,18"/></g>
+<line x1="65" y1="454" x2="565" y2="454" stroke="#C0613F" stroke-opacity=".35"/>
+<circle cx="73" cy="487" r="4" fill="#C0613F"/>
+<text x="89" y="493" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Verify runtime and preflight scientific inputs</text>
+<circle cx="73" cy="518" r="4" fill="#C0613F"/>
+<text x="89" y="524" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Estimate storage: cautions only</text>
+<rect x="615" y="358" width="540" height="331" rx="12" fill="#1A2420" stroke="#3F9AB2" stroke-width="1.8"/>
+<rect x="615" y="358" width="540" height="7" rx="3" fill="#3F9AB2"/>
+<circle cx="651" cy="410" r="21" fill="#3F9AB2"/>
+<text x="651" y="418" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#10181A" text-anchor="middle">4</text>
+<text x="685" y="418" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#F2F5F3">Process and quantify</text>
+<g transform="translate(1083,386)" fill="none" stroke="#3F9AB2" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M4 24 C12 12 28 10 36 24 C28 38 12 36 4 24 Z"/><path d="M36 24 L46 15 L44 24 L46 33 Z"/><circle cx="12" cy="22" r="1.8" fill="#3F9AB2"/><path d="M20 17 C23 21 23 27 20 31" opacity=".6"/></g>
+<line x1="635" y1="454" x2="1135" y2="454" stroke="#3F9AB2" stroke-opacity=".35"/>
+<circle cx="643" cy="487" r="4" fill="#3F9AB2"/>
+<text x="659" y="493" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Validate reference; build Salmon index</text>
+<circle cx="643" cy="518" r="4" fill="#3F9AB2"/>
+<text x="659" y="524" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Prepare reads per sample:</text>
+<rect x="659" y="538" width="4" height="18" rx="2" fill="#3F9AB2" opacity=".7"/>
+<text x="673" y="553" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" fill="#B9CCC2">Canonical: verify mates and hashes; merge library lanes</text>
+<rect x="659" y="567" width="4" height="18" rx="2" fill="#3F9AB2" opacity=".7"/>
+<text x="673" y="582" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" fill="#B9CCC2">Legacy: one FASTQ or mate pair</text>
+<circle cx="643" cy="607" r="4" fill="#3F9AB2"/>
+<text x="659" y="613" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">fastp: trimming + before/after QC</text>
+<circle cx="643" cy="638" r="4" fill="#3F9AB2"/>
+<text x="659" y="644" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Salmon: transcript quantification + metrics</text>
+<circle cx="643" cy="669" r="4" fill="#3F9AB2"/>
+<text x="659" y="675" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">MultiQC + comparative QC report</text>
+<rect x="45" y="753" width="540" height="260" rx="12" fill="#1A2420" stroke="#9A7CC2" stroke-width="1.8"/>
+<rect x="45" y="753" width="540" height="7" rx="3" fill="#9A7CC2"/>
+<circle cx="81" cy="805" r="21" fill="#9A7CC2"/>
+<text x="81" y="813" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#10181A" text-anchor="middle">5</text>
+<text x="115" y="813" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#F2F5F3">Build the cohort</text>
+<g transform="translate(513,781)"><rect x="4" y="4" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.9"/><rect x="15" y="4" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.35"/><rect x="26" y="4" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.6"/><rect x="37" y="4" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.2"/><rect x="4" y="15" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.5"/><rect x="15" y="15" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.8"/><rect x="26" y="15" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.25"/><rect x="37" y="15" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.7"/><rect x="4" y="26" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.4"/><rect x="15" y="26" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.15"/><rect x="26" y="26" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.95"/><rect x="37" y="26" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.55"/><rect x="4" y="37" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.3"/><rect x="15" y="37" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.65"/><rect x="26" y="37" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.2"/><rect x="37" y="37" width="9" height="9" rx="2" fill="#9A7CC2" opacity="0.85"/></g>
+<line x1="65" y1="849" x2="565" y2="849" stroke="#9A7CC2" stroke-opacity=".35"/>
+<circle cx="73" cy="882" r="4" fill="#9A7CC2"/>
+<text x="89" y="888" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">tximport: gene counts + provenance</text>
+<circle cx="73" cy="913" r="4" fill="#9A7CC2"/>
+<text x="89" y="919" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Apply sample policy; record inclusion/exclusion</text>
+<rect x="615" y="753" width="540" height="260" rx="12" fill="#1A2420" stroke="#C9A14A" stroke-width="1.8"/>
+<rect x="615" y="753" width="540" height="7" rx="3" fill="#C9A14A"/>
+<circle cx="651" cy="805" r="21" fill="#C9A14A"/>
+<text x="651" y="813" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#10181A" text-anchor="middle">6</text>
+<text x="685" y="813" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="25" font-weight="700" fill="#F2F5F3">Analyze and report</text>
+<g transform="translate(1083,781)"><polyline points="4,4 4,44 46,44" fill="none" stroke="#C9A14A" stroke-width="2" opacity=".7"/><circle cx="25" cy="40" r="2.4" fill="#C9A14A" opacity="0.5"/><circle cx="22" cy="38" r="2.4" fill="#C9A14A" opacity="0.5"/><circle cx="28" cy="38" r="2.4" fill="#C9A14A" opacity="0.5"/><circle cx="19" cy="34" r="2.4" fill="#C9A14A" opacity="0.5"/><circle cx="31" cy="35" r="2.4" fill="#C9A14A" opacity="0.5"/><circle cx="16" cy="28" r="2.4" fill="#C9A14A" opacity="0.9"/><circle cx="34" cy="29" r="2.4" fill="#C9A14A" opacity="0.9"/><circle cx="13" cy="20" r="2.4" fill="#C9A14A" opacity="1"/><circle cx="37" cy="21" r="2.4" fill="#C9A14A" opacity="1"/><circle cx="10" cy="12" r="2.4" fill="#C9A14A" opacity="1"/><circle cx="40" cy="10" r="2.4" fill="#C9A14A" opacity="1"/><circle cx="24" cy="36" r="2.4" fill="#C9A14A" opacity="0.5"/><circle cx="27" cy="33" r="2.4" fill="#C9A14A" opacity="0.5"/></g>
+<line x1="635" y1="849" x2="1135" y2="849" stroke="#C9A14A" stroke-opacity=".35"/>
+<circle cx="643" cy="882" r="4" fill="#C9A14A"/>
+<text x="659" y="888" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">Fit declared model and contrasts</text>
+<circle cx="643" cy="913" r="4" fill="#C9A14A"/>
+<text x="659" y="919" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" fill="#DDE6E1">DE tables + direction/output manifests</text>
+<rect x="639" y="935" width="492" height="34" rx="17" fill="none" stroke="#C9A14A" stroke-width="1.6" stroke-dasharray="6 5"/>
+<text x="885.0" y="958" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" fill="#E8DDBE" text-anchor="middle">Optional GO / KEGG enrichment</text>
+<rect x="639" y="975" width="492" height="34" rx="17" fill="none" stroke="#C9A14A" stroke-width="1.6" stroke-dasharray="6 5"/>
+<text x="885.0" y="998" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="17" fill="#E8DDBE" text-anchor="middle">Optional WGCNA on eligible gene counts</text>
+<rect x="410" y="1053" width="380" height="46" rx="23" fill="#285F47" stroke="#4E8F78" stroke-width="1.8"/>
+<text x="600" y="1083" font-family="Helvetica Neue, Helvetica, Arial, sans-serif" font-size="18" font-weight="700" fill="#F2F5F3" text-anchor="middle">Review reports, diagnostics and provenance</text>
+</svg>
