@@ -24,6 +24,8 @@ Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and 
 
 ## What you can run
 
+<img src="assets/section-capabilities.svg" alt="What you can run" width="100%" />
+
 | Capability | V2 status | Boundary |
 |---|---|---|
 | Single-end and paired-end bulk RNA-seq | 🟢 **Tested** | Annotated, non-UMI raw FASTQ input |
@@ -43,7 +45,12 @@ Salmon is the implemented quantifier. The [recommendation rules](config/recommen
 
 ## How the workflow runs
 
-Each coloured band is one of the six stages described below the map; dashed boxes are optional analyses.
+<img src="assets/section-workflow.svg" alt="How the workflow runs" width="100%" />
+
+<p align="center"><img src="assets/workflow-map.svg" alt="Workflow map: six stages from study description to reviewed results; dashed boxes are optional analyses" width="100%" /></p>
+
+<details>
+<summary><strong>Exact DAG as a Mermaid diagram</strong></summary>
 
 ```mermaid
 flowchart TD
@@ -132,6 +139,8 @@ flowchart TD
     style S6 fill:#FBEDEE,stroke:#9B3D48,color:#5E232A
 ```
 
+</details>
+
 | | Stage | What happens |
 |:-:|---|---|
 | **①** | **Describe the study** | Samples identify biological observations; libraries describe preparation; reads identify each file, mate, run and lane. Lanes do not become biological replicates. |
@@ -145,6 +154,8 @@ flowchart TD
 > The diagram reflects the current DAG: QC reporting follows quantification; WGCNA currently waits for DE completion although it uses gene counts. Independent raw-QC execution and broader assay-specific processing remain future work.
 
 ## Quick start
+
+<img src="assets/section-quickstart.svg" alt="Quick start" width="100%" />
 
 **[Get v2](#1-get-v2-and-choose-paths) → [Install](#2-install-and-verify-the-environment) → [Fill the intake](#3-fill-the-excel-intake) → [Review](#4-review-the-study-configuration) → [Run](#5-plan-run-and-resume)**
 
@@ -283,6 +294,8 @@ Low/unknown capacity is a **caution only**; it does not block launch or change t
 
 ## Find and interpret results
 
+<img src="assets/section-results.svg" alt="Find and interpret results" width="100%" />
+
 `project.output_dir` controls the result root. Manual templates default to `results/`; Excel setup normally uses `results/<project_name>/`.
 
 | Location | Contents |
@@ -307,6 +320,8 @@ Preserve the project, original inputs, reference identity, runtime lock and exac
 
 ## Troubleshooting
 
+<img src="assets/section-troubleshooting.svg" alt="Troubleshooting" width="100%" />
+
 | Symptom | Action |
 |---|---|
 | Workbook import error | Check the reported cell; use literal answers, unique text IDs and one selected assay tab |
@@ -324,6 +339,8 @@ Preserve the project, original inputs, reference identity, runtime lock and exac
 > For an issue, include the commit/tag, command, relevant configuration, preflight findings and failing rule log. Remove credentials and private participant metadata before sharing.
 
 ## Validation and development
+
+<img src="assets/section-validation.svg" alt="Validation and development" width="100%" />
 
 ```bash
 python3 scripts/environment_check.py --out environment_report.json
@@ -349,6 +366,8 @@ The remote checkout defaults to `RNASeq_pipeline` under the remote home director
 </details>
 
 ## License and citation
+
+<img src="assets/section-license.svg" alt="License and citation" width="100%" />
 
 Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.0.0**, references and tool versions in your methods.
 
