@@ -114,8 +114,8 @@ The scientific GitHub Actions workflow repeats these checks. The lightweight wor
 
 | Area | Boundary |
 |---|---|
-| RNA-seq coverage | STAR alignment and DESeq2/edgeR inference adapters are implemented and released. Small-RNA (animal Bowtie 1, plant ShortStack) is implemented as an `experimental`, unqualified development route (3.0.0). UMI handling, single-cell, spatial, long-read, dual-organism and specialized assays remain unimplemented. Installed libraries do not imply an enabled route. |
-| TAG-seq | A provisional route exists, but no named kit is qualified. |
+| RNA-seq coverage | STAR alignment and DESeq2/edgeR inference adapters are implemented and released. Small-RNA (animal Bowtie 1, plant ShortStack) is implemented as an `experimental`, unqualified development route (3.0.0). UMI handling is limited to experimental molecule counting for QuantSeq FWD-UMI (3.0.0); single-cell, spatial, long-read, dual-organism and specialized assays remain unimplemented. Installed libraries do not imply an enabled route. |
+| TAG-seq | A provisional kit-less route and experimental QuantSeq FWD, REV and FWD-UMI routes exist; no named kit is qualified. |
 | Statistical generalization | Synthetic fixtures and a small public smoke dataset do not validate every organism, design or contrast. The suite checks repeated-measures design/replication logic but does not qualify an end-to-end dream fit; mixed-model inference remains provisional. |
 | Annotation | GO has a local fixture. Live NCBI annotation construction, live KEGG results, annotation snapshot reproducibility and the eggNOG fallback are not certified by that fixture. Missing prerequisites and failures must remain visible in status files. |
 | Sample policy | QC inclusion/exclusion is implemented; a complete review/override ledger and mandatory action on library-type mismatch remain planned. Review recorded mismatches before biological interpretation. |
