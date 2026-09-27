@@ -23,11 +23,11 @@
 # -----------------------------------------------------------------------------
 # Questions that appear on EVERY assay tab (project basics, paths, design)
 # -----------------------------------------------------------------------------
-schema_version: 6
+schema_version: 7
 readme:
   - "Fill the Bulk RNA-seq tab for the currently implemented Excel intake. Yellow cells are required; gray cells are optional. Enter literal values, not formulas."
   - "Current execution: annotated, non-UMI bulk QC, gene expression and differential expression; Salmon or STAR; independent groups, batch, subject-blocked or repeated-measures (dream) designs, interactions and continuous covariates."
-  - "sRNA-seq launches animal (Bowtie to species mature miRNAs) or plant (ShortStack loci on the genome) small-RNA routes with a named non-UMI kit. TAGseq remains a planning questionnaire only and cannot launch from this workbook. Other planned RNA families have no executable intake yet."
+  - "sRNA-seq launches animal (Bowtie to species mature miRNAs) or plant (ShortStack loci on the genome) small-RNA routes with a named non-UMI kit. TAGseq launches the three named QuantSeq kits (FWD, REV, FWD-UMI) through STAR (experimental). Other planned RNA families have no executable intake yet."
   - "Choose external files or workbook tables. For workbook tables, fill Samples, Libraries and Reads; clear the FASTQ folder and external metadata path."
   - "Keep identifiers as Text before entry. One library per sample is executable; multiple run/lane read pairs within that library are checked and merged."
   - "Confirm input stage and whether the library uses UMIs. Unknown UMI status must be resolved; UMI libraries are unsupported by the current bulk route."
@@ -407,23 +407,25 @@ tabs:
 
   - name: "TAGseq"
     description: |
-      PLANNING ONLY: end-tag RNA-seq requires a qualified exact-kit route.
-      This tab cannot execute through Excel intake. Do not substitute the bulk route.
+      Lexogen QuantSeq 3'-tag RNA-seq. Launches through STAR for one of the
+      three named, cited kit profiles (config/tagseq_kits.yaml). Strand,
+      trimming and UMI handling come from the kit; do not set them separately.
     extra_questions:
+
+      - id: read_config
+        text: "Read configuration"
+        help: "Named QuantSeq kits are single-end only."
+        type: dropdown
+        options: ["single-end", "paired-end", "don't know"]
+        required: true
+        default: "single-end"
+        introduced_in: 7
 
       - id: kit
         text: "Library prep kit"
-        help: "Most common is QuantSeq FWD from Lexogen."
+        help: "Exact QuantSeq profile (config/tagseq_kits.yaml). Strand and UMI handling come from the kit; don't know cannot launch this route."
         type: dropdown
-        options: ["Lexogen QuantSeq FWD", "Lexogen QuantSeq REV", "other", "don't know"]
-        required: true
-        default: "don't know"
-
-      - id: strandedness
-        text: "Protocol-declared strandedness"
-        help: "Confirm orientation from the exact kit documentation. No direction is assumed; this tab is not executable."
-        type: dropdown
-        options: ["reverse", "forward", "don't know"]
+        options: ["QuantSeq FWD", "QuantSeq REV", "QuantSeq FWD-UMI", "don't know"]
         required: true
         default: "don't know"
 

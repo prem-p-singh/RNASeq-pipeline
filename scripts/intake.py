@@ -10,6 +10,7 @@ import re
 
 import yaml
 import metadata
+import tagseq
 from small_rna import load_kit, kit_policy
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -27,8 +28,8 @@ def read_intake(path, sheet_name=None):
     try:
         version = workbook["README"]["B2"].value if "README" in workbook.sheetnames else None
         version = 1 if version in (None, "") else version
-        if type(version) is not int or version not in (1, 2, 3, 4, 5, 6):
-            raise ValueError("README!B2: unsupported intake schema version; expected 1 to 6")
+        if type(version) is not int or version not in (1, 2, 3, 4, 5, 6, 7):
+            raise ValueError("README!B2: unsupported intake schema version; expected 1 to 7")
         candidates = []
         for name in tabs:
             if name in workbook.sheetnames:
@@ -150,10 +151,11 @@ def setup_inputs(record):
     def fail(key, detail):
         raise ValueError(f"{sources.get(key, record['sheet'])}: {detail}")
 
-    if record["sheet"] not in ("Bulk RNA-seq", "sRNA-seq"):
-        fail("project_name", "Direct intake execution currently supports Bulk RNA-seq and sRNA-seq only. "
-             "TAG-seq needs kit qualification. No bulk fallback was selected.")
+    if record["sheet"] not in ("Bulk RNA-seq", "sRNA-seq", "TAGseq"):
+        fail("project_name", "Direct intake execution currently supports Bulk RNA-seq, sRNA-seq and TAGseq only. "
+             "No bulk fallback was selected.")
     is_srna = record["sheet"] == "sRNA-seq"
+    is_tagseq = record["sheet"] == "TAGseq"
     if a.get("input_stage", "raw FASTQ") != "raw FASTQ":
         fail("input_stage", "Only raw FASTQ input is implemented; no counts/object or instrument-data import is available.")
     if a.get("umi", "no") != "no":
@@ -164,6 +166,10 @@ def setup_inputs(record):
         if a["read_config"] != "single-end":
             fail("read_config", "small-RNA routes are single-end only; set read configuration to single-end")
         layout = "srnaseq"
+    elif is_tagseq:
+        if a["read_config"] != "single-end":
+            fail("read_config", "Named QuantSeq kits are single-end only; set read configuration to single-end")
+        layout = "tagseq"
     else:
         layout = {"paired-end": "rnaseq_paired", "single-end": "rnaseq_single"}.get(a["read_config"])
         if layout is None:
@@ -258,6 +264,29 @@ def setup_inputs(record):
                 custom_ref[key] = value if "://" in str(value) else Path(absolute(str(value))).as_uri()
         custom_ref = custom_ref or None
         analysis_out = dict(small_rna_profile=profile, small_rna_kit=kit_name)
+    elif is_tagseq:
+        supplied = None
+        decoys = None
+        backend = a.get("analysis_backend") or "auto"
+        kit_name = a.get("kit")
+        try:
+            kit = tagseq.load_kit(kit_name)
+        except ValueError:
+            fail("kit", "choose a listed QuantSeq kit")
+        expected = {"forward": "SF", "reverse": "SR"}[kit["strandedness"]]
+        genome_url, gtf_url = a.get("reference_genome"), a.get("reference_gtf")
+        if not (genome_url and gtf_url):
+            fail("reference_gtf", "TAG-seq kit route requires reference_genome and reference_gtf")
+        custom_ref = {"genome_fasta_url": genome_url, "gtf_url": gtf_url}
+        custom_ref = {key: (value if "://" in str(value) else Path(absolute(str(value))).as_uri())
+                      for key, value in custom_ref.items()}
+        custom_ref.update(transcriptome_fasta_url=None, accession="custom", assembly_name=None, gene_info_url=None)
+        from preprocessing import policy_args
+        try:
+            policy, _ = policy_args(tagseq.kit_policy(kit), False)
+        except ValueError as exc:
+            fail("kit", str(exc))
+        analysis_out = dict(quantifier="star", backend=backend, kit=kit_name)
     else:
         kits = yaml.safe_load((ROOT / "config/kit_profiles.yaml").read_text())
         protocol = a.get("library_protocol") or "explicit"
@@ -383,7 +412,7 @@ def setup_inputs(record):
             fail("repeated_measures", "Repeated biological units require repeated measures = yes and a subject column")
         for read in tables["reads"]:
             read["uri"] = absolute(read["uri"])
-        if not is_srna and kit and any(lib["strandedness"] not in ("unknown", kit["strandedness"]) for lib in tables["libraries"]):
+        if not is_srna and not is_tagseq and kit and any(lib["strandedness"] not in ("unknown", kit["strandedness"]) for lib in tables["libraries"]):
             fail("library_protocol", f"Libraries strandedness conflicts with {protocol} ({kit['strandedness']})")
     return dict(project_name=a["project_name"], tax_id=tax_id, seq_type=layout,
                 analysis=analysis_out, preprocessing=policy,

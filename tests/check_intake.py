@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
                 row[2].value = answers[key]
     w.save(book)
     record = read_intake(book)
-    assert record["schema_version"] == 6
+    assert record["schema_version"] == 7
     inputs = setup_inputs(record)
     assert inputs["tax_id"] == 9606 and inputs["seq_type"] == "rnaseq_paired"
     assert inputs["expected_libtype"] == "ISR" and inputs["model_random_effects"] is None
@@ -371,7 +371,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
             s2[srna_cells[key]] = value
     sr.save(base / "srna.xlsx")
     srna_record = read_intake(base / "srna.xlsx", "sRNA-seq")
-    assert srna_record["schema_version"] == 6
+    assert srna_record["schema_version"] == 7
     srna_inputs = setup_inputs(srna_record)
     assert srna_inputs["seq_type"] == "srnaseq"
     assert srna_inputs["analysis"] == {"small_rna_profile": "plant", "small_rna_kit": "TruSeq Small RNA"}
@@ -446,5 +446,65 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     s2[srna_cells["mirbase_prefix"]] = "ath"
     s2[srna_cells["reference_genome"]] = "genome.fa"
     s2[srna_cells["reference_gtf"]] = "genes.gtf"
+
+    # TAGseq tab: named QuantSeq kits launch the star_tagseq route.
+    tg = openpyxl.load_workbook(ROOT / "intake_template.xlsx")
+    s3 = tg["TAGseq"]
+    tagseq_tab = next(t for t in q["tabs"] if t["name"] == "TAGseq")
+    tagseq_labels = {item["text"]: item["id"] for item in q["common_questions"] + tagseq_tab["extra_questions"]}
+    tagseq_cells = {}
+    for row in s3.iter_rows(min_col=1, max_col=3):
+        key = tagseq_labels.get(row[1].value)
+        if key:
+            tagseq_cells[key] = row[2].coordinate
+    tagseq_answers = dict(answers)
+    tagseq_answers.update({
+        "read_config": "single-end", "kit": "QuantSeq REV",
+        "reference_genome": "genome.fa", "reference_gtf": "genes.gtf",
+        "fastq_path": "srna_reads",
+    })
+    for key, value in tagseq_answers.items():
+        if key in tagseq_cells:
+            s3[tagseq_cells[key]] = value
+    tg.save(base / "tagseq.xlsx")
+    tagseq_record = read_intake(base / "tagseq.xlsx", "TAGseq")
+    assert tagseq_record["schema_version"] == 7
+    tagseq_inputs = setup_inputs(tagseq_record)
+    assert tagseq_inputs["seq_type"] == "tagseq"
+    assert tagseq_inputs["analysis"] == {"quantifier": "star", "backend": "auto", "kit": "QuantSeq REV"}
+    assert tagseq_inputs["expected_libtype"] == "SR"
+
+    def tagseq_rejected(key, value, message):
+        old = s3[tagseq_cells[key]].value
+        s3[tagseq_cells[key]] = value
+        tg.save(base / "tagseq_bad.xlsx")
+        try:
+            setup_inputs(read_intake(base / "tagseq_bad.xlsx", "TAGseq"))
+        except ValueError as exc:
+            assert message in str(exc), str(exc)
+        else:
+            raise AssertionError(f"accepted invalid tagseq {key}={value!r}")
+        s3[tagseq_cells[key]] = old
+
+    tagseq_rejected("kit", "don't know", "choose a listed QuantSeq kit")
+    tagseq_rejected("read_config", "paired-end", "single-end")
+
+    # End-to-end: a workbook-launched TAGseq project writes a config.yaml that
+    # recommend() selects, on the star_tagseq route.
+    tagseq_project = base / "tagseq project"
+    argv = ["setup.py", "--intake", str(base / "tagseq.xlsx"), "--intake-sheet", "TAGseq",
+            "--project-dir", str(tagseq_project), "--plan-only"]
+    with patch.object(sys, "argv", argv), patch.object(setup, "resolve_organism", return_value=org), \
+         patch.object(setup, "resolve_reference_urls", side_effect=AssertionError("tagseq used network reference lookup")), \
+         patch.object(setup, "fetch_annotation_info", return_value=False):
+        setup.main()
+    tagseq_cfg = yaml.safe_load((tagseq_project / "config/config.yaml").read_text())
+    assert tagseq_cfg["samples"]["seq_type"] == "tagseq"
+    assert tagseq_cfg["analysis"]["kit"] == "QuantSeq REV" and tagseq_cfg["analysis"]["quantifier"] == "star"
+    assert tagseq_cfg["analysis"]["backend"] == "deseq2", "handbook default: 3-12 units per group"
+    assert tagseq_cfg["reference"]["genome_fasta_url"] == (base / "genome.fa").as_uri()
+    assert tagseq_cfg["reference"]["gtf_url"] == (base / "genes.gtf").as_uri()
+    tagseq_reco = recommend_cfg(tagseq_cfg)
+    assert tagseq_reco["status"] == "selected" and tagseq_reco["route"] == "star_tagseq", tagseq_reco
 
 print("check_intake.py: all assertions passed")
