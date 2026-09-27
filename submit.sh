@@ -200,6 +200,12 @@ if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(json.load(open("
     cp "$STAR_PREFIX/environment_report.json" gates/star_environment_report.json
 fi
 
+if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(str(json.load(open("gates/preflight_plan.json"))["screening"]["enabled"]).lower())')" = true ]; then
+    SCREEN_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module screen)
+    export PATH="$ENV_PREFIX/bin:$SCREEN_PREFIX/bin:$PATH"
+    cp "$SCREEN_PREFIX/environment_report.json" gates/screen_environment_report.json
+fi
+
 SHEET=$(python3 -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["samples"]["sheet"])' "$CONFIG")
 
 # --- Count samples (strip comments + header) --------------------------

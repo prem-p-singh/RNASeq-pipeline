@@ -153,7 +153,7 @@ flowchart TD
 | **⑥** | **Analyze and report** | Fit the declared model, record contrast directions and produce requested optional results. Empty, skipped, unavailable and failed are distinct outcomes. |
 
 > [!NOTE]
-> The diagram reflects the current DAG: QC reporting follows quantification; WGCNA currently waits for DE completion although it uses gene counts. Independent raw-QC execution and broader assay-specific processing remain future work.
+> The diagram reflects the published v2 DAG: QC reporting follows quantification, and WGCNA waits for DE completion although it uses gene counts. See the development section below for the newer graph and independent raw-QC command.
 
 ## Quick start
 
@@ -353,7 +353,27 @@ python3 "$REPO/scripts/raw_qc.py" -d "$PROJECT" \
 
 This command checks lane/mate integrity and writes per-sample fastp JSON/HTML, read provenance, `manifest.json` and a cohort `index.html`. It needs no reference, Salmon index, annotation or DE model. It disables trimming/filtering and preserves original reads; temporary merged reads are removed after inspection. Use a new output directory for each run. A failure stops the command with a failed status while previously completed reports remain available.
 
-The development DAG now separates preprocessing from Salmon quantification and retains fastp reports plus a read-loss ledger. `analysis.objectives: [qc]` builds the preprocessing report without a reference or DE model; `[gene_expression]` also produces counts without running inference. The standalone command above remains observation-only; the DAG QC objective performs the configured preprocessing. Contamination screening and named kit profiles are still pending; fastp overrepresentation is a diagnostic, not a contamination verdict.
+```mermaid
+flowchart TD
+    A[Excel intake or project YAML/TSV] --> B[Validate study, references and selected objectives]
+    B --> C[Verify core and selected tool environments]
+    C --> D[Prepare lanes and mates; fastp preprocessing]
+    D --> E[Durable early QC and read-loss reports]
+    D --> F[Optional declared-panel screening; no read removal]
+    D --> G{Counts or alignments requested?}
+    G -->|No: QC only| E
+    G -->|Yes| H{Declared quantifier / objective}
+    H --> I[Salmon: transcript abundance]
+    H --> J[STAR + featureCounts: indexed BAMs and raw gene counts]
+    I --> K[Aggregate gene counts and comparative QC]
+    J --> K
+    K --> L{Inference requested?}
+    L -->|Yes| M[Declared contrasts: limma, edgeR, DESeq2 or dream]
+    M --> N[Requested enrichment]
+    K --> O[Requested coexpression]
+```
+
+The development DAG now separates preprocessing from Salmon quantification and retains fastp reports plus a read-loss ledger. `analysis.objectives: [qc]` builds the preprocessing report without a reference or DE model; `[gene_expression]` also produces counts without running inference. The standalone command above remains observation-only; the DAG QC objective performs the configured preprocessing. Optional declared-panel screening is available in development; named kit profiles remain pending. Fastp overrepresentation is a diagnostic, not a contamination verdict.
 
 The development workbook (schema 4) exposes Salmon/STAR selection, fixed-effect DE method, complete custom reference sets, genomic-decoy choice, poly-G handling, adapters and minimum retained read length. Custom reference paths resolve beside the workbook; supplying a custom set bypasses automatic reference selection. Schemas 1–3 remain readable. Advanced contrasts, repeated-measures models and non-bulk producers are still outside the executable Excel adapter.
 
@@ -375,6 +395,22 @@ For genomic alignments and exon-level gene counting, set `analysis.quantifier: s
 
 STAR 2.7.11b and featureCounts 2.1.1 produce sorted/indexed BAMs and raw exon-union gene counts. Only uniquely aligned, unambiguously assigned reads/fragments count; paired mates count as one fragment. Counts have **no transcript-length scaling**. Gene lengths are exon-union lengths. The launcher installs and verifies a separate [locked tool module](environments/star-linux-64.explicit.txt), retaining the core R runtime. Index and alignment workers request 64 GB and 40 GB respectively; these are worker memory requests, not storage limits. Missing declared BAM indexes and gene-length files trigger recovery.
 
+Optional post-preprocessing screening uses FastQ Screen 0.16.0 with Bowtie2 2.5.4. Declare the expected organism and any suspected contaminants as **prebuilt Bowtie2 indexes** in project YAML:
+
+```yaml
+screening:
+  enabled: true
+  fragments: 100000
+  seed: 1
+  references:
+    - {name: Host, role: expected, index: /references/host_transcriptome}
+    - {name: PhiX, role: possible_contaminant, index: /references/phix}
+```
+
+Build each index from your documented, versioned FASTA using `bowtie2-build reference.fa index_basename` in the screening module. Relative index basenames resolve against the project directory. No reference panel is downloaded or chosen automatically. Include an intended pathogen as `expected`, never as an assumed contaminant. The current workbook does not yet expose this panel; add it to the generated project YAML.
+
+The launcher prepares the separate [screening runtime](environments/screen-linux-64.explicit.txt) only when enabled. Uniform seeded sampling retains paired fragments together, then screens mates separately: reported counts are **reads, not fragments**. Per-sample `screening/screening.json`, `.tsv` and `.html` record sampling, reference-file checksums, exclusive/shared matches and zero reads removed. Disabled runs explicitly say `not_performed`. Screening neither excludes samples nor removes reads. Shared matches are ambiguous; matches are not organism abundance or proof of contamination, and absence of a match cannot rule out organisms omitted from the panel. Bowtie2 is not splice-aware: prefer a compatible host transcriptome for RNA screening and interpret genomic screens accordingly. Panel sensitivity and study-specific thresholds still need qualification.
+
 These are development changes, not a new release or completion of the multi-assay roadmap. The capability table above describes the published v2 tag; further assay producers, broader intake controls, protocol-specific QC and full release qualification remain open.
 
 <img src="assets/section-validation.svg" alt="Validation and development" width="100%" />
@@ -383,6 +419,9 @@ These are development changes, not a new release or completion of the multi-assa
 python3 scripts/environment_check.py --out environment_report.json
 star_prefix=$(bash scripts/bootstrap.sh --module star)
 export PATH="$star_prefix/bin:$PATH"
+screen_prefix=$(bash scripts/bootstrap.sh --module screen)
+# Keep the core Python/R runtime ahead of optional module dependencies.
+export PATH="$CONDA_PREFIX/bin:$screen_prefix/bin:$PATH"
 bash tests/run_all.sh --strict   # any missing dependency/skip fails qualification
 bash tests/check_public.sh      # six-sample public Salmon smoke test
 bash tests/check_public.sh --star # same public study through STAR

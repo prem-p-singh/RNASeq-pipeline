@@ -14,7 +14,8 @@ python3 - "$proj" <<'PY'
 import csv, json, sys, yaml
 from pathlib import Path
 p=Path(sys.argv[1])
-star=yaml.safe_load((p/'config/config.yaml').read_text()).get('analysis',{}).get('quantifier')=='star'
+cfg=yaml.safe_load((p/'config/config.yaml').read_text())
+star=cfg.get('analysis',{}).get('quantifier')=='star'
 agg=json.loads((p/'metrics/aggregate.json').read_text())
 assert agg['n_samples']==6 and agg['n_genes']>50, agg
 manifest=list(csv.DictReader((p/'results/de_manifest.tsv').open(), delimiter='\t'))
@@ -23,6 +24,13 @@ for row in manifest:
     assert (p/'results'/row['analysis_table']).stat().st_size > 0
 for i in range(6):
     root=p/f'results/quant/SRR{6357070+i}'
+    screen=json.loads((root/'screening/screening.json').read_text())
+    if cfg.get('screening',{}).get('enabled'):
+        assert screen['status']=='completed' and screen['reads_removed']==0
+        assert screen['fragments_sampled']==10000 and len(screen['results'])==2
+        assert all(r['exclusive_to_reference']>1000 for r in screen['results']), screen
+    else:
+        assert screen['status']=='not_performed'
     if star: root=root/'star'
     m=json.loads((root/'metrics.json').read_text())
     assert m['num_reads_processed']>10000 and m['mapping_rate']>0.2, m

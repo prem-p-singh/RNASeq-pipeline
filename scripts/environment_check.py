@@ -54,6 +54,8 @@ def verify(prefix, lock, module="core"):
         except Exception as exc:
             issues.append(f"Cannot import {name}: {exc}")
     probes = {name: "--version" for name in ("python3", "Rscript", "snakemake", "salmon", "fastp", "multiqc")} if module == "core" else {"STAR": "--version", "featureCounts": "-v", "samtools": "--version"}
+    if module == "screen":
+        probes = {"fastq_screen": "--version", "bowtie2": "--version", "bowtie2-build": "--version"}
     for tool, flag in probes.items():
         path = shutil.which(tool)
         if not path or not Path(path).resolve().is_relative_to(prefix):
@@ -88,7 +90,7 @@ def verify(prefix, lock, module="core"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--module", choices=["core", "star"], default="core")
+    parser.add_argument("--module", choices=["core", "star", "screen"], default="core")
     parser.add_argument("--prefix", default=sys.prefix)
     parser.add_argument("--lock", type=Path, default=ROOT / "environments/linux-64.explicit.txt")
     parser.add_argument("--out", type=Path)

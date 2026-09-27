@@ -5,13 +5,13 @@ set -euo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 MODULE=core
 if [ "$#" -gt 0 ]; then
-    [ "$#" -eq 2 ] && [ "$1" = --module ] && [ "$2" = star ] || {
-        echo "Usage: bootstrap.sh [--module star]" >&2; exit 2;
+    [ "$#" -eq 2 ] && [ "$1" = --module ] && { [ "$2" = star ] || [ "$2" = screen ]; } || {
+        echo "Usage: bootstrap.sh [--module star|screen]" >&2; exit 2;
     }
-    MODULE=star
+    MODULE=$2
 fi
 LOCK="$REPO/environments/linux-64.explicit.txt"
-[ "$MODULE" = core ] || LOCK="$REPO/environments/star-linux-64.explicit.txt"
+[ "$MODULE" = core ] || LOCK="$REPO/environments/$MODULE-linux-64.explicit.txt"
 VERIFY_PYTHON=$(command -v python3 || true)
 [ "$(uname -sm)" = "Linux x86_64" ] || {
     echo "Use a Linux x86_64 host for this release environment." >&2; exit 1;
@@ -22,9 +22,13 @@ command -v conda >/dev/null || {
 }
 digest=$(sha256sum "$LOCK" | cut -d ' ' -f1)
 prefix=${RNASEQ_ENV_PREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/rnaseq/environments/$digest}
-if [ "$MODULE" = star ]; then
-    prefix=${RNASEQ_STAR_ENV_PREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/rnaseq/environments/$digest}
-    [ -n "$VERIFY_PYTHON" ] || { echo "Activate the core runtime before installing STAR tools" >&2; exit 1; }
+if [ "$MODULE" != core ]; then
+    if [ "$MODULE" = star ]; then
+        prefix=${RNASEQ_STAR_ENV_PREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/rnaseq/environments/$digest}
+    else
+        prefix=${RNASEQ_SCREEN_ENV_PREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/rnaseq/environments/$digest}
+    fi
+    [ -n "$VERIFY_PYTHON" ] || { echo "Activate the core runtime before installing optional tools" >&2; exit 1; }
 fi
 mkdir -p "$(dirname "$prefix")"
 # The prefix must not be renamed: installed entry points embed its absolute path.

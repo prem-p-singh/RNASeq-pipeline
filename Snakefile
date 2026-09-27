@@ -51,10 +51,14 @@ if _cfg_blocking:
 
 from recommend import recommend as _recommend, requires_inference
 from preprocessing import policy_args
+from screen_reads import validate as validate_screen, index_files
 policy_args(config["preprocessing"], config["samples"]["seq_type"] == "rnaseq_paired")
 RECOMMENDATION = _recommend(config)
 if RECOMMENDATION["issues"]:
     raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
+
+SCREEN_POLICY = validate_screen(config["screening"])
+SCREEN_INDEXES = [str(f) for ref in SCREEN_POLICY["references"] for f in index_files(ref["index"])] if SCREEN_POLICY["enabled"] else []
 
 QC_ONLY = set(config["analysis"]["objectives"]) == {"qc"}
 STAR_ROUTE = RECOMMENDATION["route"] == "star_counts"
@@ -149,6 +153,9 @@ if STAR_ROUTE:
     RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/star-linux-64.explicit.txt").read_bytes()).hexdigest()
 
 
+if SCREEN_POLICY["enabled"]:
+    RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/screen-linux-64.explicit.txt").read_bytes()).hexdigest()
+
 # --- Invalidate results a flag claims but the filesystem lacks ----------
 # R09 / master plan 11: "A done flag alone never proves a result exists."
 # Runs here, at parse time, so it happens BEFORE Snakemake resolves the DAG:
@@ -175,6 +182,7 @@ def all_targets():
     """Build the final target list. OrgDb is only required when enrichment runs."""
     early = [OUT / "preprocessing_report/multiqc_report.html",
              *expand(str(QUANT / "{sample}/fastp.html"), sample=SAMPLES)]
+    early += expand(str(QUANT / "{sample}/screening/screening.{ext}"), sample=SAMPLES, ext=["json", "tsv", "html"])
     if QC_ONLY:
         return early
     targets = early + [

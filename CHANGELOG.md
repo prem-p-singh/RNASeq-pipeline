@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Optional FastQ Screen/Bowtie2 diagnostic panels: seeded fragment sampling, separate mate/read counts, reference checksums and explicit disabled status; never removes reads or excludes samples. Isolated locked deployment preserves the core interpreter.
+
 - Workbook schema 4 connects bulk quantifier/DE selection, complete custom reference sets, decoy profile and basic preprocessing to generated configuration; older schemas remain readable.
 
 - Independent, observation-only raw QC for canonical non-UMI bulk projects using locked fastp 0.23.4; no reference or statistical design required.
@@ -12,7 +14,7 @@
 - Full-genome Salmon decoy construction, identifier checks and reference/cache integrity verification.
 - STAR/featureCounts bulk route with declared strand, uniquely aligned fragment counts, indexed BAMs and a separately pinned tool module; public and recovery qualification in progress.
 - Candidate Linux runtime adds DESeq2 1.50.2 while preserving the previous 579 package records.
-- M1–M8 remain incomplete; new backend and full regression qualification is in progress. M2 remains partial: this does not implement contamination screening, chemistry profiles or new assay support.
+- M1–M8 remain incomplete; new backend and full regression qualification is in progress. M2 remains partial: named chemistry profiles and new assay support remain open; declared-panel screening does not establish panel sensitivity.
 
 ## 2.0.0 — 2026-09-23
 

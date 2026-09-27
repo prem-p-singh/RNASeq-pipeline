@@ -8,6 +8,7 @@ Public examples are authorized for development and validation. A successful bulk
 
 - `bash tests/check_public.sh`: Salmon, gene aggregation, differential expression and reports.
 - `bash tests/check_public.sh --star`: STAR/featureCounts, indexed alignments, raw gene counts, edgeR QL and reports. Requires the STAR module described in README.
+- Add `--screen` to exercise declared expected-yeast screening on 10,000 paired fragments per sample, with separate read counts for each mate. This is an operational public check, not a known-contaminant sensitivity study. The independent synthetic mixed-panel check supplies known exclusive/shared/unmapped expectations.
 - Set `RNASEQ_PUBLIC_PROJECT` to a new directory to retain downloaded inputs, provenance and outputs.
 
 The STAR fixture takes reverse strandedness from the pinned upstream samplesheet. Biological replicate identities come from the accession-level source README; the upstream workflow-test grouping is not used as biological metadata. Both routes record reference/input identities. Synthetic exon-junction and strand controls establish known count expectations independently of this public smoke test.
@@ -25,6 +26,10 @@ These are source candidates, **not implemented or qualified capabilities**. Down
 | QuantSeq FWD, REV and UMI | [Manufacturer protocol documentation](https://www.lexogen.com/docs/quantseq/) | Choose separate public accessions with explicit kit versions, read orientation and UMI structure. No accession is qualified yet; kit variants cannot inherit one another's evidence. |
 | Animal small RNA | [GSE94585 synthetic ratiometric pools](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94585) | Select matching TruSeq technical libraries and published input ratios to measure count recovery and ratio bias. These technical pools cannot qualify biological replication. |
 | Plant small RNA, dual RNA and specialized assays | Accession selection remains open | Match the handbook profile and required controls before implementing a producer. Include organism assignment/ambiguity for dual RNA, length/adapter/UMI controls for small RNA, and protocol-specific controls for specialized assays. |
+
+### Frozen biological expectations for the first cell example
+
+The official 10x PBMC v3 page specifies one donor, 1,222 called cells, a 28-base R1 (16-base cell barcode plus 12-base UMI), 91-base transcript R2 and an 8-base I7 sample index; its published outputs used Cell Ranger 3.0.0 with `--expect-cells=1000`. These are comparison metadata for this particular example, not universal 10x defaults. Download URLs, input hashes and version-specific comparison tolerances must still be frozen before execution. [Dataset source](https://www.10xgenomics.com/datasets/1-k-pbm-cs-from-a-healthy-donor-v-3-chemistry-3-standard-3-0-0).
 
 ## Evidence recorded for each profile
 

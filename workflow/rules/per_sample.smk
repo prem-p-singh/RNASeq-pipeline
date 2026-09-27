@@ -84,3 +84,31 @@ rule qc_quant_sample:
             --expected-libtype {params.expected_libtype} \
             --delete-intermediates false > {log:q} 2>&1
         """
+
+# A second consumer keeps temporary trimmed reads alive until screening finishes.
+# Disabled screening still publishes an explicit status; it requires no tools.
+rule screen_sample:
+    input:
+        trims = lambda wc: [p.format(sample=wc.sample) for p in _trim_patterns] if SCREEN_POLICY["enabled"] else [],
+        preprocessing = QUANT / "{sample}/preprocessing.json",
+        indexes = SCREEN_INDEXES,
+        script = REPO_DIR / "scripts/screen_reads.py",
+        reader = REPO_DIR / "scripts/prepare_reads.py",
+    output:
+        json = QUANT / "{sample}/screening/screening.json",
+        tsv = QUANT / "{sample}/screening/screening.tsv",
+        html = QUANT / "{sample}/screening/screening.html",
+    params:
+        runtime_identity = RUNTIME_ID,
+        policy = json.dumps(SCREEN_POLICY, sort_keys=True),
+        # Disabled mode does not read these paths (trimmed reads may be removed).
+        reads = lambda wc: [p.format(sample=wc.sample) for p in _trim_patterns],
+        outdir = lambda wc: str(QUANT / wc.sample / "screening"),
+    threads: 2
+    resources:
+        mem_mb = 8000,
+        runtime = 90,
+    log: "logs/screening/{sample}.log"
+    shell:
+        "python {input.script:q} --reads {params.reads:q} --sample {wildcards.sample:q} "
+        "--outdir {params.outdir:q} --policy-json {params.policy:q} --threads {threads} > {log:q} 2>&1"

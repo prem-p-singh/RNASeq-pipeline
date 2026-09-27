@@ -24,6 +24,14 @@ preprocessing:
   qualified_quality_phred: 15
   unqualified_percent_limit: 40
 
+# Optional diagnostic screening; never removes reads. Bowtie2 indexes must
+# contain the expected organism (prefer transcriptome for splice-spanning reads).
+screening:
+  enabled: false
+  fragments: 100000
+  seed: 1
+  references: []  # [{name: Host, role: expected, index: /references/host}]
+
 # -----------------------------------------------------------------------------
 # Organism / reference
 # -----------------------------------------------------------------------------
@@ -118,7 +126,7 @@ model:
 # sample sheet AND a term in model.fixed_effects, or the run stops in preflight.
 #
 #   id       unique name; prefixes the output filenames
-#   type     "pairwise" (the only supported type today)
+#   type     "pairwise" or "linear" (named coefficient weights)
 #   factor   the factor whose levels are compared
 #   by       optional: run the comparison separately within each level of this
 #            factor (use for interaction designs). null = marginal comparison.
@@ -188,9 +196,8 @@ hpc:
   # are read in place and are never deleted either way.
   delete_fastq_after_quant: true
 
-# Removed from this block because nothing read them: `aligner` (only salmon is
-# implemented; see workflow/rules/per_sample.smk) and `slurm_profile` (the
-# profile comes from profiles/<tier>, chosen by submit.sh).
+# Quantifier selection lives under analysis.quantifier. Scheduler profiles
+# come from profiles/<tier>, chosen by submit.sh.
 
 # -----------------------------------------------------------------------------
 # Decision-gate thresholds
@@ -207,6 +214,6 @@ hpc:
 # the fuller definition in thresholds.yaml, leaving both merge heights unset at
 # run time. Removed rather than duplicated.
 #
-# The DE backend is not configurable: it follows model.random_effects
-# (present -> dream, absent -> limma-voom). An unsupported or non-estimable
-# design stops with a reason instead of switching to a different test.
+# Fixed-effect backends: limma_voom (auto), edger_ql or deseq2. Random
+# effects select dream. Unsupported or non-estimable designs stop with a
+# reason instead of switching to a different test.

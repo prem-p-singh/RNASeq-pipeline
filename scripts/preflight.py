@@ -36,6 +36,7 @@ import config_resolve
 import metadata as metadata_tables
 from recommend import recommend, requires_inference
 from preprocessing import policy_args
+from screen_reads import validate as validate_screen, index_files
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "config" / "spec.yaml"
@@ -99,6 +100,11 @@ def check_config(cfg: dict, repo_root, iss: Issues) -> dict:
         policy_args(resolved["preprocessing"], resolved["samples"]["seq_type"] == "rnaseq_paired")
     except (ValueError, TypeError) as exc:
         iss.add("CFG003", "preprocessing", str(exc))
+
+    try:
+        validate_screen(resolved["screening"])
+    except (ValueError, TypeError) as exc:
+        iss.add("CFG003", "screening", str(exc))
 
     ref = resolved.get("reference") or {}
     if type(ref.get("star_overhang")) is not int or ref["star_overhang"] < 1:
@@ -367,6 +373,8 @@ def stage_plan(cfg: dict, resolved: dict, design: dict) -> list[dict]:
     orgdb_strategy = (cfg.get("orgdb", {}) or {}).get("strategy", "auto")
     inference = requires_inference(cfg)
     objectives = cfg["analysis"]["objectives"]
+    screen = cfg.get("screening")
+    screening_enabled = isinstance(screen, dict) and screen.get("enabled") is True
     counts = not (isinstance(objectives, list) and objectives and all(x == "qc" for x in objectives))
     estimable = inference and design.get("estimable", False)
 
@@ -385,6 +393,8 @@ def stage_plan(cfg: dict, resolved: dict, design: dict) -> list[dict]:
 
     return [
         stage("preprocessing", True),
+        stage("screening", screening_enabled,
+              "" if screening_enabled else "not requested; an explicit not_performed report will be written"),
         stage("reference", counts),
         stage("quantification", counts),
         stage("aggregation", counts),
@@ -421,6 +431,13 @@ def main():
     # Every later check runs against the RESOLVED config, not the raw file:
     # a default that only exists after merging would otherwise look missing.
     cfg = check_config(cfg, ROOT, iss)
+    try:
+        screen = validate_screen(cfg["screening"])
+        if screen["enabled"]:
+            for ref in screen["references"]:
+                index_files(proj / Path(ref["index"]).expanduser())
+    except (ValueError, TypeError) as exc:
+        iss.add("CFG003", "screening", str(exc))
     decoys = cfg.get("reference", {}).get("decoys")
     if isinstance(decoys, str) and decoys not in ("", "genome") and not (proj / decoys).is_file():
         iss.add("CFG003", "reference", "Decoy-name file does not exist relative to the project")
@@ -465,6 +482,7 @@ def main():
         "metadata": meta,
         "metadata_tables": tables_meta,
         "design": design,
+        "screening": cfg["screening"],
         "stages": stage_plan(cfg, resolved, design),
         "n_errors": len(iss.errors),
         "n_warnings": len(iss.warnings),

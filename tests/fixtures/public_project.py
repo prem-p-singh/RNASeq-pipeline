@@ -17,9 +17,10 @@ REVISION = "626c8fab639062eade4b10747e919341cbf9b41a"
 BASE = f"https://raw.githubusercontent.com/nf-core/test-datasets/{REVISION}"
 
 dest, repo = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
-star_route = len(sys.argv) == 4 and sys.argv[3] == '--star'
-if len(sys.argv) > 3 and not star_route:
-    raise SystemExit('Usage: public_project.py PROJECT REPO [--star]')
+flags = sys.argv[3:]
+if set(flags) - {'--star', '--screen'} or len(flags) != len(set(flags)):
+    raise SystemExit('Usage: public_project.py PROJECT REPO [--star] [--screen]')
+star_route = '--star' in flags
 (dest / "config").mkdir(parents=True)
 (dest / "inputs").mkdir()
 # The upstream FASTA adds a GFP transgene absent from genes.gtf.gz. Build an
@@ -84,6 +85,13 @@ if star_route:
     cfg['reference']['gtf_url'] = annotation.as_uri()
     cfg['samples']['expected_libtype'] = 'ISR'
     cfg['analysis'] = {'quantifier': 'star', 'backend': 'edger_ql'}
+if '--screen' in flags:
+    index = dest/'inputs/yeast_screen'
+    with (dest/'inputs/screen_index.log').open('w') as log:
+        subprocess.run(['bowtie2-build', str(transcripts), str(index)], check=True,
+                       stdout=log, stderr=subprocess.STDOUT)
+    cfg['screening'] = {'enabled': True, 'fragments': 10000, 'seed': 1,
+        'references': [{'name': 'Yeast', 'role': 'expected', 'index': str(index)}]}
 (dest / "config/config.yaml").write_text(yaml.safe_dump(cfg))
 (dest / "config/thresholds.yaml").write_text((repo / "config/thresholds.yaml").read_text())
 with open(dest / "config/samples.tsv", "w") as f:
