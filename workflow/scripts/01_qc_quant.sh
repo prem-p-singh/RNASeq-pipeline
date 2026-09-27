@@ -112,6 +112,11 @@ if [[ "$seq_type" == "rnaseq_paired" ]]; then
     fi
 fi
 
+if python3 -c 'import json,sys; sys.exit(0 if json.loads(sys.argv[1]).get("umi_len") else 1)' "$processing_json"; then
+    python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from tagseq import check_spacer; print("UMI spacer fraction", check_spacer(sys.argv[2]))' \
+        "$(dirname "$0")/../../scripts" "$fastq_local"
+fi
+
 python3 "$(dirname "$0")/../../scripts/preprocessing.py" \
     --r1 "$fastq_local" --r2 "${fastq_local_r2:-}" --outdir "$outdir" \
     --sample "$sample" --threads "$threads" --policy-json "$processing_json"

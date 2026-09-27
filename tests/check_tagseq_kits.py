@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Kit facts come from one cited table; unknown kits block."""
+import gzip
 import sys
+import tempfile
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from tagseq import load_kit, KITS, kit_policy
+from tagseq import load_kit, KITS, kit_policy, check_spacer
 from preprocessing import policy_args
 
 fwd, rev, umi = (load_kit(k) for k in ('QuantSeq FWD', 'QuantSeq REV', 'QuantSeq FWD-UMI'))
@@ -33,3 +35,18 @@ except ValueError as exc:
 else:
     raise AssertionError('paired TAG-seq accepted')
 print('TAG-seq preprocessing arguments passed')
+
+with tempfile.TemporaryDirectory() as t:
+    good, bad = Path(t, 'good.fq.gz'), Path(t, 'bad.fq.gz')
+    with gzip.open(good, 'wt') as g, gzip.open(bad, 'wt') as b:
+        for i in range(200):
+            g.write(f'@r{i}\nACGTAC' + 'TATA' + 'G' * 40 + '\n+\n' + 'I' * 50 + '\n')
+            b.write(f'@r{i}\nACGTAC' + 'CCCC' + 'G' * 40 + '\n+\n' + 'I' * 50 + '\n')
+    assert check_spacer(good) == 1.0
+    try:
+        check_spacer(bad)
+    except ValueError as exc:
+        assert '0.0%' in str(exc) and 'TATA' in str(exc)
+    else:
+        raise AssertionError('missing spacer accepted')
+print('UMI spacer check passed')
