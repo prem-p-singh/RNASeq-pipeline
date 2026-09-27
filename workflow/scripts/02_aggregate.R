@@ -23,7 +23,8 @@ out_disposition <- snakemake@output$disposition
 
 cfg <- snakemake@config
 star_route <- identical(snakemake@params$count_source, "star")
-small_rna_route <- identical(snakemake@params$count_source, "small_rna")
+small_rna_matrix <- identical(snakemake@params$count_source, "small_rna_matrix")  # plant: one ShortStack cohort matrix
+small_rna_route <- small_rna_matrix || identical(snakemake@params$count_source, "small_rna")
 table_route <- star_route || small_rna_route  # per-sample gene_id/count tables in a subfolder
 
 if (!table_route) {
@@ -76,7 +77,12 @@ message("Importing ", length(quant_files), if (table_route) " gene-count tables 
         "(seq_type=", seq_type, ", countsFromAbundance=",
         counts_from_abundance, ")")
 if (table_route) {
-  tables <- lapply(quant_files, function(p) read_tsv(p, col_types = cols(gene_id = col_character(), .default = col_double())))
+  tables <- if (small_rna_matrix) {
+    m <- read_tsv(snakemake@input$small_rna_matrix, col_types = cols(gene_id = col_character(), .default = col_double()))
+    missing <- setdiff(names(quant_files), names(m))
+    if (length(missing)) stop("ShortStack matrix has no column for: ", paste(missing, collapse = ", "))
+    lapply(names(quant_files), function(s) data.frame(gene_id = m$gene_id, count = m[[s]]))
+  } else lapply(quant_files, function(p) read_tsv(p, col_types = cols(gene_id = col_character(), .default = col_double())))
   # Small-RNA tables list only observed miRNAs; STAR tables list every annotated gene.
   genes <- if (star_route) tables[[1]]$gene_id else sort(unique(unlist(lapply(tables, function(x) x$gene_id))))
   if (!length(genes) || anyNA(genes) || any(!nzchar(genes)) ||
@@ -132,9 +138,11 @@ if (star_route) {
   count_provenance$rationale <- "Raw gene-assigned genomic counts; no transcript-length scaling or additional offset"
 }
 if (small_rna_route) {
-  count_provenance$quantifier <- "bowtie_mature_mirna"
+  count_provenance$quantifier <- if (small_rna_matrix) "shortstack_loci" else "bowtie_mature_mirna"
   count_provenance$count_unit <- "reads"
-  count_provenance$rationale <- "Raw unique-hit mature miRNA read counts; multi-mapping reads excluded; no length scaling"
+  count_provenance$rationale <- if (small_rna_matrix)
+      "Raw ShortStack small-RNA locus read counts; multi-mapping reads placed by ShortStack; no length scaling"
+    else "Raw unique-hit mature miRNA read counts; multi-mapping reads excluded; no length scaling"
 }
 
 # --- Optional gene-info merge -----------------------------------------

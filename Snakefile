@@ -74,8 +74,11 @@ SCREEN_RUN_POLICY = dict(SCREEN_POLICY, references=[
 
 QC_ONLY = set(config["analysis"]["objectives"]) == {"qc"}
 STAR_ROUTE = RECOMMENDATION["route"] == "star_counts"
-SMALL_RNA_ROUTE = RECOMMENDATION["route"] == "small_rna_animal"
-QUANT_PRODUCT = "star/gene_counts.tsv" if STAR_ROUTE else "small_rna/counts.tsv" if SMALL_RNA_ROUTE else "quant.sf"
+SMALL_RNA_ROUTE = RECOMMENDATION["route"] in ("small_rna_animal", "small_rna_plant")
+PLANT_SRNA_ROUTE = RECOMMENDATION["route"] == "small_rna_plant"
+# Plant counts are one cohort matrix (ShortStack clusters loci jointly); the per-sample product is its QC record.
+QUANT_PRODUCT = ("star/gene_counts.tsv" if STAR_ROUTE else "small_rna/metrics.json" if PLANT_SRNA_ROUTE
+                 else "small_rna/counts.tsv" if SMALL_RNA_ROUTE else "quant.sf")
 
 # --- Load sample sheet ---------------------------------------------------
 import metadata as _metadata

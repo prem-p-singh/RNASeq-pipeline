@@ -36,9 +36,13 @@ def recommend(cfg, n_samples=None):
         route = policy["small_rna_routes"].get(analysis.get("small_rna_profile"))
         if route is None:
             issues.append(f"analysis.small_rna_profile must be one of {sorted(policy['small_rna_routes'])}")
-        for value, name in ((analysis.get("small_rna_kit"), "analysis.small_rna_kit"),
-                            ((cfg.get("reference") or {}).get("mature_mirna_url"), "reference.mature_mirna_url"),
-                            ((cfg.get("organism") or {}).get("mirbase_prefix"), "organism.mirbase_prefix")):
+        ref, org = cfg.get("reference") or {}, cfg.get("organism") or {}
+        known = ((ref.get("mature_mirna_url"), "reference.mature_mirna_url"),
+                 (org.get("mirbase_prefix"), "organism.mirbase_prefix"))
+        # Plant loci come from the genome; known miRNAs only annotate them, so they are optional as a pair.
+        if analysis.get("small_rna_profile") == "plant":
+            known = ((ref.get("genome_fasta_url"), "reference.genome_fasta_url"),) + (known if any(v for v, _ in known) else ())
+        for value, name in ((analysis.get("small_rna_kit"), "analysis.small_rna_kit"),) + known:
             if not value:
                 issues.append(f"Small-RNA routes require {name}")
         if analysis.get("small_rna_kit"):
@@ -100,7 +104,7 @@ def recommend(cfg, n_samples=None):
                    "fixed_effects": cfg.get("model", {}).get("fixed_effects"),
                    "random_effects": cfg.get("model", {}).get("random_effects")},
         "reasons": ["QC-only preprocessing needs no quantifier, reference or statistical model." if qc_only else
-                    f"Selected {'bowtie' if seq == 'srnaseq' else quantifier} for the declared expression/alignment objectives.",
+                    f"Selected {('ShortStack' if analysis.get('small_rna_profile') == 'plant' else 'bowtie') if seq == 'srnaseq' else quantifier} for the declared expression/alignment objectives.",
                     "The declared dependence structure selects the statistical backend." if inference else
                     "No differential-inference objective was requested; no DE model will be fitted.",
                     "Sample count informs replication/QC checks; it does not silently change the model."],

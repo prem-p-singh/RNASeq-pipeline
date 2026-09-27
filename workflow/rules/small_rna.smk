@@ -49,3 +49,53 @@ rule small_rna_counts:
             {input.trims:q} "$tmp/a.sam" 2> {log:q}
         python3 {input.helper:q} count "$tmp/a.sam" {output.counts:q} {output.metrics:q} {wildcards.sample:q} >> {log:q} 2>&1
         """
+
+# Small-RNA plant route: ShortStack clusters loci jointly, so it runs once for the cohort.
+# Reads are fastp-trimmed already, so shortstack_command never passes --autotrim.
+if PLANT_SRNA_ROUTE:
+    ruleorder: small_rna_plant_metrics > small_rna_counts
+
+    rule shortstack_run:
+        input:
+            genome = REF / "genome.fa",
+            known = [REF / "mature_species.fa"] if config["reference"].get("mature_mirna_url") else [],
+            trims = expand(str(QUANT / "{sample}/{sample}.trim.fastq.gz"), sample=SAMPLES),
+            helper = REPO_DIR / "scripts/small_rna.py",
+        output:
+            counts = OUT / "small_rna_counts.tsv",
+            loci = OUT / "small_rna_loci.tsv",
+        params:
+            known = str(REF / "mature_species.fa") if config["reference"].get("mature_mirna_url") else "",
+            runtime_identity = RUNTIME_ID,
+        threads: 8
+        resources:
+            mem_mb = 32000,
+            runtime = 360,
+        log:
+            "logs/shortstack.log",
+        shell:
+            """
+            set -euo pipefail
+            tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+            mkdir "$tmp/reads"
+            # {sample}.fastq.gz symlinks so ShortStack's per-file count columns are the sample IDs.
+            for f in {input.trims:q}; do ln -s "$(readlink -f "$f")" "$tmp/reads/$(basename "$f" .trim.fastq.gz).fastq.gz"; done
+            python3 -c 'import subprocess, sys; sys.path.insert(0, sys.argv[1]); from small_rna import shortstack_command; subprocess.run(shortstack_command(sys.argv[2], sys.argv[6:], sys.argv[3], sys.argv[4], sys.argv[5]), check=True)' \
+                {REPO_DIR:q}/scripts {input.genome:q} {params.known:q} "$tmp/run" {threads} "$tmp"/reads/*.fastq.gz > {log:q} 2>&1
+            python3 {input.helper:q} shortstack_matrix "$tmp/run/Counts.txt" "$tmp/run/Results.txt" {output.counts:q} {output.loci:q} >> {log:q} 2>&1
+            """
+
+    rule small_rna_plant_metrics:
+        input:
+            counts = OUT / "small_rna_counts.tsv",
+            preprocessing = QUANT / "{sample}/preprocessing.json",
+            helper = REPO_DIR / "scripts/small_rna.py",
+        output:
+            metrics = QUANT / "{sample}/small_rna/metrics.json",
+        params:
+            runtime_identity = RUNTIME_ID,
+        resources:
+            mem_mb = 2000,
+            runtime = 10,
+        shell:
+            "python3 {input.helper:q} plant_metrics {input.counts:q} {input.preprocessing:q} {wildcards.sample:q} {output.metrics:q}"

@@ -63,3 +63,15 @@ b = recommend({**srna_cfg, 'analysis': {**srna_cfg['analysis'], 'objectives': ['
                'downstream': {'run_go': True}})
 assert b['status'] == 'blocked' and any('miRNA/locus identifiers' in i for i in b['issues']), b['issues']
 print('small-RNA kit, qualification and enrichment blocks passed')
+plant = {**srna_cfg, 'analysis': {**srna_cfg['analysis'], 'small_rna_profile': 'plant'},
+         'reference': {'genome_fasta_url': 'file:///g.fa'}, 'organism': {}}
+r = recommend(plant)
+assert (r['status'], r['route'], r['count_treatment']) == ('selected', 'small_rna_plant', 'raw_small_rna_counts'), r
+assert 'ShortStack' in r['reasons'][0], r['reasons']
+assert recommend({**plant, 'reference': {**plant['reference'], 'mature_mirna_url': 'file:///m.fa'},
+                  'organism': {'mirbase_prefix': 'ath'}})['status'] == 'selected'
+b = recommend({**plant, 'reference': {}})
+assert b['status'] == 'blocked' and any('genome_fasta_url' in i for i in b['issues']), b['issues']
+b = recommend({**plant, 'reference': {**plant['reference'], 'mature_mirna_url': 'file:///m.fa'}})
+assert b['status'] == 'blocked' and any('mirbase_prefix' in i for i in b['issues']), b['issues']
+print('plant small-RNA route selection passed')

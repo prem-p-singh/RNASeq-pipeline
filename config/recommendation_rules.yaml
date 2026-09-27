@@ -22,6 +22,11 @@ small_rna_routes:  # srnaseq, keyed by analysis.small_rna_profile
     rule_ids: []
     handbook_ids: []
     count_treatment: raw_small_rna_counts
+  plant:
+    route: small_rna_plant
+    rule_ids: []
+    handbook_ids: []
+    count_treatment: raw_small_rna_counts
 objectives: [alignment, qc, gene_expression, differential_expression, enrichment, coexpression]
 backends:
   fixed: {name: limma_voom, rule_ids: [ST01, ST02]}

@@ -16,6 +16,7 @@ rule aggregate_counts:
         sample_metrics = expand(str(QUANT / "{sample}" / ("star/metrics.json" if STAR_ROUTE else
                                   "small_rna/metrics.json" if SMALL_RNA_ROUTE else "metrics.json")), sample=SAMPLES),
         gtf = [] if SMALL_RNA_ROUTE else REF / "annotation.gtf",
+        small_rna_matrix = OUT / "small_rna_counts.tsv" if PLANT_SRNA_ROUTE else [],
         sheet = config["samples"]["sheet"],
         design_helper = REPO_DIR / "workflow/scripts/_design.R",
     output:
@@ -27,7 +28,8 @@ rule aggregate_counts:
         imported = OUT / "gene_import.rds",
     params:
         runtime_identity = RUNTIME_ID,
-        count_source = "star" if STAR_ROUTE else "small_rna" if SMALL_RNA_ROUTE else "salmon",
+        count_source = ("star" if STAR_ROUTE else "small_rna_matrix" if PLANT_SRNA_ROUTE
+                        else "small_rna" if SMALL_RNA_ROUTE else "salmon"),
         # Shared study-design helpers, so this stage, preflight and Stage 3
         # cannot disagree about replicate counts or estimability.
         design_lib = lambda wc: str(REPO_DIR / "workflow" / "scripts" / "_design.R"),

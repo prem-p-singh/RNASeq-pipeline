@@ -14,7 +14,7 @@ analysis:
   backend: auto
   quantifier: auto  # auto: Salmon for gene expression, STAR for alignment objectives
   umi: false
-  small_rna_profile: null                       # "animal" with samples.seq_type srnaseq: Bowtie to species mature miRNAs
+  small_rna_profile: null                       # with samples.seq_type srnaseq: "animal" (Bowtie to species mature miRNAs) or "plant" (ShortStack loci on the genome)
   small_rna_kit: null                            # kit name in config/small_rna_kits.yaml, e.g. "TruSeq Small RNA"
 
 preprocessing:
@@ -86,8 +86,8 @@ reference:
   cache_dir: "~/rnaseq_reference_cache"
   # URLs must be concrete filenames. A '*' here is a guaranteed Stage 0 failure:
   # curl does not expand globs. setup.py refuses to finish if one slips through.
-  genome_fasta_url: null  # required when decoys: genome
-  mature_mirna_url: null  # miRBase mature.fa (small-RNA animal route)
+  genome_fasta_url: null  # required when decoys: genome, and for the small-RNA plant route
+  mature_mirna_url: null  # miRBase mature.fa (small-RNA animal route; optional known miRNAs for plant)
   transcriptome_fasta_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_rna.fna.gz"
   gtf_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_genomic.gtf.gz"
   annotation_tsv:                               # NCBI/Ensembl-style gene-info table
