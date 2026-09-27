@@ -162,104 +162,7 @@ message("Design OK: ", nrow(mm), " samples, ", design$rank, " coefficients, ",
 # or a silently wrong comparison.
 
 build_contrasts <- function(dummy_fit, specs, sheet, model_vars) {
-  if (is.null(specs) || length(specs) == 0) {
-    stop("config$contrasts is empty - there is nothing to test.")
-  }
-  # Reject the removed R-expression format loudly rather than guessing.
-  looks_legacy <- vapply(specs,
-                         function(s) is.character(s) && length(s) == 1L,
-                         logical(1))
-  if (any(looks_legacy)) {
-    stop("config$contrasts uses the removed R-expression format, e.g. ",
-         "\"pairs(emmeans(fit, ~group | stage))\". Rewrite it as declarative ",
-         "records - see the `contrasts:` block in config/config.template.yaml.")
-  }
-
-  mats <- list()
-  dirs <- list()
-
-  for (spec in specs) {
-    id  <- spec$id
-    typ <- if (is.null(spec$type)) "pairwise" else spec$type
-    fac <- spec$factor
-    by  <- spec$by
-    rev <- isTRUE(spec$reverse)
-    if (!is.null(by) && !nzchar(by)) by <- NULL
-
-    if (is.null(id)  || !nzchar(id))  stop("every contrast needs an 'id'")
-    if (is.null(fac) || !nzchar(fac)) stop("contrast '", id, "' needs a 'factor'")
-    if (!identical(typ, "pairwise")) {
-      stop("contrast '", id, "': unsupported type '", typ,
-           "' (supported: pairwise)")
-    }
-
-    # Validate every referenced variable against BOTH the sample sheet and the
-    # fitted model, so an inherited or stale contrast cannot reach the fit.
-    for (v in c(fac, by)) {
-      if (!v %in% names(sheet)) {
-        stop("contrast '", id, "': '", v, "' is not a column in the sample ",
-             "sheet (have: ", paste(names(sheet), collapse = ", "), ")")
-      }
-      if (!v %in% model_vars) {
-        stop("contrast '", id, "': '", v, "' is not a term in the model ",
-             "formula (have: ", paste(model_vars, collapse = ", "), ")")
-      }
-      if (nlevels(factor(sheet[[v]])) < 2L) {
-        stop("contrast '", id, "': '", v, "' has fewer than 2 levels")
-      }
-    }
-
-    em <- if (is.null(by)) {
-      emmeans::emmeans(dummy_fit, specs = fac)
-    } else {
-      emmeans::emmeans(dummy_fit, specs = fac, by = by)
-    }
-    pr <- pairs(em, reverse = rev)   # emmeans S3 method; reverse sets direction
-
-    cm   <- pr@linfct
-    grid <- as.data.frame(pr@grid)
-    labs <- as.character(grid$contrast)
-
-    # emmeans labels pairwise contrasts "<numerator> - <denominator>".
-    halves <- strsplit(labs, " - ", fixed = TRUE)
-    bad <- lengths(halves) != 2L
-    if (any(bad)) {
-      stop("contrast '", id, "': cannot parse direction from emmeans label(s): ",
-           paste(labs[bad], collapse = "; "),
-           " (a factor level probably contains ' - ')")
-    }
-    numer <- vapply(halves, `[`, character(1), 1L)
-    denom <- vapply(halves, `[`, character(1), 2L)
-
-    safe <- function(x) gsub("[^A-Za-z0-9._]+", ".", x)
-    nm <- paste0(id, "__", safe(numer), "_vs_", safe(denom))
-    if (!is.null(by)) {
-      nm <- paste0(nm, "__", safe(by), ".", safe(as.character(grid[[by]])))
-    }
-    rownames(cm) <- nm
-
-    mats[[id]] <- cm
-    dirs[[id]] <- data.frame(
-      contrast_name     = nm,
-      spec_id           = id,
-      factor            = fac,
-      by_variable       = if (is.null(by)) NA_character_ else by,
-      by_level          = if (is.null(by)) NA_character_ else as.character(grid[[by]]),
-      numerator_level   = numer,
-      denominator_level = denom,
-      interpretation    = paste0("positive logFC = higher in '", numer,
-                                 "' than in '", denom, "'"),
-      stringsAsFactors  = FALSE
-    )
-  }
-
-  cm_all <- do.call(rbind, mats)
-  dup <- duplicated(rownames(cm_all))
-  if (any(dup)) {
-    stop("duplicate contrast names generated: ",
-         paste(unique(rownames(cm_all)[dup]), collapse = ", "))
-  }
-  list(matrix = cm_all, directions = do.call(rbind, dirs))
+  build_contrast_matrix(dummy_fit, specs, sheet, model_vars)
 }
 
 fit <- NULL
@@ -280,7 +183,7 @@ if (de_backend == "dream") {
   param <- SnowParam(2, "SOCK", progressbar = FALSE)
   vobj <- voomWithDreamWeights(d, form_full, as.data.frame(sheet),
                                BPPARAM = param)
-} else {
+} else if (de_backend == "limma_voom") {
   message("Running limma-voom")
   vobj <- voom(d, mm)
 }
@@ -288,6 +191,7 @@ if (de_backend == "dream") {
 # Build contrasts from the declarative specs. The dummy lm supplies the
 # coefficient structure emmeans needs; its response is irrelevant, and its
 # column order matches `mm` because both use the same fixed-effects formula.
+set.seed(1)
 z <- rnorm(nrow(mm))
 dummy <- lm(as.formula(paste0("z ", model_fixed)), data = as.data.frame(sheet))
 built <- build_contrasts(dummy, cfg$contrasts, sheet, all.vars(form_fixed))
@@ -305,7 +209,20 @@ message("Built ", nrow(contrast_matrix), " contrasts from ",
 if (de_backend == "dream") {
   fit <- dream(vobj, form_full, as.data.frame(sheet), t(contrast_matrix))
   fit <- eBayes(fit)
-} else {
+} else if (de_backend == "edger_ql") {
+  if (!is.null(model_random) && nzchar(model_random)) stop("edgeR QL cannot fit random effects")
+  d <- calcNormFactors(d[, , keep.lib.sizes = FALSE])
+  d <- estimateDisp(d, mm, robust = TRUE)
+  fit <- glmQLFit(d, mm, robust = TRUE)
+} else if (de_backend == "deseq2") {
+  if (!is.null(model_random) && nzchar(model_random)) stop("DESeq2 cannot fit random effects")
+  if (!requireNamespace("DESeq2", quietly = TRUE)) stop("Selected DESeq2 runtime is unavailable")
+  coldata <- as.data.frame(sheet)
+  rownames(coldata) <- colnames(d$counts)
+  fit <- DESeq2::DESeqDataSetFromMatrix(round(d$counts), coldata, design = mm)
+  fit <- DESeq2::DESeq(fit, betaPrior = FALSE, minReplicatesForReplace = Inf,
+                       parallel = FALSE, quiet = TRUE)
+} else if (de_backend == "limma_voom") {
   fit <- lmFit(vobj, mm)
   fit2 <- contrasts.fit(fit, t(contrast_matrix))
   fit <- eBayes(fit2)
@@ -314,7 +231,21 @@ if (de_backend == "dream") {
 meaningful_thr <- cfg$thresholds$de_meaningful
 manifest_rows <- list()
 for (nm in rownames(contrast_matrix)) {
-  tt <- topTable(fit, coef = nm, n = Inf, sort.by = "P")
+  if (de_backend == "edger_ql") {
+    result <- topTags(glmQLFTest(fit, contrast = contrast_matrix[nm, ]), n = Inf)$table
+    tt <- data.frame(logFC = result$logFC, AveExpr = result$logCPM,
+                     F = result$F, signed_sqrt_F = sign(result$logFC) * sqrt(result$F),
+                     P.Value = result$PValue, adj.P.Val = result$FDR, row.names = rownames(result))
+  } else if (de_backend == "deseq2") {
+    result <- as.data.frame(DESeq2::results(fit, contrast = as.numeric(contrast_matrix[nm, ]),
+                                           independentFiltering = FALSE))
+    tt <- data.frame(logFC = result$log2FoldChange, baseMean = result$baseMean,
+                     lfcSE = result$lfcSE, wald_stat = result$stat,
+                     P.Value = result$pvalue, adj.P.Val = result$padj,
+                     row.names = rownames(result))
+  } else {
+    tt <- topTable(fit, coef = nm, n = Inf, sort.by = "P")
+  }
   tt$gene_id <- rownames(tt)
   write_tsv(tt, file.path(de_dir, paste0(nm, "_DE_analysis.tsv")))
   contrast_sig_counts[[nm]] <- sum(tt$adj.P.Val < 0.05, na.rm = TRUE)
@@ -325,7 +256,7 @@ for (nm in rownames(contrast_matrix)) {
     analysis_table   = file.path("DE_Results", paste0(nm, "_DE_analysis.tsv")),
     meaningful_table = if (is.null(meaningful_thr)) NA_character_ else
                        file.path("DE_Results", paste0(nm, "_DE_meaningful.tsv")),
-    statistic        = "t",
+    statistic        = if (de_backend == "edger_ql") "signed_sqrt_F" else if (de_backend == "deseq2") "wald_stat" else "t",
     n_genes_tested   = nrow(tt),
     n_significant    = contrast_sig_counts[[nm]],
     stringsAsFactors = FALSE
@@ -365,6 +296,8 @@ if (length(too_many) > 0) {
 
 metrics <- list(
   backend            = de_backend,
+  backend_version    = as.character(packageVersion(if (de_backend == "edger_ql") "edgeR" else if (de_backend == "deseq2") "DESeq2" else if (de_backend == "dream") "variancePartition" else "limma")),
+  design_coefficients = colnames(mm),
   auto_batch_added   = auto_batch_added,
   model_fixed        = model_fixed,
   model_random       = model_random,

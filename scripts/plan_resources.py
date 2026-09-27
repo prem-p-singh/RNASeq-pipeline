@@ -30,6 +30,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import config_resolve as cr
 import metadata as md          # noqa: E402
 import reference_cache as rc
+from recommend import recommend
+import star_counts
 import resources as rs         # noqa: E402
 
 REPO = Path(__file__).resolve().parent.parent
@@ -150,25 +152,30 @@ def main():
     quotas = {"results": quota_bytes} if quota_bytes is not None else {}
 
     ref_cfg = cfg.get("reference") or {}
-    entry = (Path(ref_cache).expanduser() / rc.cache_key(ref_cfg, ref_cfg.get("kmer", 31), ref_cfg.get("decoys"))
+    star_route = recommend(cfg)["route"] == "star_counts"
+    key = star_counts.cache_key(ref_cfg) if star_route else rc.cache_key(ref_cfg, ref_cfg.get("kmer", 31), ref_cfg.get("decoys"))
+    entry = (Path(ref_cache).expanduser() / key
              if ref_cache else proj / "reference")
-    complete_reference = not rc.entry_problems(entry)
+    complete_reference = (entry / "star_idx/reference.lock.json").is_file() if star_route else not rc.entry_problems(entry)
     environment = os.environ.get("RNASEQ_ENV_PREFIX") or os.environ.get("CONDA_PREFIX")
     if environment:
         paths["environment"] = Path(environment)
     cache_present = {"reference": complete_reference, "index_build": complete_reference,
                      "environment": bool(environment and (Path(environment) / "conda-meta").is_dir())}
     reference_sources = []
-    for field in ("transcriptome_fasta_url", "gtf_url"):
+    reference_fields = ["genome_fasta_url" if star_route else "transcriptome_fasta_url", "gtf_url"]
+    if not star_route and ref_cfg.get('decoys') == 'genome':
+        reference_fields.append('genome_fasta_url')
+    for field in reference_fields:
         uri = ref_cfg.get(field) or ""
         if uri.startswith("file://"):
             source = Path(unquote(urlsplit(uri).path))
             if source.is_file() and source.suffix not in {".gz", ".bz2", ".xz"}:
                 reference_sources.append(source.stat().st_size)
-    reference_source_bytes = sum(reference_sources) if len(reference_sources) == 2 else None
+    reference_source_bytes = sum(reference_sources) if len(reference_sources) == len(reference_fields) else None
     kwargs = dict(repo_root=REPO, inputs=inputs, n_libraries=libs, assay=assay,
                   concurrency=requested, paths=paths, quotas=quotas, cache_present=cache_present,
-                  reference_source_bytes=reference_source_bytes,
+                  reference_source_bytes=reference_source_bytes, retain_alignments=star_route,
                   retain_downloads=not (cfg.get("hpc") or {}).get("delete_fastq_after_quant", True))
     canonical = md.execution_inputs(proj, cfg)
     if canonical is not None:

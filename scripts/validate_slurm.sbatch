@@ -21,10 +21,16 @@ conda activate "$prefix"
 export PYTHONNOUSERSITE=1 R_ENVIRON_USER=/dev/null R_PROFILE_USER=/dev/null
 export R_LIBS_USER="$prefix/lib/R/library" R_LIBS_SITE="$prefix/lib/R/library"
 cp "$prefix/environment_report.json" "$TASK_EVIDENCE/"
+export RNASEQ_STAR_ENV_PREFIX="$TASK_WORK/star-runtime"
+star_prefix=$(bash "$TASK_REPO/scripts/bootstrap.sh" --module star)
+export PATH="$star_prefix/bin:$PATH"
+cp "$star_prefix/environment_report.json" "$TASK_EVIDENCE/star_environment_report.json"
 cd "$TASK_REPO"
 set -o pipefail
 bash tests/run_all.sh --strict 2>&1 | tee "$TASK_EVIDENCE/tests.log"
 RNASEQ_PUBLIC_PROJECT="$TASK_WORK/public" bash tests/check_public.sh 2>&1 | tee "$TASK_EVIDENCE/public.log"
+RNASEQ_PUBLIC_PROJECT="$TASK_WORK/public-star" bash tests/check_public.sh --star 2>&1 | tee "$TASK_EVIDENCE/public-star.log"
 # Reusing the verified environment must also work without network access.
 CONDA_OFFLINE=true bash scripts/bootstrap.sh > "$TASK_EVIDENCE/offline-reuse.txt"
+CONDA_OFFLINE=true bash scripts/bootstrap.sh --module star > "$TASK_EVIDENCE/star-offline-reuse.txt"
 printf 'Temporary runtime and public project retained at %s\n' "$TASK_WORK"

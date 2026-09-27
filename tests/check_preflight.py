@@ -34,6 +34,7 @@ organism: {{common_name: grape, scientific_name: Vitis vinifera, tax_id: 29760,
 reference: {{accession: GCF_1.1, assembly_name: ASM1}}
 samples: {{sheet: config/samples.tsv, seq_type: {seq_type}}}
 model: {{fixed_effects: "{fixed}", random_effects: {random}, primary_factor: {primary}}}
+contrasts: [{{id: effect, type: pairwise, factor: treatment, reverse: true}}]
 downstream: {{run_go: true, run_kegg: true, run_wgcna: false}}
 orgdb: {{strategy: auto}}
 hpc: {{storage_budget_gb: 20, delete_fastq_after_quant: true, samples_in_flight: null}}

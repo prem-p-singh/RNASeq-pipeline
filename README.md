@@ -22,6 +22,8 @@ Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and 
 > [!NOTE]
 > **V2 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. The workbook's **schema version 3** describes its file format; the software release is **v2.0.0**.
 
+The table and diagram below describe the published v2 tag. For this branch’s added routes and their qualification status, see [next-version development](#next-version-development-unreleased).
+
 ## What you can run
 
 <img src="assets/section-capabilities.svg" alt="What you can run" width="100%" />
@@ -340,7 +342,7 @@ Preserve the project, original inputs, reference identity, runtime lock and exac
 
 ## Validation and development
 
-### Next-version development: independent raw QC
+### Next-version development (unreleased)
 
 The development branch adds an observation-only QC command for canonical non-UMI bulk projects (the Samples/Libraries/Reads intake). Activate the locked Linux environment, then run:
 
@@ -351,17 +353,40 @@ python3 "$REPO/scripts/raw_qc.py" -d "$PROJECT" \
 
 This command checks lane/mate integrity and writes per-sample fastp JSON/HTML, read provenance, `manifest.json` and a cohort `index.html`. It needs no reference, Salmon index, annotation or DE model. It disables trimming/filtering and preserves original reads; temporary merged reads are removed after inspection. Use a new output directory for each run. A failure stops the command with a failed status while previously completed reports remain available.
 
-This is the first M2 increment, separate from the default analysis DAG. Legacy single-sheet input, contamination screening, adapter detection, chemistry-specific preprocessing, integrated resume and broader assays remain pending for this command. Duplication and overrepresented-sequence estimates are fastp diagnostics, not proof of contamination. The published v2 analysis path is unchanged.
+The development DAG now separates preprocessing from Salmon quantification and retains fastp reports plus a read-loss ledger. `analysis.objectives: [qc]` builds the preprocessing report without a reference or DE model; `[gene_expression]` also produces counts without running inference. The standalone command above remains observation-only; the DAG QC objective performs the configured preprocessing. Contamination screening and named kit profiles are still pending; fastp overrepresentation is a diagnostic, not a contamination verdict.
+
+The main launcher accepts the existing bulk workbook directly:
+
+```bash
+bash "$REPO/submit.sh" --intake /path/study.xlsx -d "$PROJECT" --plan-only
+bash "$REPO/submit.sh" --intake /path/study.xlsx -d "$PROJECT" --executor local --cores 4
+# Or use --executor slurm with the configured site profile.
+```
+
+Planning needs Python with pandas/openpyxl/PyYAML and R with jsonlite/emmeans; it does not build the scientific runtime or download annotation tables. It may query reference metadata services. A normal launch prepares the locked runtime automatically. Resume accepts the original workbook checksum; changed workbooks require a new project directory. Automated workbook revision/impact reports remain pending.
+
+For explicit fixed-effect inference, development configuration accepts `analysis.backend: limma_voom`, `edger_ql`, or `deseq2`; `auto` retains limma-voom. Random-effects models select dream. These methods share count provenance and declared contrasts. DESeq2 uses rounded lengthScaledTPM counts from Salmon or raw integer gene counts from STAR, its own size-factor estimation and Wald statistics; edgeR uses TMM and quasi-likelihood F tests. Neither adds another transcript-length offset. The development runtime adds DESeq2 1.50.2 to the existing package lock.
+
+Contrasts may select `numerator` and `denominator` levels instead of `reverse`, or use `type: linear` with named design-coefficient `weights`. Preflight validates these against the actual model. New setup projects default to genomic decoys; existing configurations keep their setting. To enable genome decoys on an existing project, set `reference.decoys: genome` with a compatible `genome_fasta_url`. The builder combines transcriptome and genome, checks identifiers, records hashes and verifies cache reuse. Its default worker request is 64 GB RAM; override rule resources for your reference where appropriate. `decoys: null` explicitly retains the legacy transcriptome-only index. See [Salmon's construction method](https://salmon.readthedocs.io/en/latest/salmon.html).
+
+For genomic alignments and exon-level gene counting, set `analysis.quantifier: star` (or request `analysis.objectives: [alignment]` with `quantifier: auto`), supply compatible `reference.genome_fasta_url` and `gtf_url`, and declare strandedness. Legacy paired libraries use `IU`, `ISF` or `ISR`; single-end libraries use `U`, `SF` or `SR`. Canonical libraries use their own declared strand. Unknown strandedness blocks this route. Sample number does not choose the quantifier.
+
+STAR 2.7.11b and featureCounts 2.1.1 produce sorted/indexed BAMs and raw exon-union gene counts. Only uniquely aligned, unambiguously assigned reads/fragments count; paired mates count as one fragment. Counts have **no transcript-length scaling**. Gene lengths are exon-union lengths. The launcher installs and verifies a separate [locked tool module](environments/star-linux-64.explicit.txt), retaining the core R runtime. Index and alignment workers request 64 GB and 40 GB respectively; these are worker memory requests, not storage limits. Missing declared BAM indexes and gene-length files trigger recovery.
+
+These are development changes, not a new release or completion of the multi-assay roadmap. The capability table above describes the published v2 tag; further assay producers, broader intake controls, protocol-specific QC and full release qualification remain open.
 
 <img src="assets/section-validation.svg" alt="Validation and development" width="100%" />
 
 ```bash
 python3 scripts/environment_check.py --out environment_report.json
+star_prefix=$(bash scripts/bootstrap.sh --module star)
+export PATH="$star_prefix/bin:$PATH"
 bash tests/run_all.sh --strict   # any missing dependency/skip fails qualification
-bash tests/check_public.sh      # separate networked six-sample public smoke test
+bash tests/check_public.sh      # six-sample public Salmon smoke test
+bash tests/check_public.sh --star # same public study through STAR
 ```
 
-The strict suite has **22 checks** for input contracts, read preparation, reference/cache safety, count agreement, DE directions, declared-model preservation, enrichment, WGCNA, storage and recovery. Scientific CI installs the lock and also runs the public smoke test. [Release qualification](docs/RELEASE.md) separates current source evidence from historical environment/SLURM checks. Synthetic tests and a downsampled public study do not establish validity for every organism or design.
+The published v2 strict suite has **22 checks**; the development runner adds raw QC, objective selection, genome decoys and backend comparisons for input contracts, read preparation, reference/cache safety, count agreement, DE directions, declared-model preservation, enrichment, WGCNA, storage and recovery. Scientific CI installs the lock and also runs the public smoke test. [Release qualification](docs/RELEASE.md) separates current source evidence from historical environment/SLURM checks. Synthetic tests and a downsampled public study do not establish validity for every organism or design.
 
 For clean installation on a SLURM worker, run `sbatch scripts/validate_slurm.sbatch` with your site's scheduler options. Developer mode (`bash tests/run_all.sh`) permits reported dependency skips; it is not the release gate. See [v2 changes](CHANGELOG.md), [input contracts](INPUTS.md) and [limitations](docs/RELEASE.md).
 

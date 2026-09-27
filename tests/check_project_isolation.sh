@@ -35,6 +35,7 @@ organism: {common_name: grape, scientific_name: Vitis vinifera, tax_id: 29760,
 reference: {accession: GCF_1.1, assembly_name: ASM1}
 samples: {sheet: config/samples.tsv, seq_type: $2}
 model: {fixed_effects: "~ treatment", random_effects: null, primary_factor: treatment}
+contrasts: [{id: treatment, type: pairwise, factor: treatment, numerator: treated, denominator: control}]
 downstream: {run_go: false, run_kegg: false, run_wgcna: false}
 orgdb: {strategy: skip}
 # Deliberately inadequate legacy quota must only warn.

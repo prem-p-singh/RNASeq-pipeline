@@ -160,3 +160,14 @@ from qc_report import read_sample_ids as _rsi
 assert _rsi(sh) == ["S1", "S2", "S3"]
 
 print("check_qc_report.py: all assertions passed")
+
+# Switching quantifiers must not report stale metrics from the previous route.
+d = quant/'S1'/'star'; d.mkdir()
+(d/'gene_counts.tsv').write_text('gene_id\tcount\nG1\t1\n')
+(d/'metrics.json').write_text(json.dumps(dict(producer='STAR_featureCounts',
+    num_reads_processed=100, num_mapped=70, mapping_rate=.7, strandedness=2)))
+star = qc.collect(quant, ['S1'], 'star')[0]
+assert star['percent_mapped'] == 70 and star['num_decoy'] is None
+assert star['library_type'] == 'declared reverse (not inferred)'
+assert qc.collect(quant, ['S1'], 'salmon')[0]['percent_mapped'] == 90
+print('QC quantifier isolation and declared-versus-inferred strand checks passed')

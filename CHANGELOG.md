@@ -4,7 +4,13 @@
 
 - Independent, observation-only raw QC for canonical non-UMI bulk projects using locked fastp 0.23.4; no reference or statistical design required.
 - Durable per-sample reports and run status, input checksum/mate validation, exact command provenance and protected source reads. Existing output directories are refused to prevent stale results.
-- M2 remains partial: this does not implement contamination screening, chemistry profiles or new assay support.
+- Separate resumable preprocessing and quantification producers, explicit adapter/quality/poly-G settings, read-loss provenance and an early MultiQC report.
+- QC-only, expression-only and coexpression objectives; local/SLURM launcher selection and direct Excel launch/resume with snapshot checks.
+- Fixed-effect edgeR QL and DESeq2 Wald adapters, shared preflight contrast validation, explicit pair direction and named coefficient contrasts.
+- Full-genome Salmon decoy construction, identifier checks and reference/cache integrity verification.
+- STAR/featureCounts bulk route with declared strand, uniquely aligned fragment counts, indexed BAMs and a separately pinned tool module; public and recovery qualification in progress.
+- Candidate Linux runtime adds DESeq2 1.50.2 while preserving the previous 579 package records.
+- M1–M8 remain incomplete; new backend and full regression qualification is in progress. M2 remains partial: this does not implement contamination screening, chemistry profiles or new assay support.
 
 ## 2.0.0 — 2026-09-23
 

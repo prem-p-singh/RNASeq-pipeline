@@ -22,7 +22,9 @@ out_metrics <- snakemake@output$metrics
 out_disposition <- snakemake@output$disposition
 
 cfg <- snakemake@config
+star_route <- identical(snakemake@params$count_source, "star")
 
+if (!star_route) {
 # --- Build tx2gene from GTF --------------------------------------------
 # makeTxDbFromGFF moved from GenomicFeatures to txdbmaker in Bioconductor 3.19.
 # Pick whichever the installed release provides so this works on both.
@@ -42,6 +44,8 @@ k <- AnnotationDbi::keys(txdb, keytype = "TXNAME")
 tx2gene <- AnnotationDbi::select(txdb, keys = k,
                                  columns = "GENEID", keytype = "TXNAME")
 
+}
+
 # --- Read sample sheet -------------------------------------------------
 source(snakemake@params$design_lib)
 sheet <- read_sample_sheet(sheet_path)
@@ -49,7 +53,7 @@ stopifnot("sample_id" %in% names(sheet))
 
 # --- Match quant files to samples --------------------------------------
 # quant_files come as "results/.../quant/{sample}/quant.sf"
-sample_ids <- basename(dirname(quant_files))
+sample_ids <- if (star_route) basename(dirname(dirname(quant_files))) else basename(dirname(quant_files))
 names(quant_files) <- sample_ids
 quant_files <- quant_files[match(sheet$sample_id, names(quant_files))]
 quant_files <- quant_files[!is.na(quant_files)]
@@ -64,14 +68,34 @@ if (length(quant_files) == 0) stop("No quant files matched sample sheet")
 # and do not scale with transcript length, so applying the correction would
 # distort them.
 seq_type <- cfg$samples$seq_type
-counts_from_abundance <- if (identical(seq_type, "tagseq")) "no" else "lengthScaledTPM"
+counts_from_abundance <- if (star_route || identical(seq_type, "tagseq")) "no" else "lengthScaledTPM"
 
-message("Importing ", length(quant_files), " quant.sf files ",
+message("Importing ", length(quant_files), if (star_route) " gene-count tables " else " quant.sf files ",
         "(seq_type=", seq_type, ", countsFromAbundance=",
         counts_from_abundance, ")")
-txi <- tximport(quant_files, type = "salmon", tx2gene = tx2gene,
-                countsFromAbundance = counts_from_abundance,
-                ignoreAfterBar = TRUE)
+if (star_route) {
+  tables <- lapply(quant_files, function(p) read_tsv(p, col_types = cols(gene_id = col_character(), .default = col_double())))
+  genes <- tables[[1]]$gene_id
+  if (!length(genes) || anyNA(genes) || any(!nzchar(genes)) ||
+      any(!vapply(tables, function(x) !anyDuplicated(x$gene_id) && setequal(x$gene_id, genes), logical(1))))
+    stop("STAR gene sets differ across libraries")
+  raw_counts <- do.call(cbind, lapply(tables, function(x) x$count[match(genes, x$gene_id)]))
+  dimnames(raw_counts) <- list(genes, names(quant_files))
+  lengths <- do.call(cbind, lapply(quant_files, function(p) {
+    x <- read_tsv(file.path(dirname(p), "gene_lengths.tsv"), col_types = cols(gene_id = col_character(), .default = col_double()))
+    if (anyDuplicated(x$gene_id) || !setequal(x$gene_id, genes)) stop("STAR length gene IDs differ from counts")
+    x$exonic_bases[match(genes, x$gene_id)]
+  }))
+  dimnames(lengths) <- dimnames(raw_counts)
+  if (any(!is.finite(raw_counts)) || any(raw_counts < 0) || any(raw_counts != round(raw_counts)) ||
+      any(!is.finite(lengths)) || any(lengths <= 0))
+    stop("Invalid STAR count/length matrices")
+  txi <- list(counts = raw_counts, length = lengths, abundance = NULL, countsFromAbundance = "no")
+} else {
+  txi <- tximport(quant_files, type = "salmon", tx2gene = tx2gene,
+                  countsFromAbundance = counts_from_abundance,
+                  ignoreAfterBar = TRUE)
+}
 
 counts <- round(txi$counts)
 
@@ -96,6 +120,13 @@ count_provenance <- list(
       paste("abundance-derived counts already carry the transcript-length",
             "correction (lengthScaledTPM); adding another would double it (CT02)")
 )
+
+if (star_route) {
+  count_provenance$quantifier <- "STAR_featureCounts"
+  count_provenance$count_unit <- if (identical(seq_type, "rnaseq_paired")) "fragments" else "reads"
+  count_provenance$length_definition <- "union of annotated exons; not effective transcript length"
+  count_provenance$rationale <- "Raw gene-assigned genomic counts; no transcript-length scaling or additional offset"
+}
 
 # --- Optional gene-info merge -----------------------------------------
 anno_path <- cfg$reference$annotation_tsv$path
@@ -124,10 +155,11 @@ sample_disposition <- function(qc, min_map, min_reads, policy_on) {
   # silently treated as passed, which is the one reading QC08 forbids. Missing
   # is now its own outcome, and the automatic decision is withheld rather than
   # guessed in either direction.
-  unavailable <- is.na(qc$mapping_rate) | is.na(qc$reads_processed)
+  on_genes <- if ("counts_assigned" %in% names(qc)) qc$counts_assigned else qc$reads_mapped
+  unavailable <- is.na(qc$mapping_rate) | is.na(qc$reads_processed) | is.na(on_genes)
 
   low_map  <- !unavailable & qc$mapping_rate < min_map
-  low_read <- !unavailable & qc$reads_mapped < min_reads
+  low_read <- !unavailable & on_genes < min_reads
 
   flag <- rep("", nrow(qc))
   flag[low_map] <- sprintf("mapping rate %.3f < %.2f",
@@ -161,6 +193,7 @@ qc_rows <- lapply(quant_files, function(q) {
   data.frame(sample_id       = m$sample,
              mapping_rate    = as.numeric(m$mapping_rate),
              reads_processed = as.numeric(m$num_reads_processed),
+             counts_assigned = if (is.null(m$num_assigned)) as.numeric(m$num_reads_processed) * as.numeric(m$mapping_rate) else as.numeric(m$num_assigned),
              stringsAsFactors = FALSE)
 })
 qc <- do.call(rbind, qc_rows[!vapply(qc_rows, is.null, logical(1))])
@@ -181,6 +214,7 @@ if (length(no_metrics) > 0) {
     sample_id       = no_metrics,
     mapping_rate    = NA_real_,
     reads_processed = NA_real_,
+    counts_assigned = NA_real_,
     stringsAsFactors = FALSE))
   message("No metrics.json for ", length(no_metrics), " sample(s): ",
           paste(no_metrics, collapse = ", "),
@@ -239,7 +273,7 @@ if (!is.null(txi$length)) {
 
 # Preserve the gene-level import object for downstream adapters and provenance.
 for (key in c("counts", "abundance", "length")) {
-  txi[[key]] <- txi[[key]][, colnames(counts), drop = FALSE]
+  if (!is.null(txi[[key]])) txi[[key]] <- txi[[key]][, colnames(counts), drop = FALSE]
 }
 saveRDS(list(import = txi, provenance = count_provenance),
         file.path(dirname(out_counts), "gene_import.rds"))
@@ -274,8 +308,13 @@ has_random <- !is.null(cfg$model$random_effects) &&
 # Independent biological replicates, not rows. With a random-effects grouping
 # variable (e.g. "(1|vine)") one subject contributes several rows, and those
 # rows are not independent evidence about the primary factor.
-reps <- biological_replicates(kept, primary, cfg$model$random_effects)
-de_backend <- if (has_random) "dream" else "limma_voom"
+inference_requested <- any(cfg$analysis$objectives %in% c("differential_expression", "enrichment"))
+reps <- if (inference_requested) biological_replicates(kept, primary, cfg$model$random_effects) else
+  list(rows_per_group = NA, n = NA, unit = "not_requested")
+de_backend <- if (!inference_requested) "not_requested" else if (has_random) "dream" else "limma_voom"
+if (inference_requested && !is.null(cfg$analysis$backend) && cfg$analysis$backend != "auto") {
+  de_backend <- cfg$analysis$backend
+}
 
 metrics <- list(
   n_samples         = ncol(counts),

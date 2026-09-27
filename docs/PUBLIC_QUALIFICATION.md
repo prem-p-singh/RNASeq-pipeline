@@ -1,0 +1,38 @@
+# Public-data qualification
+
+Public examples are authorized for development and validation. A successful bulk test does not qualify another assay or a different chemistry. The release capability matrix must cite completed tests for the exact producer, input stage and protocol it advertises.
+
+## Executable bulk checks
+
+`tests/check_public.sh` uses six distinct biological samples, SRR6357070–SRR6357075 from GSE110004. The [pinned nf-core source](https://raw.githubusercontent.com/nf-core/test-datasets/626c8fab639062eade4b10747e919341cbf9b41a/README.md) provides chromosome-I-filtered, downsampled yeast reads. These are operational smoke tests, not reproduction of the study's genome-wide conclusions.
+
+- `bash tests/check_public.sh`: Salmon, gene aggregation, differential expression and reports.
+- `bash tests/check_public.sh --star`: STAR/featureCounts, indexed alignments, raw gene counts, edgeR QL and reports. Requires the STAR module described in README.
+- Set `RNASEQ_PUBLIC_PROJECT` to a new directory to retain downloaded inputs, provenance and outputs.
+
+The STAR fixture takes reverse strandedness from the pinned upstream samplesheet. Biological replicate identities come from the accession-level source README; the upstream workflow-test grouping is not used as biological metadata. Both routes record reference/input identities. Synthetic exon-junction and strand controls establish known count expectations independently of this public smoke test.
+
+## Next representative profiles
+
+These are source candidates, **not implemented or qualified capabilities**. Download manifests, checksums and concrete acceptance results must be added when each route is built.
+
+| Profile | Public source | Required comparison and boundary |
+|---|---|---|
+| Chromium 3′ v3 PBMC | [10x 1k PBMCs](https://www.10xgenomics.com/datasets/1-k-pbm-cs-from-a-healthy-donor-v-3-chemistry-3-standard-3-0-0) | Barcode/UMI extraction, raw and filtered sparse matrices, cell calling and QC against the published reference outputs. A single donor cannot qualify donor-level DE. |
+| Visium fresh-frozen mouse brain | [10x aggregate of mouse-brain sections](https://www.10xgenomics.com/datasets/aggregate-of-mouse-brain-sections-visium-fresh-frozen-whole-transcriptome-1-standard) | Select individual source sections; preserve barcodes, coordinates, image scale and tissue masks. Validate registration before aggregation. Sections are not automatically independent animals. |
+| PacBio Iso-Seq | [Official IsoSeq project](https://github.com/PacificBiosciences/IsoSeq) | Select a versioned example with a documented HiFi/FLNC input stage; compare isoform structures and classifications. Starting at FLNC cannot qualify the preceding CCS/demultiplexing stages. |
+| ONT transcriptomes | [Official workflow demo](https://epi2me.nanoporetech.com/workflows/wf-transcriptomes/) | Freeze the demo/version and kit; compare alignment, transcript structures and counts. Basecalled reads do not qualify raw-signal modification analysis. |
+| QuantSeq FWD, REV and UMI | [Manufacturer protocol documentation](https://www.lexogen.com/docs/quantseq/) | Choose separate public accessions with explicit kit versions, read orientation and UMI structure. No accession is qualified yet; kit variants cannot inherit one another's evidence. |
+| Animal small RNA | [GSE94585 synthetic ratiometric pools](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE94585) | Select matching TruSeq technical libraries and published input ratios to measure count recovery and ratio bias. These technical pools cannot qualify biological replication. |
+| Plant small RNA, dual RNA and specialized assays | Accession selection remains open | Match the handbook profile and required controls before implementing a producer. Include organism assignment/ambiguity for dual RNA, length/adapter/UMI controls for small RNA, and protocol-specific controls for specialized assays. |
+
+## Evidence recorded for each profile
+
+1. Accession, source URL/revision, retrieval date, file size and SHA256; document any deterministic subsetting or reference derivation.
+2. Organism, kit/chemistry, input stage, layout, strand, barcode/UMI structure and biological-unit mapping.
+3. Exact source revision, environment locks, reference identity, commands and resources.
+4. Known synthetic controls plus an independent public output or direct native-tool comparison; state the tolerance before evaluating it.
+5. Fresh execution, ordinary resume, missing-output recovery and changed-input invalidation.
+6. A capability-specific result: passed, failed, unavailable or untested. Installation, download and job submission are not scientific passes.
+
+All required checks for an advertised release route must run without skips. A reduced public dataset qualifies its tested behavior; larger-cohort performance, biological inference and other protocols need their own evidence.

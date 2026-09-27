@@ -34,7 +34,8 @@ import yaml
 
 import config_resolve
 import metadata as metadata_tables
-from recommend import recommend
+from recommend import recommend, requires_inference
+from preprocessing import policy_args
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "config" / "spec.yaml"
@@ -94,6 +95,19 @@ def check_config(cfg: dict, repo_root, iss: Issues) -> dict:
         repo_root, [("project", cfg)])
     for code, detail in issues:
         iss.add(code, "config", detail)
+    try:
+        policy_args(resolved["preprocessing"], resolved["samples"]["seq_type"] == "rnaseq_paired")
+    except (ValueError, TypeError) as exc:
+        iss.add("CFG003", "preprocessing", str(exc))
+
+    ref = resolved.get("reference") or {}
+    if type(ref.get("star_overhang")) is not int or ref["star_overhang"] < 1:
+        iss.add("CFG003", "reference", "star_overhang must be a positive integer")
+    if ref.get("decoys") == "genome" and not ref.get("genome_fasta_url"):
+        iss.add("CFG003", "reference", "Genome decoys require reference.genome_fasta_url")
+    if ref.get("decoys") not in (None, "", "genome"):
+        if not isinstance(ref["decoys"], str):
+            iss.add("CFG003", "reference", "reference.decoys must be genome or an existing decoy-name file")
 
     for section in ("project", "samples", "model", "reference", "organism"):
         if section not in resolved:
@@ -149,19 +163,25 @@ def check_scope(cfg: dict, spec: dict, iss: Issues) -> dict:
                 "tagseq: scope.assays.tagseq.validated_kits is empty, so the "
                 "count treatment is unverified for your kit")
 
+    if not requires_inference(cfg):
+        return {"assay": assay, "design": "not_requested", "backend": None,
+                "count_treatment": recommend(cfg)["count_treatment"]}
     d = scope["designs"].get(design)
     backend = None
     if d is None:
         iss.add("SCP003", "scope", f"design {design!r} is not in scope.designs")
     else:
-        backend = d["backends"][0]
+        backend = recommend(cfg)["backend"]
+        if backend not in d["backends"]:
+            iss.add("SCP002", "scope", f"design {design} with backend {backend}")
+            return {"assay": assay, "design": design, "backend": backend}
         needs_random = design == "repeated_measures"
         if scope["backends"][backend]["handles_random_effects"] != needs_random:
             iss.add("SCP002", "scope",
                     f"design {design} with backend {backend}")
 
     return {"assay": assay, "design": design, "backend": backend,
-            "count_treatment": (a or {}).get("count_treatment")}
+            "count_treatment": recommend(cfg)["count_treatment"]}
 
 
 # ----------------------------------------------------------------- metadata
@@ -208,7 +228,7 @@ def check_metadata(cfg: dict, spec: dict, sheet_path: Path, iss: Issues) -> dict
             iss.add("MET003", "samples.tsv",
                     f"{col}: row(s) {', '.join(map(str, blanks))}")
 
-    model = cfg.get("model", {})
+    model = cfg.get("model", {}) if requires_inference(cfg) else {}
     wanted = formula_vars(model.get("fixed_effects", ""))
     unit = random_effect_unit(model.get("random_effects"))
     primary = model.get("primary_factor")
@@ -246,9 +266,14 @@ res <- tryCatch({
   reps <- biological_replicates(sheet, primary, random)
   mm <- model.matrix(as.formula(fixed), data = as.data.frame(sheet))
   d <- validate_design(mm, reps$n, primary, reps$unit)
+  specs <- jsonlite::fromJSON(args[6], simplifyVector = FALSE)
+  set.seed(1)
+  dummy <- lm(as.formula(paste("rnorm(nrow(sheet))", fixed)), data = as.data.frame(sheet))
+  contrasts <- build_contrast_matrix(dummy, specs, sheet, all.vars(as.formula(fixed)))
   list(ok = TRUE, n_samples = nrow(mm), rank = d$rank,
        residual_df = d$residual_df, n_bio_replicates = reps$n,
-       biological_unit = reps$unit)
+       biological_unit = reps$unit, coefficients = colnames(mm),
+       contrast_names = rownames(contrasts$matrix))
 }, error = function(e) list(ok = FALSE, error = conditionMessage(e)))
 
 cat(jsonlite::toJSON(res, auto_unbox = TRUE))
@@ -275,6 +300,10 @@ def check_metadata_tables(proj: Path, iss: Issues, cfg=None) -> dict | None:
     for code, detail in metadata_tables.validate(tables):
         iss.add(code, "metadata", detail)
 
+    if cfg and recommend(cfg)["route"] == "star_counts":
+        for library in tables.get("libraries", []):
+            if library.get("strandedness") not in ("forward", "reverse", "unstranded"):
+                iss.add("SCP001", "metadata", f"STAR requires known strandedness for {library.get('library_id')}")
     lanes = metadata_tables.lane_groups(tables)
     multi_lane = {lib: [{"run": g["run"], "lane": g["lane"]} for g in groups]
                   for lib, groups in lanes.items() if len(groups) > 1}
@@ -304,7 +333,7 @@ def check_design(cfg: dict, sheet_path: Path, iss: Issues) -> dict:
         # argument, so it would land in args[1] where the library path belongs.
         ["Rscript", "-e", R_DESIGN, str(DESIGN_LIB), str(sheet_path),
          model.get("fixed_effects", "~ 1"), model.get("primary_factor", ""),
-         model.get("random_effects") or ""],
+         model.get("random_effects") or "", json.dumps(cfg.get("contrasts"))],
         capture_output=True, text=True)
 
     payload = proc.stdout.strip()
@@ -336,7 +365,10 @@ def stage_plan(cfg: dict, resolved: dict, design: dict) -> list[dict]:
     """Which stages will run, and why any will not."""
     down = cfg.get("downstream", {}) or {}
     orgdb_strategy = (cfg.get("orgdb", {}) or {}).get("strategy", "auto")
-    estimable = design.get("estimable", False)
+    inference = requires_inference(cfg)
+    objectives = cfg["analysis"]["objectives"]
+    counts = not (isinstance(objectives, list) and objectives and all(x == "qc" for x in objectives))
+    estimable = inference and design.get("estimable", False)
 
     def stage(name, run, reason=""):
         return {"stage": name, "planned": bool(run), "reason": reason}
@@ -352,13 +384,14 @@ def stage_plan(cfg: dict, resolved: dict, design: dict) -> list[dict]:
         return True, ""
 
     return [
-        stage("reference", True),
-        stage("quantification", True),
-        stage("aggregation", True),
+        stage("preprocessing", True),
+        stage("reference", counts),
+        stage("quantification", counts),
+        stage("aggregation", counts),
         stage("differential_expression", estimable,
               "" if estimable else "design is not estimable"),
         stage("enrichment", *enrichment_plan(down, orgdb_strategy, estimable)),
-        stage("wgcna", bool(down.get("run_wgcna")),
+        stage("wgcna", counts and bool(down.get("run_wgcna")) and (inference or (isinstance(objectives, list) and "coexpression" in objectives)),
               "" if down.get("run_wgcna") else "downstream.run_wgcna is false"),
         stage("report", True),
     ]
@@ -388,6 +421,9 @@ def main():
     # Every later check runs against the RESOLVED config, not the raw file:
     # a default that only exists after merging would otherwise look missing.
     cfg = check_config(cfg, ROOT, iss)
+    decoys = cfg.get("reference", {}).get("decoys")
+    if isinstance(decoys, str) and decoys not in ("", "genome") and not (proj / decoys).is_file():
+        iss.add("CFG003", "reference", "Decoy-name file does not exist relative to the project")
     resolved = check_scope(cfg, spec, iss)
 
     sheet_rel = (cfg.get("samples", {}) or {}).get("sheet", "config/samples.tsv")
@@ -407,7 +443,9 @@ def main():
     else:
         meta = check_metadata(cfg, spec, sheet_path, iss)
         # Only worth asking R about estimability once the columns exist.
-        if not [r for r in iss.rows
+        if not requires_inference(cfg):
+            design = {"checked": False, "reason": "Inference not requested"}
+        elif not [r for r in iss.rows
                 if r["code"] in ("MET004", "MET005", "DSN005")]:
             design = check_design(cfg, sheet_path, iss)
         else:

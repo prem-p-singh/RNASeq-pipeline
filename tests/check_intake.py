@@ -2,6 +2,8 @@
 """Exercise the shipped workbook through setup, without live reference lookups."""
 import importlib.util
 import json
+import os
+import subprocess
 from pathlib import Path
 import sys
 import tempfile
@@ -135,6 +137,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
          patch.object(setup, "fetch_annotation_info", return_value=False):
         setup.main()
     cfg = yaml.safe_load((project / "config/config.yaml").read_text())
+    assert cfg['reference']['decoys'] == 'genome'
     assert cfg["samples"]["expected_libtype"] == "ISR"
     assert not any(cfg["downstream"].values())
     assert cfg["model"]["fixed_effects"] == "~ treatment" and cfg["model"]["random_effects"] is None
@@ -152,6 +155,17 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
         else:
             raise AssertionError("existing configuration overwritten")
     assert before == (project / "config/config.yaml").read_bytes()
+
+    # One launcher command resumes exactly the imported workbook and keeps user config.
+    env = dict(os.environ, PATH=str(Path(sys.executable).parent)+os.pathsep+os.environ['PATH'])
+    command = ['bash', str(ROOT/'submit.sh'), '--plan-only', '--executor', 'local',
+               '--intake', str(book), '-d', str(project)]
+    launched = subprocess.run(command, env=env, text=True, capture_output=True)
+    assert launched.returncode == 0, launched.stdout+launched.stderr
+    assert 'executor:      local' in launched.stdout
+    assert before == (project / 'config/config.yaml').read_bytes()
+    rejected_resume = subprocess.run(command+['--intake-sheet','TAGseq'], env=env, text=True, capture_output=True)
+    assert rejected_resume.returncode != 0 and 'worksheet differs' in rejected_resume.stderr
 
     # The same setup must consume workbook records without scanning filenames.
     s[cells["metadata_source"]] = "workbook tables"

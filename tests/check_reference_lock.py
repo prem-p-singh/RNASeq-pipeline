@@ -136,7 +136,7 @@ builder = (ROOT / "workflow" / "scripts" / "build_salmon_index.py").read_text()
 # `-d` is passed only when a decoy file was supplied, so nothing can claim
 # decoys for a build that had none.
 assert '"salmon", "index"' in builder, "salmon index invocation not found"
-assert 'if a.decoys:' in builder and '"-d", a.decoys' in builder, (
+assert 'if a.decoys:' in builder and '"-d", decoy_file' in builder, (
     "decoys must be added conditionally, so the recorded label matches the build")
 assert '"-d"' not in builder.split("if a.decoys:")[0], (
     "a decoy flag is passed unconditionally; the label would then be a claim, "

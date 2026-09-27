@@ -603,6 +603,9 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
         "genome_fasta_url": ref["genome_fasta_url"],
         "transcriptome_fasta_url": ref["transcriptome_fasta_url"],
         "gtf_url": ref["gtf_url"],
+        # New projects use full genomic decoys. Existing projects retain their
+        # explicit setting; the shared resolver's legacy default is unchanged.
+        "decoys": inputs.get("reference_decoys", "genome"),
     })
     cfg["reference"]["annotation_tsv"]["path"] = "reference/annotation_info.tsv"
     cfg["reference"].pop("ncbi_to_ensembl", None)
@@ -641,6 +644,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("inputs_file", nargs="?", default=None)
     ap.add_argument("--interactive", action="store_true")
+    ap.add_argument("--plan-only", action="store_true", help="prepare configuration without downloading annotation tables")
     ap.add_argument("--intake", help="completed intake_template.xlsx (independent bulk first release)")
     ap.add_argument("--intake-sheet", help="explicit assay worksheet to import")
     ap.add_argument("--project-dir", default=".",
@@ -688,7 +692,8 @@ def main():
     ref = resolve_reference_urls(int(inputs["tax_id"]))
 
     REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
-    fetch_annotation_info(ref.get("gene_info_url"), REFERENCE_DIR / "annotation_info.tsv")
+    if not args.plan_only:
+        fetch_annotation_info(ref.get("gene_info_url"), REFERENCE_DIR / "annotation_info.tsv")
 
     if inputs.get("metadata_tables"):
         import metadata

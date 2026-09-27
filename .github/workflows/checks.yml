@@ -27,7 +27,7 @@ jobs:
           sudo apt-get update -qq
           # r-cran-jsonlite rather than install.packages(): the runner cannot
           # write to R's site-library, and the prebuilt package skips compiling.
-          sudo apt-get install -y -qq r-base-core r-cran-jsonlite
+          sudo apt-get install -y -qq r-base-core r-cran-jsonlite r-cran-emmeans
           Rscript -e 'stopifnot(requireNamespace("jsonlite", quietly = TRUE)); cat("jsonlite ok\n")' 
 
       - name: Shell syntax

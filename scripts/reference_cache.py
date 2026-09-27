@@ -49,7 +49,7 @@ def key_inputs(reference: dict, kmer: int = 31, decoys: str | None = None) -> di
     URLs, k-mer and decoy status that actually determine what was built.
     """
     reference = reference or {}
-    return {
+    inputs = {
         "key_schema": KEY_SCHEMA,
         "salmon_version": "1.10.3",
         "accession": reference.get("accession") or "unspecified_assembly",
@@ -58,6 +58,12 @@ def key_inputs(reference: dict, kmer: int = 31, decoys: str | None = None) -> di
         "kmer": int(kmer),
         "decoys": decoys or "none",
     }
+    if decoys == "genome":
+        inputs["genome_fasta_url"] = reference.get("genome_fasta_url") or ""
+    elif decoys:
+        with Path(decoys).open("rb") as f:
+            inputs["decoys_sha256"] = hashlib.file_digest(f, "sha256").hexdigest()
+    return inputs
 
 
 def cache_key(reference: dict, kmer: int = 31, decoys: str | None = None) -> str:
@@ -116,7 +122,13 @@ def verify_entry(entry_dir, reference: dict, kmer: int = 31,
     wanted = key_inputs(reference, kmer, decoys)
     diffs = [f"{k}: entry has {recorded.get(k)!r}, request wants {v!r}"
              for k, v in wanted.items() if recorded.get(k) != v]
-    for name, rel in (("transcriptome", "transcriptome.fa"), ("annotation", "annotation.gtf")):
+    files = [("transcriptome", "transcriptome.fa"), ("annotation", "annotation.gtf")]
+    if decoys == "genome":
+        files += [("genome", "genome.fa"), ("decoy_names", "decoys.txt")]
+    for name, rel in files:
+        if not (Path(entry_dir) / rel).is_file():
+            diffs.append(f"missing {rel}")
+            continue
         expected = (lock.get("files") or {}).get(name, {}).get("sha256")
         with (Path(entry_dir) / rel).open("rb") as f:
             actual = hashlib.file_digest(f, "sha256").hexdigest()
@@ -206,7 +218,7 @@ def demo():
     assert cache_key(ref, kmer=25) != k1, "k-mer must change the key"
     assert cache_key(dict(ref, gtf_url="https://x/other.gtf.gz")) != k1, \
         "annotation release must change the key"
-    assert cache_key(ref, decoys="genome.fa") != k1, "decoys must change the key"
+    assert cache_key(ref, decoys="genome") != k1, "decoys must change the key"
     assert cache_key(ref, kmer=31) == k1, "same inputs must give the same key"
     assert k1.startswith("GCF_1.1-"), k1
 

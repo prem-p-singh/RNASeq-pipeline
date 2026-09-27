@@ -11,7 +11,7 @@ permissions:
 jobs:
   scientific-linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 120
     defaults:
       run:
         shell: bash -el {0}
@@ -36,9 +36,13 @@ jobs:
           export R_LIBS_USER="$CONDA_PREFIX/lib/R/library"
           export R_LIBS_SITE="$CONDA_PREFIX/lib/R/library"
           python3 scripts/environment_check.py --out release-evidence/environment_report.json
+          star_prefix=$(bash scripts/bootstrap.sh --module star)
+          export PATH="$star_prefix/bin:$PATH"
+          cp "$star_prefix/environment_report.json" release-evidence/star_environment_report.json
           set -o pipefail
           bash tests/run_all.sh --strict 2>&1 | tee release-evidence/tests.log
           bash tests/check_public.sh 2>&1 | tee release-evidence/public.log
+          bash tests/check_public.sh --star 2>&1 | tee release-evidence/public-star.log
       - name: Preserve qualification evidence
         if: always()
         uses: actions/upload-artifact@v4

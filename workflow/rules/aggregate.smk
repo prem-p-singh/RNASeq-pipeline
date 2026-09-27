@@ -9,10 +9,11 @@
 # --- Stage 2: aggregate quants to a count matrix -----------------------
 rule aggregate_counts:
     input:
-        quants = expand(str(QUANT / "{sample}/quant.sf"), sample=SAMPLES),
+        quants = expand(str(QUANT / "{sample}" / QUANT_PRODUCT), sample=SAMPLES),
+        star_lengths = expand(str(QUANT / "{sample}/star/gene_lengths.tsv"), sample=SAMPLES) if STAR_ROUTE else [],
         # Per-sample QC drives the inclusion decision, so declare it: a changed
         # metrics.json must re-run aggregation, not be silently ignored.
-        sample_metrics = expand(str(QUANT / "{sample}/metrics.json"), sample=SAMPLES),
+        sample_metrics = expand(str(QUANT / "{sample}" / ("star/metrics.json" if STAR_ROUTE else "metrics.json")), sample=SAMPLES),
         gtf = REF / "annotation.gtf",
         sheet = config["samples"]["sheet"],
         design_helper = REPO_DIR / "workflow/scripts/_design.R",
@@ -25,6 +26,7 @@ rule aggregate_counts:
         imported = OUT / "gene_import.rds",
     params:
         runtime_identity = RUNTIME_ID,
+        count_source = "star" if STAR_ROUTE else "salmon",
         # Shared study-design helpers, so this stage, preflight and Stage 3
         # cannot disagree about replicate counts or estimability.
         design_lib = lambda wc: str(REPO_DIR / "workflow" / "scripts" / "_design.R"),
@@ -102,7 +104,6 @@ rule enrichment:
 rule wgcna:
     input:
         counts = OUT / "counts.tsv",
-        de_flag = OUT / "de_done.flag",
     output:
         done = touch(OUT / "wgcna_done.flag"),
         metrics = METRICS / "wgcna.json",

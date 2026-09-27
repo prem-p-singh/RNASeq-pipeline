@@ -2,7 +2,19 @@
 
 Release: **v2.0.0**, 2026-09-23. Scope: **Linux x86_64, annotated non-UMI bulk gene expression**. The user authorized publication of the current bulk release; full multi-assay coverage is not a v2 claim.
 
-## Current upgrade evidence
+## Unreleased development qualification
+
+The development branch changes the runtime and adds bulk routes. The sections below this one describe the **v2 tag**, not a qualification claim for the current branch.
+
+- Core candidate: 580 packages, preserving the previous 579 package identities and adding DESeq2 1.50.2. Lock SHA256: `dc1d1459bf56f4a5e93c72d2a966c1a96a37168ea49e15933fe549e3549bff75`.
+- Separate STAR module: 37 packages including STAR 2.7.11b, featureCounts 2.1.1 and samtools 1.24. Lock SHA256: `ebca83dc6a889b16291dadc923379a830b4596970b3cabe6c2c62c483c86c0d5`. The launcher verifies this module without replacing the core R environment.
+- Direct native edgeR QL, DESeq2 Wald and one paired-donor dream comparison passed on Linux snapshots. Genome-decoy construction, reuse/tamper rejection, and QC/count-only objectives also passed. These fixtures do not qualify all study designs.
+- A six-sample public Salmon run passed on the upgraded core runtime. STAR SE/PE exon-junction, strand and intronic controls passed. A six-sample public STAR/featureCounts/edgeR run also completed (Linux job 38992390, exit 0); recovery and full current-source qualification remain pending.
+- The current release gate requires **31 checks, zero skips**, plus both public routes. Full current-source qualification is pending; do not publish a new release based only on the focused checks above.
+
+Public protocol selection and evidence requirements are recorded in [Public-data qualification](PUBLIC_QUALIFICATION.md). The wider working plan remains incomplete.
+
+## V2 upgrade evidence
 
 - Canonical-intake candidate: Linux/SLURM job **38577940**, exit 0 in **14:02**, **22 passed, 0 failed, 0 skipped**. Includes two sequencing runs sharing a lane number, legacy single-end processing, quantitative recovery, changed-input detection and missing-provenance repair. Archive SHA256: `96916f31b70344a03e2260d9905daaa92b7c0997589369959cd096aa25e1c715`.
 - Final retained-intermediate storage correction: Linux job **38578300**, exit 0; later TSV example changes passed local metadata checks.

@@ -20,6 +20,10 @@ tax_id: 29760                              # Vitis vinifera
 # 3. Sequencing type: tagseq | rnaseq_single | rnaseq_paired
 seq_type: "tagseq"
 
+# New projects use full-genome Salmon decoys. Set null only for an explicitly
+# intended transcriptome-only index; this changes the reference guarantee.
+reference_decoys: genome
+
 # 4. Where the raw FASTQ files live. One of:
 #    - a local directory path   (e.g. /data/project/fastq)
 #    - an s3:// prefix          (e.g. s3://my-bucket/project/fastq/)

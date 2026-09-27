@@ -8,12 +8,29 @@
 # Depends only on per-sample outputs, so it runs right after Stage 1 (no DE needed).
 # =============================================================================
 
+rule preprocessing_report:
+    input:
+        reports = expand(str(QUANT / "{sample}/fastp.json"), sample=SAMPLES),
+        ledgers = expand(str(QUANT / "{sample}/preprocessing.json"), sample=SAMPLES),
+    output:
+        html = OUT / "preprocessing_report/multiqc_report.html",
+    threads: 1
+    resources:
+        mem_mb = 2000,
+        runtime = 30,
+    log:
+        "logs/preprocessing_report.log",
+    shell:
+        "multiqc {input.reports:q} -o {OUT:q}/preprocessing_report -n multiqc_report -f > {log:q} 2>&1"
+
 rule qc_report:
     input:
-        quant = expand(str(QUANT / "{sample}/quant.sf"), sample=SAMPLES),
+        quant = expand(str(QUANT / "{sample}" / QUANT_PRODUCT), sample=SAMPLES),
+        star_reports = expand(str(QUANT / "{sample}/star/{report}"), sample=SAMPLES,
+                              report=["Log.final.out", "featureCounts.tsv.summary"]) if STAR_ROUTE else [],
         sheet = config["samples"]["sheet"],
         # R17c: the report states reference construction from this record only.
-        reference_lock = REF / "reference.lock.json",
+        reference_lock = REF / ("star_idx/reference.lock.json" if STAR_ROUTE else "reference.lock.json"),
         report_script = REPO_DIR / "workflow/scripts/qc_report.py",
     output:
         done = OUT / "qc_report/qc_report.done",
@@ -23,6 +40,10 @@ rule qc_report:
         mqc  = OUT / "qc_report/multiqc/multiqc_report.html",
     params:
         runtime_identity = RUNTIME_ID,
+        quantifier = "star" if STAR_ROUTE else "salmon",
+        reports = [str(QUANT / sample / filename) for sample in SAMPLES
+                   for filename in (["fastp.json", "star/Log.final.out", "star/featureCounts.tsv.summary"]
+                                    if STAR_ROUTE else ["fastp.json", "aux_info/meta_info.json"])],
         quantdir = lambda wc: str(QUANT),
         outdir   = lambda wc: str(OUT / "qc_report"),
         # Report identity comes from this run's config, so the output describes
@@ -42,10 +63,11 @@ rule qc_report:
         set -euo pipefail
         mkdir -p {params.outdir:q}
         echo "[qc_report] MultiQC over {params.quantdir:q}" > {log:q}
-        multiqc {params.quantdir:q} -o {params.outdir:q}/multiqc -n multiqc_report -f >> {log:q} 2>&1
+        multiqc {params.reports:q} -o {params.outdir:q}/multiqc -n multiqc_report -f >> {log:q} 2>&1
         echo "[qc_report] comparative charts" >> {log:q}
         python {REPO_DIR:q}/workflow/scripts/qc_report.py \
             --quant {params.quantdir:q} \
+            --quantifier {params.quantifier:q} \
             --out {params.outdir:q} \
             --samples {input.sheet:q} \
             --project={params.project:q} \

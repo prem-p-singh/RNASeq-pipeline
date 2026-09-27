@@ -88,6 +88,11 @@ bf <- build_contrasts(dummy,
                       sheet, model_vars)
 stopifnot(abs(estimate(bf$matrix) + 10) < 0.5)
 
+explicit <- build_contrasts(dummy,
+  list(list(id = "chosen", factor = "treatment", numerator = "treated", denominator = "control")),
+  sheet, model_vars)
+stopifnot(nrow(explicit$matrix) == 1, abs(estimate(explicit$matrix) - 10) < 0.5)
+
 # within-stage keeps direction in every stratum
 bw <- build_contrasts(dummy,
                       list(list(id = "trt_by_stage", type = "pairwise",
@@ -96,6 +101,16 @@ bw <- build_contrasts(dummy,
 stopifnot(nrow(bw$matrix) == 2)
 stopifnot(all(abs(estimate(bw$matrix) - 10) < 0.5))
 stopifnot(all(bw$directions$by_variable == "stage"))
+
+# Explicit coefficient combinations support interaction differences without eval.
+bl <- build_contrasts(dummy, list(list(id = "interaction", type = "linear",
+  weights = list("treatmenttreated:stagelate" = 1))), sheet, model_vars)
+stopifnot(identical(rownames(bl$matrix), "interaction"),
+          bl$matrix[1, "treatmenttreated:stagelate"] == 1,
+          sum(abs(bl$matrix)) == 1)
+bad_weights <- try(build_contrasts(dummy, list(list(id = "bad", type = "linear",
+  weights = list(unknown_coefficient = 1))), sheet, model_vars), silent = TRUE)
+stopifnot(inherits(bad_weights, "try-error"))
 
 # a contrast naming a column that does not exist must stop
 bad <- tryCatch({

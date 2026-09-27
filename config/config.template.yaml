@@ -12,7 +12,17 @@ project:
 analysis:
   objectives: [gene_expression, differential_expression]
   backend: auto
+  quantifier: auto  # auto: Salmon for gene expression, STAR for alignment objectives
   umi: false
+
+preprocessing:
+  # fastp instrument-header detection; explicitly set on/off for known chemistry.
+  poly_g: auto
+  adapter_r1: ""
+  adapter_r2: ""
+  minimum_length: 15
+  qualified_quality_phred: 15
+  unqualified_percent_limit: 40
 
 # -----------------------------------------------------------------------------
 # Organism / reference
@@ -47,7 +57,8 @@ orgdb:
 
 reference:
   kmer: 31
-  decoys: null
+  star_overhang: 99  # longest read length minus one
+  decoys: null  # genome: append genome_fasta_url as full genomic decoys; null: transcriptome only
   # accession + assembly_name identify exactly which reference was used and key
   # the OrgDb cache. setup.py fills them in; set them by hand if you write this
   # config yourself, otherwise the cache key degrades to "unknown".
@@ -61,7 +72,7 @@ reference:
   cache_dir: "~/rnaseq_reference_cache"
   # URLs must be concrete filenames. A '*' here is a guaranteed Stage 0 failure:
   # curl does not expand globs. setup.py refuses to finish if one slips through.
-  genome_fasta_url: null  # optional; the current index uses transcriptome_fasta_url
+  genome_fasta_url: null  # required when decoys: genome
   transcriptome_fasta_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_rna.fna.gz"
   gtf_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_genomic.gtf.gz"
   annotation_tsv:                               # NCBI/Ensembl-style gene-info table
