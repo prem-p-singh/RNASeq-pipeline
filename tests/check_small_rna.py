@@ -82,6 +82,10 @@ with tempfile.TemporaryDirectory() as t:
     loci = (t / 'l.tsv').read_text().splitlines()
     assert loci[0] == 'Name\tChrom\tStart\tEnd\tStrand\tDicerCall\tMIRNA\tKnown_miRNAs'
     assert [l.split('\t')[5] for l in loci[1:]] == ['21', '24', 'N']
+    # Without --known_miRNAs the column may be absent: loci still written, counts not aborted.
+    (t / 'R2.txt').write_text('\t'.join(cols[:-1]) + '\n' + ''.join('\t'.join(r[:-1]) + '\n' for r in rows))
+    assert shortstack_matrix(t / 'Counts.txt', t / 'R2.txt', t / 'm2.tsv', t / 'l2.tsv') == 3
+    assert [l.split('\t')[7] for l in (t / 'l2.tsv').read_text().splitlines()[1:]] == ['NA'] * 3
     # Plant QC: reads in loci over reads after preprocessing, in count_metrics' shape.
     (t / 'pre.json').write_text(json.dumps({'reads_after': 200}))
     m = matrix_metrics(t / 'm.tsv', t / 'pre.json', 'S2', t / 'metrics.json')

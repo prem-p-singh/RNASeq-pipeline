@@ -90,9 +90,10 @@ def shortstack_matrix(counts_txt, results_txt, out_counts, out_loci):
     Path(out_counts).write_text('\t'.join(['gene_id'] + head[3:]) + '\n' +
                                 ''.join('\t'.join([r[1]] + r[3:]) + '\n' for r in rows[1:]))
     keep = ['Name', 'Chrom', 'Start', 'End', 'Strand', 'DicerCall', 'MIRNA', 'Known_miRNAs']
+    # Known_miRNAs may be absent without --known_miRNAs; the counts matrix must not fail on the loci table.
     with open(results_txt) as fh:
         loci = list(csv.DictReader(fh, delimiter='\t'))
-    Path(out_loci).write_text('\t'.join(keep) + '\n' + ''.join('\t'.join(r[k] for k in keep) + '\n' for r in loci))
+    Path(out_loci).write_text('\t'.join(keep) + '\n' + ''.join('\t'.join(r[k] if k != 'Known_miRNAs' else r.get(k, 'NA') for k in keep) + '\n' for r in loci))
     return len(rows) - 1
 
 
@@ -108,6 +109,7 @@ def matrix_metrics(matrix_tsv, preprocessing_json, sample, metrics_json):
         raise ValueError(f'{preprocessing_json}: no reads after preprocessing')
     m = dict(schema_version=1, sample=sample, producer='shortstack_loci', count_unit='reads',
              num_reads_processed=reads, num_mapped=in_loci, num_assigned=in_loci,
+             # reads in loci / reads after trimming: stricter than the animal rate, same srnaseq threshold
              mapping_rate=in_loci / reads, assignment_rate=in_loci / reads,
              multimapping='placed by ShortStack')
     Path(metrics_json).write_text(json.dumps(m, indent=2) + '\n')
