@@ -140,6 +140,7 @@ run check_screen_real        "python3 tests/check_screen.py --real"
 run check_screen_workflow    "bash tests/check_screen_workflow.sh"
 run check_star.py            "python3 tests/check_star.py"
 run check_star_workflow.sh   "bash tests/check_star_workflow.sh"
+run check_tagseq_workflow.sh "bash tests/check_tagseq_workflow.sh"
 if command -v Rscript >/dev/null 2>&1; then
     run check_enrichment.R "Rscript tests/check_enrichment.R"
 else
