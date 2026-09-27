@@ -616,6 +616,7 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
         "tax_id": org["tax_id"],
         "kegg_code": org["kegg_code"],
         "orgdb_package": org["orgdb_package"],
+        "mirbase_prefix": inputs.get("mirbase_prefix"),
     })
 
     cfg["reference"].update({
@@ -623,9 +624,15 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
         # this assembly; without them every organism collides on "unknown".
         "accession": ref.get("accession"),
         "assembly_name": ref.get("assembly_name"),
-        "genome_fasta_url": ref["genome_fasta_url"],
-        "transcriptome_fasta_url": ref["transcriptome_fasta_url"],
-        "gtf_url": ref["gtf_url"],
+        # .get(): bulk's resolved/custom reference dict always carries these
+        # keys (possibly None); the small-RNA routes' reference_overrides
+        # only carry the subset each profile needs (animal: mature_mirna_url;
+        # plant: genome_fasta_url/gtf_url), so indexing them directly would
+        # KeyError. Bulk's actual values are unaffected either way.
+        "genome_fasta_url": ref.get("genome_fasta_url"),
+        "transcriptome_fasta_url": ref.get("transcriptome_fasta_url"),
+        "gtf_url": ref.get("gtf_url"),
+        "mature_mirna_url": ref.get("mature_mirna_url"),
         # New projects use full genomic decoys. Existing projects retain their
         # explicit setting; the shared resolver's legacy default is unchanged.
         "decoys": inputs.get("reference_decoys", "genome"),
@@ -791,7 +798,15 @@ def main():
 
     # Stop before anything can be submitted if the reference never resolved.
     # The config is still written so it can be corrected by hand.
-    required_refs = ['genome_fasta_url', 'gtf_url'] if (inputs.get('analysis') or {}).get('quantifier') == 'star' else ['transcriptome_fasta_url', 'gtf_url'] + (['genome_fasta_url'] if inputs.get('reference_decoys', 'genome') == 'genome' else [])
+    small_rna_profile = (inputs.get('analysis') or {}).get('small_rna_profile')
+    if small_rna_profile == 'animal':
+        required_refs = ['mature_mirna_url']
+    elif small_rna_profile == 'plant':
+        required_refs = ['genome_fasta_url']
+    elif (inputs.get('analysis') or {}).get('quantifier') == 'star':
+        required_refs = ['genome_fasta_url', 'gtf_url']
+    else:
+        required_refs = ['transcriptome_fasta_url', 'gtf_url'] + (['genome_fasta_url'] if inputs.get('reference_decoys', 'genome') == 'genome' else [])
     problems = unresolved_reference_urls(ref, required_refs)
     if problems:
         print("\n" + "=" * 60)

@@ -66,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     assert "platform" not in record["context_only"] and "library_kit" in record["context_only"]
     legacy=openpyxl.load_workbook(book)
     legacy['README']['B2']=3
-    legacy['Bulk RNA-seq'].delete_rows(36,8)
+    legacy['Bulk RNA-seq'].delete_rows(37,7)
     legacy.save(base/'schema3.xlsx')
     assert setup_inputs(read_intake(base/'schema3.xlsx'))['analysis']=={'quantifier':'auto','backend':'auto'}
 
@@ -194,6 +194,11 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
         for mate in (1, 2):
             (reads / f"{sid}_R{mate}.fastq.gz").write_bytes(b"fixture")
     (base / "samples.tsv").write_text("\n".join(rows) + "\n")
+    srna_reads = base / "srna_reads"
+    srna_reads.mkdir()
+    for i in range(1, 7):
+        sid = "NA" if i == 6 else f"00{i}"
+        (srna_reads / f"{sid}.fastq.gz").write_bytes(b"fixture")
     project = base / "project"
     org = dict(genus="Homo", species="sapiens", tax_id=9606, kegg_code="hsa", orgdb_package="org.Hs.eg.db")
     ref = dict(accession="fixture", assembly_name="fixture",
@@ -359,6 +364,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
         "read_config": "single-end", "adapter_kit": "TruSeq Small RNA",
         "small_rna_profile": "plant", "mirbase_prefix": "ath",
         "reference_genome": "genome.fa", "reference_gtf": "genes.gtf",
+        "fastq_path": "srna_reads",
     })
     for key, value in srna_answers.items():
         if key in srna_cells:
@@ -397,5 +403,48 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     assert any("plant organism with the animal profile" in msg for msg in mixed_record["limitations"]), mixed_record["limitations"]
     s2[srna_cells["small_rna_profile"]] = "plant"
     s2[srna_cells["organism"]] = "human"
+    sr.save(base / "srna.xlsx")
+
+    # End-to-end: a workbook-launched sRNA project writes a config.yaml that
+    # recommend() accepts, for both profiles.
+    from recommend import recommend as recommend_cfg
+    plant_project = base / "srna plant project"
+    argv = ["setup.py", "--intake", str(base / "srna.xlsx"), "--intake-sheet", "sRNA-seq",
+            "--project-dir", str(plant_project), "--plan-only"]
+    with patch.object(sys, "argv", argv), patch.object(setup, "resolve_organism", return_value=org), \
+         patch.object(setup, "resolve_reference_urls", side_effect=AssertionError("srna plant used network reference lookup")):
+        setup.main()
+    plant_cfg = yaml.safe_load((plant_project / "config/config.yaml").read_text())
+    assert plant_cfg["samples"]["seq_type"] == "srnaseq"
+    assert plant_cfg["analysis"]["small_rna_profile"] == "plant"
+    assert plant_cfg["analysis"]["small_rna_kit"] == "TruSeq Small RNA"
+    assert plant_cfg["reference"]["genome_fasta_url"] == (base / "genome.fa").as_uri()
+    assert plant_cfg["preprocessing"]["length_limit"] == 30
+    plant_reco = recommend_cfg(plant_cfg)
+    assert plant_reco["status"] == "selected" and plant_reco["route"] == "small_rna_plant", plant_reco
+
+    # animal profile: mature_mirna_url + mirbase_prefix carried through; no genome needed.
+    s2[srna_cells["small_rna_profile"]] = "animal"
+    s2[srna_cells["mirbase_prefix"]] = "hsa"
+    s2[srna_cells["reference_genome"]] = None
+    s2[srna_cells["reference_gtf"]] = None
+    sr.save(base / "srna_animal.xlsx")
+    animal_project = base / "srna animal project"
+    argv = ["setup.py", "--intake", str(base / "srna_animal.xlsx"), "--intake-sheet", "sRNA-seq",
+            "--project-dir", str(animal_project), "--plan-only"]
+    with patch.object(sys, "argv", argv), patch.object(setup, "resolve_organism", return_value=org), \
+         patch.object(setup, "resolve_reference_urls", side_effect=AssertionError("srna animal used network reference lookup")):
+        setup.main()
+    animal_cfg = yaml.safe_load((animal_project / "config/config.yaml").read_text())
+    assert animal_cfg["analysis"]["small_rna_profile"] == "animal"
+    assert animal_cfg["organism"]["mirbase_prefix"] == "hsa"
+    assert animal_cfg["reference"]["mature_mirna_url"] == "https://mirbase.org/download/mature.fa"
+    assert animal_cfg["reference"]["genome_fasta_url"] is None
+    animal_reco = recommend_cfg(animal_cfg)
+    assert animal_reco["status"] == "selected" and animal_reco["route"] == "small_rna_animal", animal_reco
+    s2[srna_cells["small_rna_profile"]] = "plant"
+    s2[srna_cells["mirbase_prefix"]] = "ath"
+    s2[srna_cells["reference_genome"]] = "genome.fa"
+    s2[srna_cells["reference_gtf"]] = "genes.gtf"
 
 print("check_intake.py: all assertions passed")

@@ -211,6 +211,18 @@ common_questions:
     default: differential expression
     required: false
     introduced_in: 5
+  - id: analysis_backend
+    text: Differential expression method
+    help: auto follows the handbook default at setup (DESeq2 for 3-12 biological units per group, limma-voom above 12, dream with a random subject). Explicit methods keep the declared model.
+    type: dropdown
+    options:
+    - auto
+    - limma_voom
+    - edger_ql
+    - deseq2
+    default: auto
+    required: false
+    introduced_in: 4
   - id: subject_column
     text: Subject column (repeated measures)
     help: Metadata column naming the donor/plant/animal measured repeatedly. Required when repeated measures is yes.
@@ -312,18 +324,6 @@ tabs:
         - auto
         - salmon
         - star
-        default: auto
-        required: false
-        introduced_in: 4
-      - id: analysis_backend
-        text: Differential expression method
-        help: auto follows the handbook default at setup (DESeq2 for 3-12 biological units per group, limma-voom above 12, dream with a random subject). Explicit methods keep the declared model.
-        type: dropdown
-        options:
-        - auto
-        - limma_voom
-        - edger_ql
-        - deseq2
         default: auto
         required: false
         introduced_in: 4

@@ -215,11 +215,11 @@ def setup_inputs(record):
         p = Path(value).expanduser()
         return str(p if p.is_absolute() else Path(record["source"]).parent / p)
 
+    if a["orgdb_strategy"] == "use_existing":
+        fail("orgdb_strategy", "This workbook has no OrgDb package field. Use YAML with an explicit package.")
     srna_limitation = None
     mirbase_prefix = None
     if is_srna:
-        if a["orgdb_strategy"] == "use_existing":
-            fail("orgdb_strategy", "This workbook has no OrgDb package field. Use YAML with an explicit package.")
         quantifier = backend = None
         decoys = None
         supplied = expected = None
@@ -281,8 +281,6 @@ def setup_inputs(record):
             allowed = {"IU", "ISF", "ISR", "OU", "OSF", "OSR", "MU", "MSF", "MSR"} if layout == "rnaseq_paired" else {"U", "SF", "SR"}
             if supplied not in allowed:
                 fail("expected_libtype", f"invalid library type for {a['read_config']}")
-        if a["orgdb_strategy"] == "use_existing":
-            fail("orgdb_strategy", "This workbook has no OrgDb package field. Use YAML with an explicit package.")
         quantifier = a.get('analysis_quantifier') or 'auto'
         backend = a.get('analysis_backend') or 'auto'
         decoys = None if a.get('reference_decoys') == 'transcriptome only' else 'genome'
