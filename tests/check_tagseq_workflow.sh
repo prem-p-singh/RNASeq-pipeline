@@ -28,7 +28,7 @@ from pathlib import Path
 import yaml
 proj, kit, repo = Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3])
 rng = random.Random(27092026)
-genome = ''.join(rng.choices('ACGT', k=10000))
+genome = ''.join(rng.choices('ACGT', k=30000))  # STAR 2.7.11b aborts indexing a 10 kb genome with a GTF (job 39023968)
 (proj / 'inputs').mkdir(parents=True); (proj / 'config').mkdir()
 (proj / 'inputs/genome.fa').write_text(f'>chr1\n{genome}\n')
 (proj / 'inputs/genes.gtf').write_text(
