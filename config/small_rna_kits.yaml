@@ -11,3 +11,7 @@ kits:
     sources: [https://support-docs.illumina.com/SHARE/AdapterSequences/Content/TruSeq-SmallRNA.htm]
 blocked:
   QIAseq miRNA: UMI small-RNA kits need UMI-aware counting, which is not implemented.
+# miRBase species codes for plants. No local organism preset carries a
+# kingdom/lineage field, so the animal/plant mismatch check compares the
+# chosen mirbase_prefix against this list instead.
+plant_mirbase_prefixes: [ath, osa, zma, gma, vvi, sly, mtr, ptc, bdi, sbi]

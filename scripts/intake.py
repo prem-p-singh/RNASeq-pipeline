@@ -10,6 +10,7 @@ import re
 
 import yaml
 import metadata
+from small_rna import load_kit, kit_policy
 
 ROOT = Path(__file__).resolve().parent.parent
 # NCBI nuccore FASTA for the Illumina PhiX control; identity is hashed at download.
@@ -26,8 +27,8 @@ def read_intake(path, sheet_name=None):
     try:
         version = workbook["README"]["B2"].value if "README" in workbook.sheetnames else None
         version = 1 if version in (None, "") else version
-        if type(version) is not int or version not in (1, 2, 3, 4, 5):
-            raise ValueError("README!B2: unsupported intake schema version; expected 1 to 5")
+        if type(version) is not int or version not in (1, 2, 3, 4, 5, 6):
+            raise ValueError("README!B2: unsupported intake schema version; expected 1 to 6")
         candidates = []
         for name in tabs:
             if name in workbook.sheetnames:
@@ -149,19 +150,24 @@ def setup_inputs(record):
     def fail(key, detail):
         raise ValueError(f"{sources.get(key, record['sheet'])}: {detail}")
 
-    if record["sheet"] != "Bulk RNA-seq":
-        fail("project_name", "Direct intake execution currently supports Bulk RNA-seq only. "
-             "TAG-seq needs kit qualification; small RNA needs its own processing route. "
-             "No bulk fallback was selected.")
+    if record["sheet"] not in ("Bulk RNA-seq", "sRNA-seq"):
+        fail("project_name", "Direct intake execution currently supports Bulk RNA-seq and sRNA-seq only. "
+             "TAG-seq needs kit qualification. No bulk fallback was selected.")
+    is_srna = record["sheet"] == "sRNA-seq"
     if a.get("input_stage", "raw FASTQ") != "raw FASTQ":
         fail("input_stage", "Only raw FASTQ input is implemented; no counts/object or instrument-data import is available.")
     if a.get("umi", "no") != "no":
         fail("umi", "Confirm a non-UMI library. UMI processing is not implemented; unknown status must be resolved.")
     if not re.fullmatch(r"[A-Za-z0-9_]+", str(a["project_name"])):
         fail("project_name", "use letters, digits and underscores")
-    layout = {"paired-end": "rnaseq_paired", "single-end": "rnaseq_single"}.get(a["read_config"])
-    if layout is None:
-        fail("read_config", "read configuration must be resolved before setup")
+    if is_srna:
+        if a["read_config"] != "single-end":
+            fail("read_config", "small-RNA routes are single-end only; set read configuration to single-end")
+        layout = "srnaseq"
+    else:
+        layout = {"paired-end": "rnaseq_paired", "single-end": "rnaseq_single"}.get(a["read_config"])
+        if layout is None:
+            fail("read_config", "read configuration must be resolved before setup")
     factor = str(a["primary_factor"])
     batch = a["batch_effect_column"]
     subject = a.get("subject_column")
@@ -209,67 +215,112 @@ def setup_inputs(record):
         p = Path(value).expanduser()
         return str(p if p.is_absolute() else Path(record["source"]).parent / p)
 
-    kits = yaml.safe_load((ROOT / "config/kit_profiles.yaml").read_text())
-    protocol = a.get("library_protocol") or "explicit"
-    kit = kits["profiles"].get(protocol, {})
-    if protocol != "explicit":
-        for key, field in (("strandedness", "strandedness"), ("adapter_r1", "preprocess_adapter_r1"), ("adapter_r2", "preprocess_adapter_r2")):
-            given = a.get(field)
-            if key != "strandedness" and given:
-                given = str(given).upper()
-            if given not in (None, "", "don't know") and given != kit[key]:
-                fail(field, f"conflicts with {protocol} profile ({kit[key]})")
-    strand = kit.get("strandedness") or a["strandedness"]
-    expected = {"reverse": "ISR" if layout == "rnaseq_paired" else "SR",
-                "forward": "ISF" if layout == "rnaseq_paired" else "SF",
-                "unstranded": "IU" if layout == "rnaseq_paired" else "U"}.get(strand)
-    supplied = a.get("expected_libtype")
-    if supplied and expected and supplied.upper() != expected:
-        fail("expected_libtype", f"conflicts with declared strand/layout ({expected})")
-    if supplied:
-        supplied = supplied.upper()
-        allowed = {"IU", "ISF", "ISR", "OU", "OSF", "OSR", "MU", "MSF", "MSR"} if layout == "rnaseq_paired" else {"U", "SF", "SR"}
-        if supplied not in allowed:
-            fail("expected_libtype", f"invalid library type for {a['read_config']}")
-    if a["orgdb_strategy"] == "use_existing":
-        fail("orgdb_strategy", "This workbook has no OrgDb package field. Use YAML with an explicit package.")
-    quantifier = a.get('analysis_quantifier') or 'auto'
-    backend = a.get('analysis_backend') or 'auto'
-    decoys = None if a.get('reference_decoys') == 'transcriptome only' else 'genome'
-    custom_ref = {key: a.get(field) for key, field in (
-        ('genome_fasta_url', 'reference_genome'), ('transcriptome_fasta_url', 'reference_transcriptome'),
-        ('gtf_url', 'reference_gtf'))}
-    if any(custom_ref.values()):
-        required_refs = ['genome_fasta_url', 'gtf_url'] if quantifier == 'star' else ['transcriptome_fasta_url', 'gtf_url'] + (['genome_fasta_url'] if decoys else [])
-        missing = [key for key in required_refs if not custom_ref[key]]
-        if missing:
-            fail('reference_gtf', 'Incomplete custom reference set: missing ' + ', '.join(missing))
-        custom_ref = {key: (value if '://' in str(value) else Path(absolute(str(value))).as_uri())
-                      if value else None for key, value in custom_ref.items()}
-        custom_ref.update(accession='custom', assembly_name=None, gene_info_url=None)
+    srna_limitation = None
+    mirbase_prefix = None
+    if is_srna:
+        if a["orgdb_strategy"] == "use_existing":
+            fail("orgdb_strategy", "This workbook has no OrgDb package field. Use YAML with an explicit package.")
+        quantifier = backend = None
+        decoys = None
+        supplied = expected = None
+        kit_name = a.get("adapter_kit")
+        try:
+            kit = load_kit(kit_name)
+        except ValueError as exc:
+            fail("adapter_kit", str(exc))
+        from preprocessing import policy_args
+        try:
+            policy, _ = policy_args(kit_policy(kit), False)
+        except ValueError as exc:
+            fail("adapter_kit", str(exc))
+        profile = a.get("small_rna_profile")
+        if profile not in ("animal", "plant"):
+            fail("small_rna_profile", "choose animal or plant")
+        mirbase_prefix = a.get("mirbase_prefix") or None
+        genome_url, gtf_url = a.get("reference_genome"), a.get("reference_gtf")
+        mature_url = None
+        if profile == "animal":
+            if not mirbase_prefix:
+                fail("mirbase_prefix", "The animal small-RNA route requires mirbase_prefix")
+            mature_url = "https://mirbase.org/download/mature.fa"
+            kits_table = yaml.safe_load((ROOT / "config/small_rna_kits.yaml").read_text())
+            if mirbase_prefix in kits_table.get("plant_mirbase_prefixes", []):
+                srna_limitation = (f"mirbase_prefix {mirbase_prefix!r} is a plant organism with the animal "
+                                    "profile; counts will miss plant-specific small-RNA size classes.")
+        else:
+            if not genome_url:
+                fail("reference_genome", "The plant small-RNA route requires reference_genome")
+            if mirbase_prefix:
+                mature_url = "https://mirbase.org/download/mature.fa"
+        custom_ref = {}
+        for key, value in (("genome_fasta_url", genome_url), ("gtf_url", gtf_url), ("mature_mirna_url", mature_url)):
+            if value:
+                custom_ref[key] = value if "://" in str(value) else Path(absolute(str(value))).as_uri()
+        custom_ref = custom_ref or None
+        analysis_out = dict(small_rna_profile=profile, small_rna_kit=kit_name)
     else:
-        custom_ref = None
-    if quantifier == 'star':
-        tables = record.get('metadata_tables')
-        if tables:
-            if any(row['strandedness'] not in ('unstranded', 'forward', 'reverse') for row in tables['libraries']):
-                fail('analysis_quantifier', 'STAR requires known strandedness for every library in Libraries')
-        elif (supplied or expected) not in ({'IU', 'ISF', 'ISR'} if layout == 'rnaseq_paired' else {'U', 'SF', 'SR'}):
-            fail('strandedness', 'STAR requires known strandedness and inward paired orientation')
-    from preprocessing import policy_args
-    poly_g = a.get('preprocess_poly_g') or 'auto'
-    if poly_g == 'auto':
-        poly_g = kits['platform_poly_g'].get(a.get('platform'), 'auto')
-    paired = layout == 'rnaseq_paired'
-    policy = dict(poly_g=poly_g,
-                  adapter_r1=kit.get('adapter_r1') or str(a.get('preprocess_adapter_r1') or '').upper(),
-                  adapter_r2=(kit.get('adapter_r2') if paired else '') or str(a.get('preprocess_adapter_r2') or '').upper(),
-                  minimum_length=int(a.get('preprocess_minimum_length') or 15))
-    try:
-        policy, _ = policy_args(policy, layout == 'rnaseq_paired')
-    except ValueError as exc:
-        key = next((key for key in policy if key in str(exc)), 'minimum_length')
-        fail('preprocess_' + key, str(exc))
+        kits = yaml.safe_load((ROOT / "config/kit_profiles.yaml").read_text())
+        protocol = a.get("library_protocol") or "explicit"
+        kit = kits["profiles"].get(protocol, {})
+        if protocol != "explicit":
+            for key, field in (("strandedness", "strandedness"), ("adapter_r1", "preprocess_adapter_r1"), ("adapter_r2", "preprocess_adapter_r2")):
+                given = a.get(field)
+                if key != "strandedness" and given:
+                    given = str(given).upper()
+                if given not in (None, "", "don't know") and given != kit[key]:
+                    fail(field, f"conflicts with {protocol} profile ({kit[key]})")
+        strand = kit.get("strandedness") or a["strandedness"]
+        expected = {"reverse": "ISR" if layout == "rnaseq_paired" else "SR",
+                    "forward": "ISF" if layout == "rnaseq_paired" else "SF",
+                    "unstranded": "IU" if layout == "rnaseq_paired" else "U"}.get(strand)
+        supplied = a.get("expected_libtype")
+        if supplied and expected and supplied.upper() != expected:
+            fail("expected_libtype", f"conflicts with declared strand/layout ({expected})")
+        if supplied:
+            supplied = supplied.upper()
+            allowed = {"IU", "ISF", "ISR", "OU", "OSF", "OSR", "MU", "MSF", "MSR"} if layout == "rnaseq_paired" else {"U", "SF", "SR"}
+            if supplied not in allowed:
+                fail("expected_libtype", f"invalid library type for {a['read_config']}")
+        if a["orgdb_strategy"] == "use_existing":
+            fail("orgdb_strategy", "This workbook has no OrgDb package field. Use YAML with an explicit package.")
+        quantifier = a.get('analysis_quantifier') or 'auto'
+        backend = a.get('analysis_backend') or 'auto'
+        decoys = None if a.get('reference_decoys') == 'transcriptome only' else 'genome'
+        custom_ref = {key: a.get(field) for key, field in (
+            ('genome_fasta_url', 'reference_genome'), ('transcriptome_fasta_url', 'reference_transcriptome'),
+            ('gtf_url', 'reference_gtf'))}
+        if any(custom_ref.values()):
+            required_refs = ['genome_fasta_url', 'gtf_url'] if quantifier == 'star' else ['transcriptome_fasta_url', 'gtf_url'] + (['genome_fasta_url'] if decoys else [])
+            missing = [key for key in required_refs if not custom_ref[key]]
+            if missing:
+                fail('reference_gtf', 'Incomplete custom reference set: missing ' + ', '.join(missing))
+            custom_ref = {key: (value if '://' in str(value) else Path(absolute(str(value))).as_uri())
+                          if value else None for key, value in custom_ref.items()}
+            custom_ref.update(accession='custom', assembly_name=None, gene_info_url=None)
+        else:
+            custom_ref = None
+        if quantifier == 'star':
+            tables = record.get('metadata_tables')
+            if tables:
+                if any(row['strandedness'] not in ('unstranded', 'forward', 'reverse') for row in tables['libraries']):
+                    fail('analysis_quantifier', 'STAR requires known strandedness for every library in Libraries')
+            elif (supplied or expected) not in ({'IU', 'ISF', 'ISR'} if layout == 'rnaseq_paired' else {'U', 'SF', 'SR'}):
+                fail('strandedness', 'STAR requires known strandedness and inward paired orientation')
+        from preprocessing import policy_args
+        poly_g = a.get('preprocess_poly_g') or 'auto'
+        if poly_g == 'auto':
+            poly_g = kits['platform_poly_g'].get(a.get('platform'), 'auto')
+        paired = layout == 'rnaseq_paired'
+        policy = dict(poly_g=poly_g,
+                      adapter_r1=kit.get('adapter_r1') or str(a.get('preprocess_adapter_r1') or '').upper(),
+                      adapter_r2=(kit.get('adapter_r2') if paired else '') or str(a.get('preprocess_adapter_r2') or '').upper(),
+                      minimum_length=int(a.get('preprocess_minimum_length') or 15))
+        try:
+            policy, _ = policy_args(policy, layout == 'rnaseq_paired')
+        except ValueError as exc:
+            key = next((key for key in policy if key in str(exc)), 'minimum_length')
+            fail('preprocess_' + key, str(exc))
+        analysis_out = dict(quantifier=quantifier, backend=backend)
     enrichment = a["run_enrichment"] == "yes"
     if enrichment and a["orgdb_strategy"] == "skip":
         fail("orgdb_strategy", "skip conflicts with requested GO + KEGG enrichment; select no enrichment or a strategy")
@@ -317,12 +368,14 @@ def setup_inputs(record):
             validate(screening)
         except ValueError as exc:
             fail("screening_extra", str(exc))
-    record["context_only"] = ["contact_email", "tissue_type", "library_type", "library_kit"]
+    record["context_only"] = ["contact_email", "tissue_type", "library_type", "library_kit", "size_range"]
     record["limitations"] = [
         "A named protocol sets adapters and strand only; it is not a kit-level scientific qualification.",
         "Contact email is recorded but does not configure scheduler notifications.",
         "Multiple libraries per sample and non-bulk workbook execution remain pending assay qualification.",
     ]
+    if srna_limitation:
+        record["limitations"].append(srna_limitation)
     if record["schema_version"] == 1:
         record["limitations"].append("Legacy workbook: assumes raw non-UMI bulk input. Confirm protocol or use the current template with explicit eligibility fields.")
     tables = record.get("metadata_tables")
@@ -332,11 +385,12 @@ def setup_inputs(record):
             fail("repeated_measures", "Repeated biological units require repeated measures = yes and a subject column")
         for read in tables["reads"]:
             read["uri"] = absolute(read["uri"])
-        if kit and any(lib["strandedness"] not in ("unknown", kit["strandedness"]) for lib in tables["libraries"]):
+        if not is_srna and kit and any(lib["strandedness"] not in ("unknown", kit["strandedness"]) for lib in tables["libraries"]):
             fail("library_protocol", f"Libraries strandedness conflicts with {protocol} ({kit['strandedness']})")
     return dict(project_name=a["project_name"], tax_id=tax_id, seq_type=layout,
-                analysis=dict(quantifier=quantifier, backend=backend), preprocessing=policy,
+                analysis=analysis_out, preprocessing=policy,
                 reference_overrides=custom_ref, reference_decoys=decoys,
+                mirbase_prefix=mirbase_prefix,
                 metadata_tables=tables,
                 fastq_source=absolute(str(a["fastq_path"])) if not tables else None,
                 metadata_file=absolute(str(a["metadata_file"])) if not tables else None,

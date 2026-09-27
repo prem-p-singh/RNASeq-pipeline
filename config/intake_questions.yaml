@@ -23,11 +23,11 @@
 # -----------------------------------------------------------------------------
 # Questions that appear on EVERY assay tab (project basics, paths, design)
 # -----------------------------------------------------------------------------
-schema_version: 5
+schema_version: 6
 readme:
   - "Fill the Bulk RNA-seq tab for the currently implemented Excel intake. Yellow cells are required; gray cells are optional. Enter literal values, not formulas."
   - "Current execution: annotated, non-UMI bulk QC, gene expression and differential expression; Salmon or STAR; independent groups, batch, subject-blocked or repeated-measures (dream) designs, interactions and continuous covariates."
-  - "TAGseq and sRNA-seq tabs are planning questionnaires only. They cannot launch from this workbook. Other planned RNA families have no executable intake yet."
+  - "sRNA-seq launches animal (Bowtie to species mature miRNAs) or plant (ShortStack loci on the genome) small-RNA routes with a named non-UMI kit. TAGseq remains a planning questionnaire only and cannot launch from this workbook. Other planned RNA families have no executable intake yet."
   - "Choose external files or workbook tables. For workbook tables, fill Samples, Libraries and Reads; clear the FASTQ folder and external metadata path."
   - "Keep identifiers as Text before entry. One library per sample is executable; multiple run/lane read pairs within that library are checked and merged."
   - "Confirm input stage and whether the library uses UMIs. Unknown UMI status must be resolved; UMI libraries are unsupported by the current bulk route."
@@ -203,6 +203,47 @@ common_questions:
     required: true
     default: "yes"
 
+  - id: analysis_goal
+    text: Analysis goal
+    help: QC only needs no reference or model. Expression only produces counts (and WGCNA if requested) without DE.
+    type: dropdown
+    options: [differential expression, expression only, QC only]
+    default: differential expression
+    required: false
+    introduced_in: 5
+  - id: subject_column
+    text: Subject column (repeated measures)
+    help: Metadata column naming the donor/plant/animal measured repeatedly. Required when repeated measures is yes.
+    type: text
+    required: false
+    introduced_in: 5
+  - id: subject_model
+    text: Subject effect
+    help: random fits (1|subject) with dream. fixed block adds subject as a fixed term (paired designs) with any fixed-effect method.
+    type: dropdown
+    options: [random, fixed block]
+    default: random
+    required: false
+    introduced_in: 5
+  - id: model_formula
+    text: Fixed-effects formula (optional)
+    help: "Replaces the generated formula. Example: ~ batch + genotype * treatment + age. Must include the primary factor, batch and a fixed subject block when declared."
+    type: text
+    required: false
+    introduced_in: 5
+  - id: reference_genome
+    text: Custom genome FASTA path or URL
+    help: Optional custom reference set. With STAR, provide genome and GTF. With Salmon genomic decoys, also provide transcripts. Small-RNA plant routes need this and the GTF.
+    type: text
+    required: false
+    introduced_in: 4
+  - id: reference_gtf
+    text: Custom annotation GTF path or URL
+    help: Use the matching assembly/release. If any custom reference is supplied, provide the complete required set.
+    type: text
+    required: false
+    introduced_in: 4
+
 
 # -----------------------------------------------------------------------------
 # Per-assay tabs. Each tab gets all common_questions PLUS its own extras.
@@ -286,21 +327,9 @@ tabs:
         default: auto
         required: false
         introduced_in: 4
-      - id: reference_genome
-        text: Custom genome FASTA path or URL
-        help: Optional custom reference set. With STAR, provide genome and GTF. With Salmon genomic decoys, also provide transcripts.
-        type: text
-        required: false
-        introduced_in: 4
       - id: reference_transcriptome
         text: Custom transcriptome FASTA path or URL
         help: Salmon custom reference requires transcripts and GTF; genomic decoys additionally need genome. IDs must match annotation.
-        type: text
-        required: false
-        introduced_in: 4
-      - id: reference_gtf
-        text: Custom annotation GTF path or URL
-        help: Use the matching assembly/release. If any custom reference is supplied, provide the complete required set.
         type: text
         required: false
         introduced_in: 4
@@ -345,34 +374,6 @@ tabs:
         default: 15
         required: false
         introduced_in: 4
-      - id: analysis_goal
-        text: Analysis goal
-        help: QC only needs no reference or model. Expression only produces counts (and WGCNA if requested) without DE.
-        type: dropdown
-        options: [differential expression, expression only, QC only]
-        default: differential expression
-        required: false
-        introduced_in: 5
-      - id: subject_column
-        text: Subject column (repeated measures)
-        help: Metadata column naming the donor/plant/animal measured repeatedly. Required when repeated measures is yes.
-        type: text
-        required: false
-        introduced_in: 5
-      - id: subject_model
-        text: Subject effect
-        help: random fits (1|subject) with dream. fixed block adds subject as a fixed term (paired designs) with any fixed-effect method.
-        type: dropdown
-        options: [random, fixed block]
-        default: random
-        required: false
-        introduced_in: 5
-      - id: model_formula
-        text: Fixed-effects formula (optional)
-        help: "Replaces the generated formula. Example: ~ batch + genotype * treatment + age. Must include the primary factor, batch and a fixed subject block when declared."
-        type: text
-        required: false
-        introduced_in: 5
       - id: library_protocol
         text: Named library protocol
         help: Sets adapters and strand from a listed kit profile (config/kit_profiles.yaml). explicit uses the adapter and strand answers above.
@@ -431,19 +432,44 @@ tabs:
     description: |
       Small RNA sequencing (miRNAs, siRNAs, viral siRNAs).
       Single-end, very short reads (typically SE50 or SE75).
-      Special pipeline (not yet integrated — placeholder for future).
+      Launches the animal (Bowtie to species mature miRNAs) or plant
+      (ShortStack loci on the genome) route with a named non-UMI kit.
     extra_questions:
+
+      - id: read_config
+        text: "Read configuration"
+        help: "Small-RNA routes are single-end only."
+        type: dropdown
+        options: ["single-end", "paired-end", "don't know"]
+        required: true
+        default: "single-end"
+        introduced_in: 6
 
       - id: adapter_kit
         text: "Small-RNA library kit (determines adapter sequence)"
-        help: "Record the actual kit. Adapter, random-base and UMI handling still require a qualified small-RNA route."
+        help: "Named non-UMI kits only (config/small_rna_kits.yaml). UMI kits (e.g. QIAseq miRNA) are blocked: UMI-aware counting is not implemented."
         type: dropdown
-        options: ["NEXTflex Small RNA v4", "NEBNext Multiplex Small RNA", "QIAseq miRNA", "don't know"]
+        options: ["TruSeq Small RNA", "QIAseq miRNA", "don't know"]
         required: true
+
+      - id: small_rna_profile
+        text: "Small-RNA profile"
+        help: "animal: Bowtie to species mature miRNAs (needs mirbase_prefix below). plant: ShortStack loci on the genome (needs the genome FASTA above)."
+        type: dropdown
+        options: ["animal", "plant"]
+        required: true
+        introduced_in: 6
+
+      - id: mirbase_prefix
+        text: "miRBase species code (e.g. hsa, ath)"
+        help: "Required for the animal profile. Optional for plant, but only together with a mature miRNA reference; leave both blank to skip known-miRNA annotation."
+        type: text
+        required: false
+        introduced_in: 6
 
       - id: size_range
         text: "Expected sRNA size range (nt)"
-        help: "miRNAs = 20-22 nt; plant siRNAs = 21-24 nt; full sRNA universe = 18-30 nt."
+        help: "Context only; recorded for reference. It does not change the kit's 18-30 nt length settings, even when it names a narrower window."
         type: dropdown
         options: ["18-30 (broad)", "20-22 (miRNA-focused)", "21-24 (plant siRNA)"]
         required: true

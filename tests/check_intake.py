@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
                 row[2].value = answers[key]
     w.save(book)
     record = read_intake(book)
-    assert record["schema_version"] == 5
+    assert record["schema_version"] == 6
     inputs = setup_inputs(record)
     assert inputs["tax_id"] == 9606 and inputs["seq_type"] == "rnaseq_paired"
     assert inputs["expected_libtype"] == "ISR" and inputs["model_random_effects"] is None
@@ -66,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     assert "platform" not in record["context_only"] and "library_kit" in record["context_only"]
     legacy=openpyxl.load_workbook(book)
     legacy['README']['B2']=3
-    legacy['Bulk RNA-seq'].delete_rows(30,10)
+    legacy['Bulk RNA-seq'].delete_rows(36,8)
     legacy.save(base/'schema3.xlsx')
     assert setup_inputs(read_intake(base/'schema3.xlsx'))['analysis']=={'quantifier':'auto','backend':'auto'}
 
@@ -343,5 +343,59 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
         assert "no matching" in str(exc)
     else:
         raise AssertionError("Orphan read accepted")
+
+    # sRNA-seq tab: the workbook sheet launches animal/plant small-RNA routes.
+    sr = openpyxl.load_workbook(ROOT / "intake_template.xlsx")
+    s2 = sr["sRNA-seq"]
+    srna_tab = next(t for t in q["tabs"] if t["name"] == "sRNA-seq")
+    srna_labels = {item["text"]: item["id"] for item in q["common_questions"] + srna_tab["extra_questions"]}
+    srna_cells = {}
+    for row in s2.iter_rows(min_col=1, max_col=3):
+        key = srna_labels.get(row[1].value)
+        if key:
+            srna_cells[key] = row[2].coordinate
+    srna_answers = dict(answers)
+    srna_answers.update({
+        "read_config": "single-end", "adapter_kit": "TruSeq Small RNA",
+        "small_rna_profile": "plant", "mirbase_prefix": "ath",
+        "reference_genome": "genome.fa", "reference_gtf": "genes.gtf",
+    })
+    for key, value in srna_answers.items():
+        if key in srna_cells:
+            s2[srna_cells[key]] = value
+    sr.save(base / "srna.xlsx")
+    srna_record = read_intake(base / "srna.xlsx", "sRNA-seq")
+    assert srna_record["schema_version"] == 6
+    srna_inputs = setup_inputs(srna_record)
+    assert srna_inputs["seq_type"] == "srnaseq"
+    assert srna_inputs["analysis"] == {"small_rna_profile": "plant", "small_rna_kit": "TruSeq Small RNA"}
+    assert srna_inputs["preprocessing"]["length_limit"] == 30
+    assert srna_inputs["reference_overrides"]["genome_fasta_url"] == (base / "genome.fa").as_uri()
+
+    def srna_rejected(key, value, message):
+        old = s2[srna_cells[key]].value
+        s2[srna_cells[key]] = value
+        sr.save(base / "srna_bad.xlsx")
+        try:
+            setup_inputs(read_intake(base / "srna_bad.xlsx", "sRNA-seq"))
+        except ValueError as exc:
+            assert message in str(exc), str(exc)
+        else:
+            raise AssertionError(f"accepted invalid srna {key}={value!r}")
+        s2[srna_cells[key]] = old
+
+    srna_rejected("adapter_kit", "QIAseq miRNA", "UMI")
+    srna_rejected("read_config", "paired-end", "single-end")
+
+    # Mixed profile: a plant miRBase code with the animal profile is allowed, but flagged.
+    s2[srna_cells["small_rna_profile"]] = "animal"
+    s2[srna_cells["organism"]] = "Arabidopsis thaliana"
+    sr.save(base / "srna_mixed.xlsx")
+    mixed_record = read_intake(base / "srna_mixed.xlsx", "sRNA-seq")
+    mixed_inputs = setup_inputs(mixed_record)
+    assert mixed_inputs["tax_id"] == 3702
+    assert any("plant organism with the animal profile" in msg for msg in mixed_record["limitations"]), mixed_record["limitations"]
+    s2[srna_cells["small_rna_profile"]] = "plant"
+    s2[srna_cells["organism"]] = "human"
 
 print("check_intake.py: all assertions passed")
