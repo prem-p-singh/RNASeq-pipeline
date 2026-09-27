@@ -51,7 +51,8 @@ def policy_args(policy, paired):
 
 
 def loss_summary(data):
-    return dict(filtering_result=dict(data.get("filtering_result", {})))
+    fr = data.get("filtering_result", {})
+    return dict(filtering_result=dict(fr), size_selection=dict(too_short_reads=fr.get("too_short_reads", 0), too_long_reads=fr.get("too_long_reads", 0), mean_length_after=data["summary"]["after_filtering"].get("read1_mean_length")))
 
 
 def process(r1, r2, outdir, sample, threads, policy):
