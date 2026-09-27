@@ -85,6 +85,32 @@ rule qc_quant_sample:
             --delete-intermediates false > {log:q} 2>&1
         """
 
+rule fetch_screen_fasta:
+    output: fa = "screening_panel/{name}/source.fa"
+    params:
+        url = lambda wc: SCREEN_BUILT[wc.name] if "://" in SCREEN_BUILT[wc.name]
+              else Path(SCREEN_BUILT[wc.name]).expanduser().resolve().as_uri(),
+    shell:
+        "bash {REPO_DIR:q}/workflow/scripts/fetch_reference_file.sh --url {params.url:q} --out {output.fa:q} --kind fasta"
+
+rule build_screen_index:
+    input:
+        fa = lambda wc: {"transcriptome": REF / "transcriptome.fa", "genome": REF / "genome.fa"}.get(
+            SCREEN_BUILT[wc.name], f"screening_panel/{wc.name}/source.fa"),
+    output: done = "screening_panel/{name}/built.txt"
+    params: base = "screening_panel/{name}/{name}"
+    threads: 4
+    resources:
+        mem_mb = 16000,
+        runtime = 240,
+    log: "logs/screening/index_{name}.log"
+    shell:
+        """
+        set -euo pipefail
+        bowtie2-build --threads {threads} {input.fa:q} {params.base:q} > {log:q} 2>&1
+        {{ bowtie2-build --version | head -1; sha256sum {input.fa:q}; }} > {output.done:q}
+        """
+
 # A second consumer keeps temporary trimmed reads alive until screening finishes.
 # Disabled screening still publishes an explicit status; it requires no tools.
 rule screen_sample:
@@ -100,7 +126,7 @@ rule screen_sample:
         html = QUANT / "{sample}/screening/screening.html",
     params:
         runtime_identity = RUNTIME_ID,
-        policy = json.dumps(SCREEN_POLICY, sort_keys=True),
+        policy = json.dumps(SCREEN_RUN_POLICY, sort_keys=True),
         # Disabled mode does not read these paths (trimmed reads may be removed).
         reads = lambda wc: [p.format(sample=wc.sample) for p in _trim_patterns],
         outdir = lambda wc: str(QUANT / wc.sample / "screening"),

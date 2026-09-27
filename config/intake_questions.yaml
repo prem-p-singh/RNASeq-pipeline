@@ -23,10 +23,10 @@
 # -----------------------------------------------------------------------------
 # Questions that appear on EVERY assay tab (project basics, paths, design)
 # -----------------------------------------------------------------------------
-schema_version: 4
+schema_version: 5
 readme:
   - "Fill the Bulk RNA-seq tab for the currently implemented Excel intake. Yellow cells are required; gray cells are optional. Enter literal values, not formulas."
-  - "Current execution: annotated, non-UMI bulk gene expression and differential expression; Salmon or STAR, explicit fixed-effect methods, independent groups with optional batch."
+  - "Current execution: annotated, non-UMI bulk QC, gene expression and differential expression; Salmon or STAR; independent groups, batch, subject-blocked or repeated-measures (dream) designs, interactions and continuous covariates."
   - "TAGseq and sRNA-seq tabs are planning questionnaires only. They cannot launch from this workbook. Other planned RNA families have no executable intake yet."
   - "Choose external files or workbook tables. For workbook tables, fill Samples, Libraries and Reads; clear the FASTQ folder and external metadata path."
   - "Keep identifiers as Text before entry. One library per sample is executable; multiple run/lane read pairs within that library are checked and merged."
@@ -39,7 +39,8 @@ readme:
   - "For SLURM, configure your site's profile and run: bash submit.sh -d /path/new_project. See README.md for local Linux execution."
   - "Storage estimates only warn. Actual input, software, scientific-design and filesystem write errors remain failures."
   - "Contact, tissue, platform and kit answers are recorded context. They do not configure notifications, platform-specific trimming or kit-specific processing."
-  - "Bulk method, custom references and basic preprocessing have input fields. Advanced contrasts, subject effects, analysis objectives and executor settings still require configuration outside this workbook."
+  - "Bulk method, analysis goal, model formula, subject effects, custom references, kit profile, preprocessing and screening have input fields. Optional Contrasts tab: one row per comparison; blank uses generated pairwise contrasts. Executor settings are submit.sh options."
+  - "Changing a workbook after setup: submit.sh reports which settings and stages change and applies the revision only with --accept-revision."
   - "Blank strandedness knowledge is not a reverse-stranded assumption: choose don't know. Salmon detects library type and reports disagreement. STAR requires a known declared strand; it does not infer strand."
   - "Do not change the field IDs in column E. Sorting complete rows and editing display labels do not change the field identities."
   - "Full intake and route coverage remains incomplete. See docs/INTAKE_TEMPLATE_AUDIT.md for required fields, implementation gaps and the v2 publication gate."
@@ -56,6 +57,9 @@ record_tables:
       layout: [single, paired]
       strandedness: [unknown, unstranded, forward, reverse]
       umi: ['no', 'yes', unknown]
+  Contrasts:
+    columns: [contrast_id, factor, by, numerator, denominator, weights]
+    help: "Optional. One comparison per row; blank tab uses generated pairwise contrasts. Pairwise: factor, optional by (within each level), numerator and denominator levels. Linear: weights only, e.g. treatmenttreated=1; sexM:treatmenttreated=1 (model coefficient names)."
   Reads:
     columns: [read_unit_id, library_id, role, uri, run, lane, bytes, checksum]
     help: "One gzip FASTQ file per row. Paired reads need R1 and R2 for each run/lane. URI is a path or URL; relative paths resolve beside this workbook. Bytes and SHA256 checksum are optional."
@@ -124,7 +128,7 @@ common_questions:
 
   - id: repeated_measures
     text: "Same subject measured at multiple timepoints / conditions?"
-    help: "Yes blocks workbook setup: subject/model fields are not available here yet. Explicit repeated-measures models use YAML setup."
+    help: "Yes requires the Subject column answer below. Repeated rows of one subject are not independent replicates."
     type: dropdown
     options: ["yes", "no"]
     required: true
@@ -272,7 +276,7 @@ tabs:
         introduced_in: 4
       - id: analysis_backend
         text: Differential expression method
-        help: auto selects limma-voom for this independent design. Explicit methods keep the declared model.
+        help: auto follows the handbook default at setup (DESeq2 for 3-12 biological units per group, limma-voom above 12, dream with a random subject). Explicit methods keep the declared model.
         type: dropdown
         options:
         - auto
@@ -341,6 +345,64 @@ tabs:
         default: 15
         required: false
         introduced_in: 4
+      - id: analysis_goal
+        text: Analysis goal
+        help: QC only needs no reference or model. Expression only produces counts (and WGCNA if requested) without DE.
+        type: dropdown
+        options: [differential expression, expression only, QC only]
+        default: differential expression
+        required: false
+        introduced_in: 5
+      - id: subject_column
+        text: Subject column (repeated measures)
+        help: Metadata column naming the donor/plant/animal measured repeatedly. Required when repeated measures is yes.
+        type: text
+        required: false
+        introduced_in: 5
+      - id: subject_model
+        text: Subject effect
+        help: random fits (1|subject) with dream. fixed block adds subject as a fixed term (paired designs) with any fixed-effect method.
+        type: dropdown
+        options: [random, fixed block]
+        default: random
+        required: false
+        introduced_in: 5
+      - id: model_formula
+        text: Fixed-effects formula (optional)
+        help: "Replaces the generated formula. Example: ~ batch + genotype * treatment + age. Must include the primary factor, batch and a fixed subject block when declared."
+        type: text
+        required: false
+        introduced_in: 5
+      - id: library_protocol
+        text: Named library protocol
+        help: Sets adapters and strand from a listed kit profile (config/kit_profiles.yaml). explicit uses the adapter and strand answers above.
+        type: dropdown
+        options: [explicit, TruSeq Stranded mRNA, TruSeq Stranded Total RNA, TruSeq RNA v2 (unstranded), NEBNext Ultra II Directional RNA, NEBNext Ultra II RNA (unstranded)]
+        default: explicit
+        required: false
+        introduced_in: 5
+      - id: screening
+        text: Contamination screening
+        help: yes screens a read sample against this project's transcriptome (expected), PhiX and any extra FASTA below. Reports only; never removes reads.
+        type: dropdown
+        options: ['no', 'yes']
+        default: 'no'
+        required: false
+        introduced_in: 5
+      - id: screening_extra
+        text: Extra screening references
+        help: "Optional name=FASTA path or URL pairs separated by ';'. Example: Botrytis=refs/botrytis.fa.gz"
+        type: text
+        required: false
+        introduced_in: 5
+      - id: screening_fragments
+        text: Fragments screened per library
+        help: Seeded random sample of read pairs/reads per library.
+        type: number
+        maximum: 10000000
+        default: 100000
+        required: false
+        introduced_in: 5
 
   - name: "TAGseq"
     description: |

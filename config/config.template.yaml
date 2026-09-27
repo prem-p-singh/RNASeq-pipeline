@@ -24,13 +24,15 @@ preprocessing:
   qualified_quality_phred: 15
   unqualified_percent_limit: 40
 
-# Optional diagnostic screening; never removes reads. Bowtie2 indexes must
-# contain the expected organism (prefer transcriptome for splice-spanning reads).
+# Optional diagnostic screening; never removes reads. Each reference gives a
+# prebuilt Bowtie2 `index`, or a `fasta` (path, URL, `transcriptome` or `genome`)
+# that the workflow indexes under screening_panel/. Declare the expected organism
+# (prefer transcriptome for splice-spanning reads).
 screening:
   enabled: false
   fragments: 100000
   seed: 1
-  references: []  # [{name: Host, role: expected, index: /references/host}]
+  references: []  # [{name: Host, role: expected, fasta: transcriptome}, {name: PhiX, role: possible_contaminant, fasta: https://...}]
 
 # -----------------------------------------------------------------------------
 # Organism / reference

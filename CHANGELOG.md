@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+Nothing yet beyond 2.1.0.
+
+## 2.1.0 — candidate, not yet released
+
+Scope: bulk completion (milestones M1–M3). Later assay families are planned for 3.0.0 and beyond.
+
+- Workbook schema 5: analysis goal (differential expression, expression only, QC only), repeated measures with a subject column (random subject with dream, or fixed subject block for pairing), optional fixed-effects formula, optional Contrasts tab (pairwise with levels or linear weights), named library protocol, and contamination screening questions.
+- A changed workbook reports the changed settings and affected stages; `submit.sh --accept-revision` applies it and keeps the previous configuration.
+- Named non-UMI bulk kit profiles (TruSeq, NEBNext) set adapters and strand; conflicting answers are rejected. The sequencing platform sets poly-G trimming unless chosen explicitly.
+- Screening panels accept FASTA sources (path, URL, project transcriptome or genome) that the workflow indexes automatically, with the build version and FASTA checksum recorded.
+- New projects record the handbook DE default (DESeq2 for 3–12 biological units per group, limma-voom above 12); `auto` in existing configurations is unchanged. Two units per group needs an explicit method.
+- Design checks compare an interaction (DESeq2), a donor-blocked pairing (edgeR QL) and a continuous covariate (limma-voom) against direct fits.
+
 - Optional FastQ Screen/Bowtie2 diagnostic panels: seeded fragment sampling, separate mate/read counts, reference checksums and explicit disabled status; never removes reads or excludes samples. Isolated locked deployment preserves the core interpreter.
 
 - Workbook schema 4 connects bulk quantifier/DE selection, complete custom reference sets, decoy profile and basic preprocessing to generated configuration; older schemas remain readable.
@@ -12,9 +25,9 @@
 - QC-only, expression-only and coexpression objectives; local/SLURM launcher selection and direct Excel launch/resume with snapshot checks.
 - Fixed-effect edgeR QL and DESeq2 Wald adapters, shared preflight contrast validation, explicit pair direction and named coefficient contrasts.
 - Full-genome Salmon decoy construction, identifier checks and reference/cache integrity verification.
-- STAR/featureCounts bulk route with declared strand, uniquely aligned fragment counts, indexed BAMs and a separately pinned tool module; public and recovery qualification in progress.
+- STAR/featureCounts bulk route with declared strand, uniquely aligned fragment counts, indexed BAMs and a separately pinned tool module; public (38992390) and recovery (38992412) checks passed.
 - Candidate Linux runtime adds DESeq2 1.50.2 while preserving the previous 579 package records.
-- M1–M8 remain incomplete; new backend and full regression qualification is in progress. M2 remains partial: named chemistry profiles and new assay support remain open; declared-panel screening does not establish panel sensitivity.
+- Full regression: 35 checks, 0 failed, 0 skipped, plus Salmon (with screening) and STAR public routes (39010068). M4–M8 remain incomplete. M2 remains partial: named chemistry profiles and new assay support remain open; declared-panel screening does not establish panel sensitivity.
 
 ## 2.0.0 — 2026-09-23
 

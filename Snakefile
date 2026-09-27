@@ -58,7 +58,14 @@ if RECOMMENDATION["issues"]:
     raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
 
 SCREEN_POLICY = validate_screen(config["screening"])
-SCREEN_INDEXES = [str(f) for ref in SCREEN_POLICY["references"] for f in index_files(ref["index"])] if SCREEN_POLICY["enabled"] else []
+# FASTA panel members (transcriptome, genome, path or URL) are indexed in the
+# project by build_screen_index; the run policy then names only Bowtie2 indexes.
+SCREEN_BUILT = {r["name"]: r["fasta"] for r in SCREEN_POLICY["references"] if "fasta" in r} if SCREEN_POLICY["enabled"] else {}
+SCREEN_INDEXES = [str(f) for ref in SCREEN_POLICY["references"] if "index" in ref for f in index_files(ref["index"])] if SCREEN_POLICY["enabled"] else []
+SCREEN_INDEXES += [f"screening_panel/{name}/built.txt" for name in SCREEN_BUILT]
+SCREEN_RUN_POLICY = dict(SCREEN_POLICY, references=[
+    dict(name=r["name"], role=r["role"], index=str(Path("screening_panel", r["name"], r["name"]).resolve()))
+    if "fasta" in r else r for r in SCREEN_POLICY["references"]])
 
 QC_ONLY = set(config["analysis"]["objectives"]) == {"qc"}
 STAR_ROUTE = RECOMMENDATION["route"] == "star_counts"

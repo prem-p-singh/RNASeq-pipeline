@@ -2,6 +2,19 @@
 
 Release: **v2.0.0**, 2026-09-23. Scope: **Linux x86_64, annotated non-UMI bulk gene expression**. The user authorized publication of the current bulk release; full multi-assay coverage is not a v2 claim.
 
+## Release versions
+
+Each software version groups development milestones (M1–M8). Workbook schema numbers are independent of software versions. A version is tagged only after its source is frozen, required checks pass with zero skips, and evidence covers each advertised capability.
+
+| Version | Scope | Status |
+|---|---|---|
+| 2.0.0 | Annotated non-UMI bulk: Salmon, limma-voom/dream, workbook schema 3 | Released 2026-09-23 |
+| 2.1.0 | Bulk completion: workbook schema 5 with analysis goal, subject models, formula, Contrasts tab and revision reports (M1); named bulk kit profiles, platform poly-G and automatic screening panel (M2); handbook DE default and interaction/paired/continuous design checks (M3); earlier schema 4 and Excel launch/resume (M1); raw QC, preprocessing and screening (M2); Salmon decoys, STAR/featureCounts, DESeq2, edgeR QL and objective selection (M3) | Candidate. Completed M1–M3 code passed 35 checks (0 failed, 0 skipped) and both public routes in Linux job 39010068 (exit 0, 55:09; source archive SHA256 `7fc10ce7987a11b9c195cd74420bab3ecf78c2cd1b3b9c3942d22c803e3afbb5`). Not tagged |
+| 3.0.0 | Named end-tag kits, small RNA and dual organism (M4) | Test data prepared only |
+| Later | Cell/nucleus and spatial (M5), long-read and reference-poor (M6), specialized RNA (M7) | Not started; versions assigned when scoped |
+
+Moved from M1–M2 to the assay milestones that need them: workbook intake for non-bulk assays (M4–M7) and barcode/UMI base protection (M4, with UMI and end-tag routes).
+
 ## Unreleased development qualification
 
 The development branch changes the runtime and adds bulk routes. The sections below this one describe the **v2 tag**, not a qualification claim for the current branch.
@@ -11,7 +24,7 @@ The development branch changes the runtime and adds bulk routes. The sections be
 - Direct native edgeR QL, DESeq2 Wald and one paired-donor dream comparison passed on Linux snapshots. Genome-decoy construction, reuse/tamper rejection, and QC/count-only objectives also passed. These fixtures do not qualify all study designs.
 - A six-sample public Salmon run passed on the upgraded core runtime. STAR SE/PE exon-junction, strand and intronic controls passed. A six-sample public STAR/featureCounts/edgeR run also completed (Linux job 38992390, exit 0); synthetic raw-read/count/DE/report, resume and deleted-BAM-index recovery passed in job 38992412. Full current-source qualification remains pending.
 - Schema 4 workbook setup/intake/preflight/project-isolation checks passed in Linux job 38993523; workbook rendering and prior values/formats/dropdowns/panes were checked locally. The bulk full-suite snapshot predates this intake edit.
-- Screening module: 64 pinned packages, FastQ Screen 0.16.0/Bowtie2 2.5.4; lock SHA256 `065bb112579c134645324e4d9ee6a21d9aa822c3090e9ebc7475bc483852a7de`. Real SE/PE exclusive/shared mixture controls passed in 38994223, which then exposed interpreter shadowing during preflight. The launcher now retains core Python first in PATH; corrected QC-only screening DAG, resume, missing-report recovery, project isolation, clean installation and offline reuse passed in 38994332. Public yeast screening with Salmon/counts/DE/QC passed in 38994434. The current 34-check suite and both public routes are running in 38994640. This failed overall job is not a suite pass.
+- Screening module: 64 pinned packages, FastQ Screen 0.16.0/Bowtie2 2.5.4; lock SHA256 `065bb112579c134645324e4d9ee6a21d9aa822c3090e9ebc7475bc483852a7de`. Real SE/PE exclusive/shared mixture controls passed in 38994223, which then exposed interpreter shadowing during preflight. The launcher now retains core Python first in PATH; corrected QC-only screening DAG, resume, missing-report recovery, project isolation, clean installation and offline reuse passed in 38994332. Public yeast screening with Salmon/counts/DE/QC passed in 38994434. Job 38994223 as a whole failed and is not a suite pass. The 34-check strict suite (34 passed, 0 failed, 0 skipped) and both GSE110004 public routes (Salmon with screening, STAR) passed in 38994640 with exit 0 on the frozen source archive `c5e01ba2e992549de876326ef824b6b09ed1aa9cc1e6eb4b91faa0a980224a33`.
 - The current release gate requires **34 checks, zero skips**, plus both public routes. Full current-source qualification is pending; do not publish a new release based only on the focused checks above.
 
 Public protocol selection and evidence requirements are recorded in [Public-data qualification](PUBLIC_QUALIFICATION.md). The wider working plan remains incomplete.

@@ -1,0 +1,14 @@
+# Named non-UMI bulk library protocols. A profile fixes adapter sequences and
+# declared strand; an explicit workbook answer that disagrees is an error.
+# Sources: Illumina "Adapter Sequences" document (TruSeq read 1/read 2 adapter
+# trimming sequences) and the vendors' dUTP/directional protocol descriptions.
+# UMI, end-tag and small-RNA kits are separate routes and are not listed here.
+truseq_adapters: &truseq {adapter_r1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCA, adapter_r2: AGATCGGAAGAGCGTCGTGTAGGGAAAGAGTGT}
+profiles:
+  TruSeq Stranded mRNA: {<<: *truseq, strandedness: reverse}
+  TruSeq Stranded Total RNA: {<<: *truseq, strandedness: reverse}
+  TruSeq RNA v2 (unstranded): {<<: *truseq, strandedness: unstranded}
+  NEBNext Ultra II Directional RNA: {<<: *truseq, strandedness: reverse}
+  NEBNext Ultra II RNA (unstranded): {<<: *truseq, strandedness: unstranded}
+# Two-colour chemistry reads no-signal as G, so poly-G tails are trimmed.
+platform_poly_g: {NovaSeq: 'on', NextSeq: 'on', MiSeq: 'off'}

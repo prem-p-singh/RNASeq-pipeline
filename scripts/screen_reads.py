@@ -32,15 +32,16 @@ def validate(policy):
         raise ValueError('screening.references must be a list')
     names = set()
     for ref in p['references']:
-        if not isinstance(ref, dict) or set(ref) != {'name', 'role', 'index'}:
-            raise ValueError('Each screen reference needs exactly name, role and index')
+        if not isinstance(ref, dict) or set(ref) not in ({'name', 'role', 'index'}, {'name', 'role', 'fasta'}):
+            raise ValueError('Each screen reference needs name, role and exactly one of index or fasta')
         if not isinstance(ref['name'], str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*', ref['name']) or ref['name'] in names:
             raise ValueError('Screen reference names must be unique alphanumeric identifiers')
         names.add(ref['name'])
         if ref['role'] not in ('expected', 'possible_contaminant'):
             raise ValueError('Screen reference role must be expected or possible_contaminant')
-        if not isinstance(ref['index'], str) or not ref['index'].strip():
-            raise ValueError('Screen reference index must be a Bowtie2 basename')
+        source = ref.get('index', ref.get('fasta'))
+        if not isinstance(source, str) or not source.strip():
+            raise ValueError('Screen reference index must be a Bowtie2 basename; fasta a path, URL, transcriptome or genome')
     if p['enabled'] and not any(r['role'] == 'expected' for r in p['references']):
         raise ValueError('Screening requires an explicitly declared expected reference')
     return p

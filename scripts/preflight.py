@@ -435,7 +435,13 @@ def main():
         screen = validate_screen(cfg["screening"])
         if screen["enabled"]:
             for ref in screen["references"]:
-                index_files(proj / Path(ref["index"]).expanduser())
+                if "index" in ref:
+                    index_files(proj / Path(ref["index"]).expanduser())
+                elif ref["fasta"] in ("transcriptome", "genome"):
+                    if not (cfg.get("reference") or {}).get(f"{ref['fasta'] if ref['fasta'] == 'genome' else 'transcriptome'}_fasta_url"):
+                        raise ValueError(f"Screen reference {ref['name']} needs reference.{ref['fasta']}_fasta_url")
+                elif "://" not in ref["fasta"] and not (proj / Path(ref["fasta"]).expanduser()).is_file():
+                    raise ValueError(f"Screen FASTA not found: {ref['fasta']}")
     except (ValueError, TypeError) as exc:
         iss.add("CFG003", "screening", str(exc))
     decoys = cfg.get("reference", {}).get("decoys")
