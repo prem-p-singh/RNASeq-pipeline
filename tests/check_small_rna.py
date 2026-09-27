@@ -19,3 +19,12 @@ except ValueError as exc:
 else:
     raise AssertionError('UMI small-RNA kit accepted')
 print('small RNA kit table passed')
+
+from preprocessing import loss_summary
+fake = {'summary': {'before_filtering': {'total_reads': 100}, 'after_filtering': {'total_reads': 70}},
+        'filtering_result': {'passed_filter_reads': 70, 'too_short_reads': 10, 'too_long_reads': 20,
+                             'low_quality_reads': 0, 'too_many_N_reads': 0}}
+s = loss_summary(fake)
+assert s['filtering_result']['too_long_reads'] == 20
+assert sum(v for k, v in s['filtering_result'].items() if k != 'passed_filter_reads') == 30
+print('small RNA loss summary passed')

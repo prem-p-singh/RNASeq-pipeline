@@ -50,6 +50,10 @@ def policy_args(policy, paired):
     return p, args
 
 
+def loss_summary(data):
+    return dict(filtering_result=dict(data.get("filtering_result", {})))
+
+
 def process(r1, r2, outdir, sample, threads, policy):
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", sample):
         raise ValueError("Invalid sample identifier")
@@ -104,7 +108,7 @@ def process(r1, r2, outdir, sample, threads, policy):
                   fastp_version=version, policy=p, command=cmd, input_files=inputs,
                   fragments_before=fragments, fragments_after=after // mates,
                   reads_before=before, reads_after=after, fraction_lost=loss,
-                  filtering_result=data.get("filtering_result", {}),
+                  **loss_summary(data),
                   warnings=["More than 10% of reads lost: review preprocessing and library quality"] if loss > 0.10 else [],
                   contamination_screening="not_performed")
     (out / "preprocessing.json").write_text(json.dumps(ledger, indent=2) + "\n")
