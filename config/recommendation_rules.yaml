@@ -34,5 +34,6 @@ backends:
 fixed_backends: [limma_voom, edger_ql, deseq2]
 alternatives:
   - {route: star_counts, status: experimental, reason: 'Explicit non-UMI bulk genomic alignment; requires known strand and a matching genome/GTF.'}
+  - {route: star_tagseq, status: experimental, reason: 'Named QuantSeq kit; strand, trimming and UMI handling from config/tagseq_kits.yaml.'}
   - {route: deseq2, status: experimental, reason: 'Explicit fixed-effect Wald adapter; see development qualification.'}
   - {route: edger_ql, status: experimental, reason: 'Explicit fixed-effect QL adapter; see development qualification.'}

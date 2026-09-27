@@ -53,13 +53,19 @@ from recommend import recommend as _recommend, requires_inference
 from preprocessing import policy_args
 from screen_reads import validate as validate_screen, index_files
 from small_rna import load_kit, kit_policy
+import tagseq as _tagseq
 RECOMMENDATION = _recommend(config)
 if RECOMMENDATION["issues"]:
     raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
-# Small-RNA kits fix the adapter and size window; the kit table wins over the generic policy.
+# Small-RNA and named TAG-seq kits fix adapter, trimming and UMI settings; the kit table wins
+# over the generic policy (a TAG-seq config that sets a kit key to another value is refused).
+TAGSEQ_KIT = _tagseq.load_kit(config["analysis"]["kit"]) if RECOMMENDATION["route"] == "star_tagseq" else None
+UMI_ROUTE = RECOMMENDATION["count_treatment"] == "umi_gene_counts"
 PREPROCESSING = config["preprocessing"]
 if config["samples"]["seq_type"] == "srnaseq":
     PREPROCESSING = PREPROCESSING | kit_policy(load_kit(config["analysis"]["small_rna_kit"]))
+if TAGSEQ_KIT:
+    PREPROCESSING = _tagseq.merge_policy(PREPROCESSING, TAGSEQ_KIT)
 policy_args(PREPROCESSING, config["samples"]["seq_type"] == "rnaseq_paired")
 
 SCREEN_POLICY = validate_screen(config["screening"])
@@ -73,17 +79,17 @@ SCREEN_RUN_POLICY = dict(SCREEN_POLICY, references=[
     if "fasta" in r else r for r in SCREEN_POLICY["references"]])
 
 QC_ONLY = set(config["analysis"]["objectives"]) == {"qc"}
-STAR_ROUTE = RECOMMENDATION["route"] == "star_counts"
+STAR_ROUTE = RECOMMENDATION["route"] in ("star_counts", "star_tagseq")
 SMALL_RNA_ROUTE = RECOMMENDATION["route"] in ("small_rna_animal", "small_rna_plant")
 PLANT_SRNA_ROUTE = RECOMMENDATION["route"] == "small_rna_plant"
 # Plant counts are one cohort matrix (ShortStack clusters loci jointly); the per-sample product is its QC record.
-QUANT_PRODUCT = ("star/gene_counts.tsv" if STAR_ROUTE else "small_rna/metrics.json" if PLANT_SRNA_ROUTE
+QUANT_PRODUCT = ("star/umi_gene_counts.tsv" if UMI_ROUTE else "star/gene_counts.tsv" if STAR_ROUTE else "small_rna/metrics.json" if PLANT_SRNA_ROUTE
                  else "small_rna/counts.tsv" if SMALL_RNA_ROUTE else "quant.sf")
 
 # --- Load sample sheet ---------------------------------------------------
 import metadata as _metadata
 CANONICAL_INPUTS = _metadata.execution_inputs(Path.cwd(), config)
-if STAR_ROUTE and CANONICAL_INPUTS is not None:
+if STAR_ROUTE and not TAGSEQ_KIT and CANONICAL_INPUTS is not None:
     for sample_id, library in CANONICAL_INPUTS.items():
         if library['expected_libtype'] not in ('U', 'SF', 'SR', 'IU', 'ISF', 'ISR'):
             raise ValueError(f'STAR requires known strandedness for {sample_id}')
@@ -179,6 +185,8 @@ if STAR_ROUTE:
     RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/star-linux-64.explicit.txt").read_bytes()).hexdigest()
 if SMALL_RNA_ROUTE:
     RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/srna-linux-64.explicit.txt").read_bytes()).hexdigest()
+if UMI_ROUTE:
+    RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/umi-linux-64.explicit.txt").read_bytes()).hexdigest()
 
 
 if SCREEN_POLICY["enabled"]:

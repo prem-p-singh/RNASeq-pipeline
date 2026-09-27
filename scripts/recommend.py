@@ -4,6 +4,7 @@ import hashlib
 from pathlib import Path
 import yaml
 from small_rna import load_kit
+import tagseq
 
 POLICY = Path(__file__).resolve().parent.parent / "config/recommendation_rules.yaml"
 
@@ -62,11 +63,26 @@ def recommend(cfg, n_samples=None):
     quantifier = analysis.get("quantifier", "auto")
     if quantifier == "auto":
         quantifier = "star" if "alignment" in objectives else "salmon"
+    kit = None
+    if analysis.get("kit"):
+        try:
+            kit = tagseq.load_kit(analysis["kit"])
+        except ValueError as exc:
+            issues.append(str(exc))
+        if seq != "tagseq":
+            issues.append("analysis.kit applies to seq_type tagseq only")
+        if not all((cfg.get("reference") or {}).get(k) for k in ("genome_fasta_url", "gtf_url")):
+            issues.append("TAG-seq kit route requires reference.genome_fasta_url and gtf_url")
+        if quantifier != "star" and analysis.get("quantifier", "auto") != "auto":
+            issues.append("Named TAG-seq kits use the STAR route; set analysis.quantifier to auto or star")
+    tagseq_route = seq == "tagseq" and kit is not None and not qc_only
+    if tagseq_route:
+        quantifier = "star"  # strand comes from the kit, not expected_libtype
     if quantifier not in ("salmon", "star"):
         issues.append("analysis.quantifier must be auto, salmon or star")
     if "alignment" in objectives and quantifier != "star":
         issues.append("Alignment output requires the STAR route")
-    if quantifier == "star" and not qc_only:
+    if quantifier == "star" and not qc_only and not tagseq_route:
         if seq not in ("rnaseq_single", "rnaseq_paired"):
             issues.append("STAR counting is implemented for non-UMI bulk libraries only")
         if not (cfg.get("reference") or {}).get("genome_fasta_url"):
@@ -83,7 +99,7 @@ def recommend(cfg, n_samples=None):
     unknown = sorted(set(objectives) - set(policy["objectives"]))
     if unknown:
         issues.append(f"Requested objectives have no implemented route: {', '.join(unknown)}")
-    if analysis.get("umi"):
+    if analysis.get("umi") and not (kit and kit["umi_len"]):
         issues.append("UMI extraction/deduplication has no qualified implementation")
     backend = policy["backends"]["random" if cfg.get("model", {}).get("random_effects") else "fixed"]
     requested = analysis.get("backend", "auto")
@@ -95,9 +111,11 @@ def recommend(cfg, n_samples=None):
         "policy_version": policy["policy_version"],
         "policy_sha256": hashlib.sha256(POLICY.read_bytes()).hexdigest(),
         "status": "blocked" if issues else "selected",
-        "route": ("fastp_qc" if qc_only else "star_counts" if quantifier == "star" else route["route"]) if route else None,
+        "route": ("fastp_qc" if qc_only else "star_tagseq" if tagseq_route
+                  else "star_counts" if quantifier == "star" else route["route"]) if route else None,
         "backend": backend["name"] if inference else None,
-        "count_treatment": ("raw_gene_counts" if quantifier == "star" else route["count_treatment"]) if route and not qc_only else None,
+        "count_treatment": (("umi_gene_counts" if kit["umi_len"] else "raw_gene_counts") if tagseq_route
+                            else "raw_gene_counts" if quantifier == "star" else route["count_treatment"]) if route and not qc_only else None,
         "rule_ids": (route["rule_ids"] if route else []) + backend["rule_ids"] + ["ST11"],
         "handbook_ids": route["handbook_ids"] if route else [],
         "inputs": {"seq_type": seq, "n_samples": n_samples, "objectives": objectives,

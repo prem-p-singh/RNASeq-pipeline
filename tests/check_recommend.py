@@ -75,3 +75,23 @@ assert b['status'] == 'blocked' and any('genome_fasta_url' in i for i in b['issu
 b = recommend({**plant, 'reference': {**plant['reference'], 'mature_mirna_url': 'file:///m.fa'}})
 assert b['status'] == 'blocked' and any('mirbase_prefix' in i for i in b['issues']), b['issues']
 print('plant small-RNA route selection passed')
+tag = {'samples': {'seq_type': 'tagseq', 'expected_libtype': None},
+       'analysis': {'objectives': ['gene_expression'], 'quantifier': 'auto', 'kit': 'QuantSeq FWD-UMI'},
+       'reference': {'genome_fasta_url': 'file:///g.fa', 'gtf_url': 'file:///a.gtf'}}
+r = recommend(tag)
+assert r['route'] == 'star_tagseq' and r['count_treatment'] == 'umi_gene_counts' and not r['issues'], r
+tag['analysis']['kit'] = 'QuantSeq REV'
+assert recommend(tag)['count_treatment'] == 'raw_gene_counts'
+tag['analysis']['kit'] = 'Mystery'
+assert any('Unknown TAG-seq kit' in i for i in recommend(tag)['issues'])
+tag['analysis']['kit'] = None
+assert recommend(tag)['route'] == 'salmon_end_tag_provisional', 'legacy tagseq must not change'
+print('TAG-seq route selection passed')
+tag['analysis'].update(kit='QuantSeq FWD', objectives=['alignment', 'gene_expression'])
+r = recommend(tag)
+assert (r['status'], r['route']) == ('selected', 'star_tagseq'), r['issues']
+for bad, word in (({**tag, 'reference': {'genome_fasta_url': 'file:///g.fa'}}, 'gtf_url'),
+                  ({**tag, 'samples': {'seq_type': 'rnaseq_single'}}, 'seq_type tagseq only'),
+                  ({**tag, 'analysis': {**tag['analysis'], 'quantifier': 'salmon'}}, 'STAR route')):
+    assert any(word in i for i in recommend(bad)['issues']), recommend(bad)['issues']
+print('TAG-seq kit route blocks passed')

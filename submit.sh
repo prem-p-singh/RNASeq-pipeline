@@ -214,7 +214,7 @@ if ! python3 "$REPO/scripts/preflight.py" -d "$PROJDIR" -c "$CONFIG"; then
     exit 1
 fi
 echo "-----------------"
-if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(json.load(open("gates/recommendation.json"))["route"])' )" = star_counts ]; then
+if [ "$PLAN_ONLY" -eq 0 ] && python3 -c 'import json,sys;sys.exit(json.load(open("gates/recommendation.json"))["route"] not in ("star_counts", "star_tagseq"))'; then
     STAR_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module star)
     export PATH="$STAR_PREFIX/bin:$PATH"
     cp "$STAR_PREFIX/environment_report.json" gates/star_environment_report.json
@@ -223,6 +223,11 @@ if [ "$PLAN_ONLY" -eq 0 ] && python3 -c 'import json,sys;sys.exit(not json.load(
     SRNA_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module srna)
     export PATH="$SRNA_PREFIX/bin:$PATH"
     cp "$SRNA_PREFIX/environment_report.json" gates/srna_environment_report.json
+fi
+if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(json.load(open("gates/recommendation.json"))["count_treatment"])')" = umi_gene_counts ]; then
+    UMI_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module umi)
+    export PATH="$ENV_PREFIX/bin:$UMI_PREFIX/bin:$PATH"
+    cp "$UMI_PREFIX/environment_report.json" gates/umi_environment_report.json
 fi
 
 if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(str(json.load(open("gates/preflight_plan.json"))["screening"]["enabled"]).lower())')" = true ]; then

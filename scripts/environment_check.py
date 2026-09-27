@@ -58,6 +58,8 @@ def verify(prefix, lock, module="core"):
         probes = {"fastq_screen": "--version", "bowtie2": "--version", "bowtie2-build": "--version"}
     if module == "srna":
         probes = {"bowtie": "--version", "bowtie-build": "--version"}
+    if module == "umi":
+        probes = {"umi_tools": "--version", "samtools": "--version"}
     for tool, flag in probes.items():
         path = shutil.which(tool)
         if not path or not Path(path).resolve().is_relative_to(prefix):
@@ -92,7 +94,7 @@ def verify(prefix, lock, module="core"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--module", choices=["core", "star", "screen", "srna"], default="core")
+    parser.add_argument("--module", choices=["core", "star", "screen", "srna", "umi"], default="core")
     parser.add_argument("--prefix", default=sys.prefix)
     parser.add_argument("--lock", type=Path, default=ROOT / "environments/linux-64.explicit.txt")
     parser.add_argument("--out", type=Path)

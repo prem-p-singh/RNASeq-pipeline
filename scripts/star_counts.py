@@ -113,7 +113,7 @@ def build_index(genome, gtf, destination, threads=4, overhang=99):
     return saved
 
 
-def quantify(r1, r2, index, gtf, destination, strand, threads=4, sample=None, replace_owned=False):
+def quantify(r1, r2, index, gtf, destination, strand, threads=4, sample=None, replace_owned=False, gene_tags=False):
     if strand not in (0,1,2) or threads < 1:
         raise ValueError('Declare strand 0, 1 or 2 and a positive thread count')
     index, gtf, dest = Path(index).resolve(), Path(gtf).resolve(), Path(destination).resolve()
@@ -150,8 +150,13 @@ def quantify(r1, r2, index, gtf, destination, strand, threads=4, sample=None, re
                  '-s',str(strand),'-o',str(counts)]
     if r2:
         count_cmd += ['-p','--countReadPairs','-B','-C']
+    if gene_tags:
+        # Per-read XS/XT tags for UMI counting; written as <bam name>.featureCounts.bam beside -o.
+        count_cmd += ['-R','BAM']
     count_cmd.append(str(bam))
     run(count_cmd,dest/'counting.log')
+    if gene_tags and not (dest/(bam.name+'.featureCounts.bam')).is_file():
+        raise ValueError('featureCounts did not write the gene-tagged BAM')
     with counts.open() as f:
         rows = list(csv.DictReader((line for line in f if not line.startswith('#')),delimiter='\t'))
     if not rows or len(rows[0]) != 7 or len({r['Geneid'] for r in rows}) != len(rows):
@@ -200,6 +205,7 @@ if __name__ == '__main__':
     q.add_argument('--threads',type=int,default=4)
     q.add_argument('--sample')
     q.add_argument('--replace-owned',action='store_true')
+    q.add_argument('--gene-tags',action='store_true')
     a=ap.parse_args()
     if a.command=='index':build_index(a.genome,a.gtf,a.out,a.threads,a.overhang)
-    else:quantify(a.r1,a.r2,a.index,a.gtf,a.out,a.strand,a.threads,a.sample,a.replace_owned)
+    else:quantify(a.r1,a.r2,a.index,a.gtf,a.out,a.strand,a.threads,a.sample,a.replace_owned,a.gene_tags)

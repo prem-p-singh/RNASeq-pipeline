@@ -28,7 +28,7 @@ rule aggregate_counts:
         imported = OUT / "gene_import.rds",
     params:
         runtime_identity = RUNTIME_ID,
-        count_source = ("star" if STAR_ROUTE else "small_rna_matrix" if PLANT_SRNA_ROUTE
+        count_source = ("star_umi" if UMI_ROUTE else "star" if STAR_ROUTE else "small_rna_matrix" if PLANT_SRNA_ROUTE
                         else "small_rna" if SMALL_RNA_ROUTE else "salmon"),
         # Shared study-design helpers, so this stage, preflight and Stage 3
         # cannot disagree about replicate counts or estimability.

@@ -5,8 +5,8 @@ set -euo pipefail
 REPO=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 MODULE=core
 if [ "$#" -gt 0 ]; then
-    [ "$#" -eq 2 ] && [ "$1" = --module ] && { [ "$2" = star ] || [ "$2" = screen ] || [ "$2" = srna ]; } || {
-        echo "Usage: bootstrap.sh [--module star|screen|srna]" >&2; exit 2;
+    [ "$#" -eq 2 ] && [ "$1" = --module ] && { [ "$2" = star ] || [ "$2" = screen ] || [ "$2" = srna ] || [ "$2" = umi ]; } || {
+        echo "Usage: bootstrap.sh [--module star|screen|srna|umi]" >&2; exit 2;
     }
     MODULE=$2
 fi
@@ -27,6 +27,8 @@ if [ "$MODULE" != core ]; then
         prefix=${RNASEQ_STAR_ENV_PREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/rnaseq/environments/$digest}
     elif [ "$MODULE" = srna ]; then
         prefix=${RNASEQ_SRNA_ENV_PREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/rnaseq/environments/$digest}
+    elif [ "$MODULE" = umi ]; then
+        prefix=${RNASEQ_UMI_ENV_PREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/rnaseq/environments/$digest}
     else
         prefix=${RNASEQ_SCREEN_ENV_PREFIX:-${XDG_CACHE_HOME:-$HOME/.cache}/rnaseq/environments/$digest}
     fi

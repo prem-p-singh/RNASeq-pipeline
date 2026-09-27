@@ -50,3 +50,16 @@ with tempfile.TemporaryDirectory() as t:
     else:
         raise AssertionError('missing spacer accepted')
 print('UMI spacer check passed')
+
+from tagseq import merge_policy
+from preprocessing import DEFAULTS
+merged = merge_policy(dict(DEFAULTS, qualified_quality_phred=20), umi)
+assert merged['umi_len'] == 6 and merged['trim_front'] == 12 and merged['qualified_quality_phred'] == 20
+assert merge_policy(dict(DEFAULTS, trim_front=12), fwd)['trim_front'] == 12  # same value is not a conflict
+try:
+    merge_policy(dict(DEFAULTS, trim_front=5), fwd)
+except ValueError as exc:
+    assert 'preprocessing.trim_front' in str(exc) and 'kit' in str(exc), exc
+else:
+    raise AssertionError('conflicting kit key accepted')
+print('TAG-seq kit policy merge passed')

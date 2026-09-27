@@ -113,8 +113,8 @@ if [[ "$seq_type" == "rnaseq_paired" ]]; then
 fi
 
 if python3 -c 'import json,sys; sys.exit(0 if json.loads(sys.argv[1]).get("umi_len") else 1)' "$processing_json"; then
-    python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from tagseq import check_spacer; print("UMI spacer fraction", check_spacer(sys.argv[2]))' \
-        "$(dirname "$0")/../../scripts" "$fastq_local"
+    python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); import json; from tagseq import check_spacer; print("UMI spacer fraction", check_spacer(sys.argv[2], umi_len=json.loads(sys.argv[3])["umi_len"]))' \
+        "$(dirname "$0")/../../scripts" "$fastq_local" "$processing_json"
 fi
 
 python3 "$(dirname "$0")/../../scripts/preprocessing.py" \

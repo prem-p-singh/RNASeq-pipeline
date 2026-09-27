@@ -21,6 +21,8 @@ rule star_index:
 
 
 def star_strand(wc):
+    if TAGSEQ_KIT:
+        return {"forward": 1, "reverse": 2}[TAGSEQ_KIT["strandedness"]]
     declared = (CANONICAL_INPUTS[wc.sample]["expected_libtype"] if CANONICAL_INPUTS is not None
                 else config["samples"].get("expected_libtype"))
     return {"U": 0, "IU": 0, "SF": 1, "ISF": 1, "SR": 2, "ISR": 2}[declared]
@@ -42,11 +44,13 @@ rule star_quant:
         metrics = QUANT / "{sample}/star/metrics.json",
         alignment_summary = QUANT / "{sample}/star/Log.final.out",
         counting_summary = QUANT / "{sample}/star/featureCounts.tsv.summary",
+        tagged = QUANT / "{sample}/star/Aligned.sortedByCoord.out.bam.featureCounts.bam" if UMI_ROUTE else [],
     params:
         index = str(REF / "star_idx"),
         r1 = lambda wc: _trim_patterns[0].format(sample=wc.sample),
         r2 = lambda wc: _trim_patterns[1].format(sample=wc.sample) if len(_trim_patterns) == 2 else "",
         strand = star_strand,
+        gene_tags = "--gene-tags" if UMI_ROUTE else "",
         runtime_identity = RUNTIME_ID,
     threads: 4
     resources:
@@ -59,5 +63,32 @@ rule star_quant:
         python3 {input.helper:q} quant --r1 {params.r1:q} --r2={params.r2:q} \
             --index {params.index:q} --gtf {input.gtf:q} --out {output.folder:q} \
             --sample {wildcards.sample:q} --strand {params.strand} --threads {threads} \
-            --replace-owned > {log:q} 2>&1
+            --replace-owned {params.gene_tags} > {log:q} 2>&1
+        """
+
+
+# FWD-UMI: collapse reads to molecules per gene. Every annotated gene is written
+# (zero when unobserved) so the table matches the STAR gene_counts.tsv gene set.
+rule umi_gene_counts:
+    input:
+        tagged = QUANT / "{sample}/star/Aligned.sortedByCoord.out.bam.featureCounts.bam",
+        genes = QUANT / "{sample}/star/gene_counts.tsv",
+    output:
+        counts = QUANT / "{sample}/star/umi_gene_counts.tsv",
+    params:
+        runtime_identity = RUNTIME_ID,
+    resources:
+        mem_mb = 8000,
+        runtime = 120,
+    log: "logs/star/{sample}.umi.log"
+    shell:
+        """
+        set -euo pipefail
+        tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+        samtools sort -o "$tmp/s.bam" {input.tagged:q} && samtools index "$tmp/s.bam"
+        umi_tools count --per-gene --gene-tag=XT --assigned-status-tag=XS \
+            --extract-umi-method=read_id --umi-separator=: \
+            -I "$tmp/s.bam" -S "$tmp/c.tsv" -L {log:q}
+        python3 -c 'import csv,sys; genes=[r[0] for r in list(csv.reader(open(sys.argv[1]),delimiter="\\t"))[1:]]; r=csv.reader(open(sys.argv[2]),delimiter="\\t"); assert next(r)==["gene","count"]; n=dict(r); assert set(n)<=set(genes), "UMI genes outside annotation"; w=open(sys.argv[3],"w"); w.write("gene_id\\tcount\\n"); [w.write(f"{{g}}\\t{{n.get(g,0)}}\\n") for g in genes]' \
+            {input.genes:q} "$tmp/c.tsv" {output.counts:q}
         """

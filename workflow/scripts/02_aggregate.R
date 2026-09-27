@@ -22,7 +22,8 @@ out_metrics <- snakemake@output$metrics
 out_disposition <- snakemake@output$disposition
 
 cfg <- snakemake@config
-star_route <- identical(snakemake@params$count_source, "star")
+umi_route <- identical(snakemake@params$count_source, "star_umi")  # umi_tools molecules per gene, STAR gene set
+star_route <- umi_route || identical(snakemake@params$count_source, "star")
 small_rna_matrix <- identical(snakemake@params$count_source, "small_rna_matrix")  # plant: one ShortStack cohort matrix
 small_rna_route <- small_rna_matrix || identical(snakemake@params$count_source, "small_rna")
 table_route <- star_route || small_rna_route  # per-sample gene_id/count tables in a subfolder
@@ -136,6 +137,11 @@ if (star_route) {
   count_provenance$count_unit <- if (identical(seq_type, "rnaseq_paired")) "fragments" else "reads"
   count_provenance$length_definition <- "union of annotated exons; not effective transcript length"
   count_provenance$rationale <- "Raw gene-assigned genomic counts; no transcript-length scaling or additional offset"
+}
+if (umi_route) {
+  count_provenance$quantifier <- "STAR_featureCounts_umi_tools"
+  count_provenance$count_unit <- "molecules"
+  count_provenance$rationale <- "UMI-deduplicated molecules per gene (umi_tools count --per-gene); no length scaling"
 }
 if (small_rna_route) {
   count_provenance$quantifier <- if (small_rna_matrix) "shortstack_loci" else "bowtie_mature_mirna"

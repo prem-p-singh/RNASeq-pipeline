@@ -152,7 +152,7 @@ def main():
     quotas = {"results": quota_bytes} if quota_bytes is not None else {}
 
     ref_cfg = cfg.get("reference") or {}
-    star_route = recommend(cfg)["route"] == "star_counts"
+    star_route = recommend(cfg)["route"] in ("star_counts", "star_tagseq")
     key = star_counts.cache_key(ref_cfg) if star_route else rc.cache_key(ref_cfg, ref_cfg.get("kmer", 31), ref_cfg.get("decoys"))
     entry = (Path(ref_cache).expanduser() / key
              if ref_cache else proj / "reference")
