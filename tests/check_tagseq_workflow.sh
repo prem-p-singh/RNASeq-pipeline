@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 # Synthetic QuantSeq route check: one 10 kb contig, gene A on the plus strand and
 # gene B on the minus strand, six single-end samples in kit read geometry.
-#   FWD:     12 nt + 50 nt sense insert from A, 100 reads -> A=100, B=0
-#   REV:     the same reads declared REV -> A=0, assignment rate drops to 0
+#   FWD:     12 nt + 50 nt plus-strand insert; 100 reads in A (sense) and 30 in B
+#            (antisense to B) -> A=100, B=0
+#   REV:     the same reads declared REV -> A=0, B=30 (positive control)
 #   FWD-UMI: 6 nt UMI + TATA + 12 nt + insert; 20 molecules x 5 identical PCR
 #            duplicates -> 100 reads but 20 molecules on A, plus one read too
 #            short after UMI, spacer and front trim, lost in the preprocessing ledger
+# The B reads are in the FWD/REV libraries only; the UMI library has A reads only.
+# Without umi_tools, FWD and REV still run and assert, then the script exits 77
+# so run_all.sh reports the UMI case as SKIP (and --strict fails).
 set -euo pipefail
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 . "$REPO/tests/_gate.sh"
 gate_runtime r
-for tool in STAR featureCounts samtools fastp umi_tools; do
+for tool in STAR featureCounts samtools fastp; do
     command -v "$tool" >/dev/null || { echo "needs $tool on PATH"; exit 77; }
 done
 TASK_TMP=$(mktemp -d)
@@ -43,6 +47,9 @@ for s in range(6):
         start = rng.randrange(1000, 2950)  # inside A (1-based 1001-3000)
         seq = (umis[m] + 'TATA' if umi else '') + ''.join(rng.choices('ACGT', k=12)) + genome[start:start + 50]
         reads += [(f'{sid}_m{m}_d{d}', seq) for d in range(5 if umi else 1)]
+    for b in range(0 if umi else 30):
+        start = rng.randrange(5000, 6950)  # inside B (1-based 5001-7000), plus strand = antisense to B
+        reads.append((f'{sid}_b{b}', ''.join(rng.choices('ACGT', k=12)) + genome[start:start + 50]))
     if umi:  # 6 + 4 + 12 + 10 nt: 10 nt left after processing, below minimum_length 20
         reads.append((f'{sid}_short', umis[20] + 'TATA' + ''.join(rng.choices('ACGT', k=22))))
         expected[sid] = {seq[:6]: seq[-50:] for _, seq in reads[:-1]}  # UMI -> insert
@@ -91,15 +98,14 @@ per_sample() {  # $1 = product under results/quant/{sample}/
     for s in S1 S2 S3 S4 S5 S6; do echo "results/quant/$s/$1"; done
 }
 
-for kit in FWD REV FWD-UMI; do
+for kit in FWD REV; do
     build "$TASK_TMP/$kit" "QuantSeq $kit"
 done
 run_case "$TASK_TMP/FWD" results/counts.tsv
 run_case "$TASK_TMP/REV" $(per_sample star/metrics.json)
-run_case "$TASK_TMP/FWD-UMI" results/counts.tsv
 
 python3 - "$TASK_TMP" <<'PY'
-import csv, gzip, json, sys
+import csv, json, sys
 from pathlib import Path
 root = Path(sys.argv[1])
 samples = [f'S{i}' for i in range(1, 7)]
@@ -115,12 +121,13 @@ def star(proj, s):
 for s in samples:
     fwd, m = star(root / 'FWD', s)
     assert fwd == {'A': 100, 'B': 0}, (s, fwd)
-    assert m['strandedness'] == 1 and m['num_assigned'] == 100 and m['assignment_rate'] == 1.0, m
+    assert m['strandedness'] == 1 and m['mapping_rate'] == 1.0 and m['num_assigned'] == 100, m
+    assert m['assignment_summary']['Unassigned_NoFeatures'] == 30, m
     rev, m = star(root / 'REV', s)
-    assert rev == {'A': 0, 'B': 0}, (s, rev)
-    assert m['strandedness'] == 2 and m['mapping_rate'] == 1.0 and m['assignment_rate'] == 0, m
+    assert rev == {'A': 0, 'B': 30}, (s, rev)
+    assert m['strandedness'] == 2 and m['mapping_rate'] == 1.0 and m['num_assigned'] == 30, m
     assert m['assignment_summary']['Unassigned_NoFeatures'] == 100, m
-print('QuantSeq FWD counts sense reads only (A=100, B=0); REV on the same reads assigns 0 of 100')
+print('QuantSeq strand: FWD counts A=100, B=0; REV on the same reads counts A=0, B=30')
 
 p = root / 'FWD'
 with open(p / 'results/counts.tsv') as f:
@@ -128,11 +135,29 @@ with open(p / 'results/counts.tsv') as f:
 assert all(int(rows['A'][s]) == 100 and int(rows['B'][s]) == 0 for s in samples), rows
 prov = json.loads((p / 'results/counts_provenance.json').read_text())
 assert prov['quantifier'] == 'STAR_featureCounts' and prov['count_unit'] == 'reads', prov
+PY
+
+if ! command -v umi_tools >/dev/null; then
+    echo "FWD and REV passed; FWD-UMI case needs umi_tools on PATH"
+    exit 77
+fi
+build "$TASK_TMP/FWD-UMI" "QuantSeq FWD-UMI"
+run_case "$TASK_TMP/FWD-UMI" results/counts.tsv
+
+python3 - "$TASK_TMP" <<'PY'
+import csv, gzip, json, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+samples = [f'S{i}' for i in range(1, 7)]
+
+def table(path):
+    with open(path) as f:
+        return {r[0]: int(r[1]) for r in list(csv.reader(f, delimiter='\t'))[1:]}
 
 p = root / 'FWD-UMI'
 expected = json.loads((p / 'expected.json').read_text())
 for s in samples:
-    reads, m = star(p, s)
+    reads = table(p / 'results/quant' / s / 'star/gene_counts.tsv')
     assert reads == {'A': 100, 'B': 0}, (s, reads)
     assert table(p / 'results/quant' / s / 'umi/gene_counts.tsv') == {'A': 20, 'B': 0}, s
     ledger = json.loads((p / 'results/quant' / s / 'preprocessing.json').read_text())
