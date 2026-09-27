@@ -78,12 +78,13 @@ def prepare(kit, destination):
             acc = run['accession']
             raw = raw_dir / f'{acc}.fastq.gz'
             source = fetch(run['fastq_url'], raw, run['fastq_md5'], run['fastq_bytes'])
+            entry = dict(group=run['group'], sample_title=run['sample_title'], source=source)
+            if kit == 'QuantSeq FWD-UMI':
+                # Declared geometry must be visible before any trimming/downsampling touches the reads.
+                entry['umi_spacer_fraction'] = check_spacer(raw)
             derived_path = out / f'{acc}.fastq.gz'
             counts = downsample(raw, derived_path)
-            entry = dict(group=run['group'], sample_title=run['sample_title'],
-                         source=source, derived=dict(sha256=digest(derived_path), **counts))
-            if kit == 'QuantSeq FWD-UMI':
-                entry['umi_spacer_fraction'] = check_spacer(derived_path)
+            entry['derived'] = dict(sha256=digest(derived_path), **counts)
             evidence['runs'][acc] = entry
         samples_tsv = out / 'samples.tsv'
         with samples_tsv.open('w') as f:
