@@ -3,6 +3,7 @@
 import hashlib
 from pathlib import Path
 import yaml
+from small_rna import load_kit
 
 POLICY = Path(__file__).resolve().parent.parent / "config/recommendation_rules.yaml"
 
@@ -40,6 +41,13 @@ def recommend(cfg, n_samples=None):
                             ((cfg.get("organism") or {}).get("mirbase_prefix"), "organism.mirbase_prefix")):
             if not value:
                 issues.append(f"Small-RNA routes require {name}")
+        if analysis.get("small_rna_kit"):
+            try:
+                load_kit(analysis["small_rna_kit"])
+            except ValueError as exc:
+                issues.append(str(exc))
+        if isinstance(objectives, list) and "enrichment" in objectives:
+            issues.append("GO/KEGG enrichment needs gene identifiers; small-RNA counts are miRNA/locus identifiers")
     elif route is None:
         issues.append(f"No implemented route for assay/layout {seq!r}")
     if not isinstance(objectives, list) or not objectives or not all(isinstance(x, str) for x in objectives):
@@ -96,6 +104,7 @@ def recommend(cfg, n_samples=None):
                     "The declared dependence structure selects the statistical backend." if inference else
                     "No differential-inference objective was requested; no DE model will be fitted.",
                     "Sample count informs replication/QC checks; it does not silently change the model."],
-        "qualification": "provisional; no named kit qualified" if seq == "tagseq" else "see release validation evidence",
+        "qualification": "provisional; no named kit qualified" if seq == "tagseq" else
+                         "experimental; no public-data check passed" if seq == "srnaseq" else "see release validation evidence",
         "alternatives": policy["alternatives"], "issues": issues,
     }

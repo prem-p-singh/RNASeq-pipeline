@@ -39,14 +39,15 @@ def mature_reference(mature_fa, prefix, out):
 def count_alignments(sam, out_tsv):
     """Unique hits count per miRNA; a read aligned more than once is reported, never split."""
     hits, unaligned = {}, set()
-    for line in Path(sam).read_text().splitlines():
-        if line.startswith('@'):
-            continue
-        read, flag, ref = line.split('\t')[:3]
-        if int(flag) & 4:
-            unaligned.add(read)
-        else:
-            hits.setdefault(read, []).append(ref)
+    with open(sam) as fh:  # streamed: -a output for 20-30M reads does not fit in memory as text
+        for line in fh:
+            if line.startswith('@'):
+                continue
+            read, flag, ref = line.split('\t', 3)[:3]
+            if int(flag) & 4:
+                unaligned.add(read)
+            else:
+                hits.setdefault(read, []).append(ref)
     counts = {}
     for refs in hits.values():
         if len(refs) == 1:

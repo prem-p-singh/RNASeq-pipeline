@@ -8,6 +8,10 @@ sample_qc:
   mapping_rate_min: 0.60         # < this → sample flagged, excluded from downstream
   min_reads_on_genes_tagseq: 3000000     # handbook p7: 3-10M typical for TAGseq
   min_reads_on_genes_rnaseq: 20000000    # handbook p7: 20-40M for bulk RNA-seq DE
+  # srnaseq: unique mature-miRNA hits and (unique + multi) / reads. Both values
+  # are assumptions pending the public-data check of the small-RNA route.
+  min_reads_on_genes_srnaseq: 1000000
+  mapping_rate_min_srnaseq: 0.10
   duplication_rate_warn: 0.30    # handbook A: > 30% duplication = over-amplified
 
 # Differential-expression "biologically meaningful" filter (handbook 10.2.3)

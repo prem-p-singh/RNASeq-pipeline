@@ -210,6 +210,8 @@ if (is.null(qc)) stop("no per-sample metrics.json found beside the quant files")
 
 min_reads <- if (identical(seq_type, "tagseq")) {
   cfg$thresholds$sample_qc$min_reads_on_genes_tagseq
+} else if (identical(seq_type, "srnaseq")) {
+  cfg$thresholds$sample_qc$min_reads_on_genes_srnaseq
 } else {
   cfg$thresholds$sample_qc$min_reads_on_genes_rnaseq
 }
@@ -232,7 +234,8 @@ if (length(no_metrics) > 0) {
 
 policy_on <- isTRUE(cfg$sample_policy$exclude_failing_qc)
 disposition <- sample_disposition(qc,
-                                  cfg$thresholds$sample_qc$mapping_rate_min,
+                                  if (identical(seq_type, "srnaseq")) cfg$thresholds$sample_qc$mapping_rate_min_srnaseq
+                                  else cfg$thresholds$sample_qc$mapping_rate_min,
                                   min_reads,
                                   policy_on)
 write_tsv(disposition, out_disposition)
