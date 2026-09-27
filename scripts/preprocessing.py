@@ -11,7 +11,7 @@ import subprocess
 from prepare_reads import records
 
 DEFAULTS = dict(poly_g="auto", adapter_r1="", adapter_r2="", minimum_length=15,
-                qualified_quality_phred=15, unqualified_percent_limit=40)
+                qualified_quality_phred=15, unqualified_percent_limit=40, length_limit=0)
 
 
 def policy_args(policy, paired):
@@ -26,6 +26,8 @@ def policy_args(policy, paired):
                             ("unqualified_percent_limit", 0, 100)):
         if type(p[name]) is not int or not low <= p[name] <= high:
             raise ValueError(f"preprocessing.{name} must be an integer in {low}..{high}")
+    if type(p["length_limit"]) is not int or not (p["length_limit"] == 0 or p["length_limit"] >= p["minimum_length"]):
+        raise ValueError("preprocessing.length_limit must be 0 (no limit) or >= minimum_length")
     for name in ("adapter_r1", "adapter_r2"):
         if not isinstance(p[name], str) or set(p[name].upper()) - set("ACGT"):
             raise ValueError(f"preprocessing.{name} must be an A/C/G/T sequence or empty")
@@ -35,6 +37,8 @@ def policy_args(policy, paired):
             "--qualified_quality_phred", str(p["qualified_quality_phred"]),
             "--unqualified_percent_limit", str(p["unqualified_percent_limit"]),
             "--overrepresentation_analysis"]
+    if p["length_limit"]:
+        args.extend(["--length_limit", str(p["length_limit"])])
     if p["poly_g"] != "auto":
         args.append("--trim_poly_g" if p["poly_g"] == "on" else "--disable_trim_poly_g")
     if p["adapter_r1"]:

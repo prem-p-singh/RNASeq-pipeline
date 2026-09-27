@@ -82,6 +82,12 @@ else
     skip check_setup_helpers.py "needs pyyaml"
 fi
 
+if have_py_mods yaml; then
+    run check_small_rna.py "python3 tests/check_small_rna.py"
+else
+    skip check_small_rna.py "needs pyyaml"
+fi
+
 run check_qc_report.py       "python3 tests/check_qc_report.py"
 run check_reference_lock.py  "python3 tests/check_reference_lock.py"
 run check_config_resolve.py  "python3 tests/check_config_resolve.py"

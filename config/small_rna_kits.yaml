@@ -1,0 +1,13 @@
+# 3' adapters for non-UMI small-RNA kits. Source for TruSeq:
+# https://support-docs.illumina.com/SHARE/AdapterSequences/Content/TruSeq-SmallRNA.htm
+# (also pinned in tests/fixtures/small_rna_public.json). Size window 18-30 nt covers
+# animal miRNA and plant 21/22/24 nt classes; reads outside it are counted as lost.
+kits:
+  TruSeq Small RNA:
+    adapter_r1: TGGAATTCTCGGGTGCCAAGG
+    minimum_length: 18
+    length_limit: 30
+    status: experimental
+    sources: [https://support-docs.illumina.com/SHARE/AdapterSequences/Content/TruSeq-SmallRNA.htm]
+blocked:
+  QIAseq miRNA: UMI small-RNA kits need UMI-aware counting, which is not implemented.

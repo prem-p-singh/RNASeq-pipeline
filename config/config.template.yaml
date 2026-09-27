@@ -14,6 +14,8 @@ analysis:
   backend: auto
   quantifier: auto  # auto: Salmon for gene expression, STAR for alignment objectives
   umi: false
+  small_rna_profile: null                       # e.g. "small_rna" to enable the small-RNA route
+  small_rna_kit: null                            # kit name in config/small_rna_kits.yaml, e.g. "TruSeq Small RNA"
 
 preprocessing:
   # fastp instrument-header detection; explicitly set on/off for known chemistry.
@@ -23,6 +25,7 @@ preprocessing:
   minimum_length: 15
   qualified_quality_phred: 15
   unqualified_percent_limit: 40
+  length_limit: 0                               # max read length after trimming; 0 = no limit
 
 # Optional diagnostic screening; never removes reads. Each reference gives a
 # prebuilt Bowtie2 `index`, or a `fasta` (path, URL, `transcriptome` or `genome`)
