@@ -1,0 +1,155 @@
+{
+  "schema_version": 1,
+  "status": "selected_not_qualified",
+  "note": "ENA Portal API metadata only (2026-09-27); no FASTQ bytes fetched here. Qualification (check_spacer / strand pilot) still to run once tests/fixtures/prepare_tagseq_public.py has downloaded the pinned runs.",
+  "downsample": {"max_reads_per_run": 2000000, "seed": 1, "method": "reservoir sampling, pure Python stdlib (no seqtk)"},
+  "kits": {
+    "QuantSeq FWD": {
+      "study": "PRJNA631146",
+      "geo_study": "GSE151920",
+      "organism": "Mus musculus",
+      "protocol_excerpt": "200ng RNA input from each sample was used with Quantseq 3' mRNA-seq Library Prep Kit FWD (Lexogen, SKU:015.24)",
+      "library_layout": "SINGLE",
+      "groups": {"control": ["SRR11731538", "SRR11731539", "SRR11731540"],
+                 "bNGF": ["SRR11731535", "SRR11731536", "SRR11731537"]},
+      "reference": {
+        "ensembl_release": 116,
+        "genome_fasta_url": "https://ftp.ensembl.org/pub/release-116/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz",
+        "gtf_url": "https://ftp.ensembl.org/pub/release-116/gtf/mus_musculus/Mus_musculus.GRCm39.116.gtf.gz"
+      },
+      "acceptance_criteria": {
+        "strand_pilot": "featureCounts -s 1 assigns more reads than -s 2 on a pilot STAR BAM (kit is forward-stranded)",
+        "every_sample_reaches_counts": true,
+        "biological_inference_eligible": true
+      },
+      "runs": [
+        {"accession": "SRR11731538", "sample_title": "control_1_rnaseq", "group": "control",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/038/SRR11731538/SRR11731538.fastq.gz",
+         "fastq_md5": "f520617758feb3536b48f0012d545d54", "fastq_bytes": 1107188869, "read_count": 28884607},
+        {"accession": "SRR11731539", "sample_title": "control_2_rnaseq", "group": "control",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/039/SRR11731539/SRR11731539.fastq.gz",
+         "fastq_md5": "91f6f1a44c10b64a6a592035ffe66d6f", "fastq_bytes": 1916251594, "read_count": 49756174},
+        {"accession": "SRR11731540", "sample_title": "control_3_rnaseq", "group": "control",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/040/SRR11731540/SRR11731540.fastq.gz",
+         "fastq_md5": "a26dab5fb4734c1f5f3c24d2757fe2b7", "fastq_bytes": 1598660593, "read_count": 41127241},
+        {"accession": "SRR11731535", "sample_title": "bNGF_1_rnaseq", "group": "bNGF",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/035/SRR11731535/SRR11731535.fastq.gz",
+         "fastq_md5": "e4a54199028582ae52d20721124d97d2", "fastq_bytes": 2002446216, "read_count": 52698562},
+        {"accession": "SRR11731536", "sample_title": "bNGF_2_rnaseq", "group": "bNGF",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/036/SRR11731536/SRR11731536.fastq.gz",
+         "fastq_md5": "70fef20afb707ce72767bda643b4afc6", "fastq_bytes": 1843283192, "read_count": 48543131},
+        {"accession": "SRR11731537", "sample_title": "bNGF_4_rnaseq", "group": "bNGF",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR117/037/SRR11731537/SRR11731537.fastq.gz",
+         "fastq_md5": "dafd68526aa8669daeccbc945696f72a", "fastq_bytes": 1788245959, "read_count": 46687632}
+      ],
+      "backup_candidate": {
+        "study": "PRJNA638920", "organism": "Mus musculus",
+        "reason_not_primary": "same lab/kit (QuantSeq 3' mRNA-seq Library Prep Kit FWD, Lexogen), but Heart/Neural-Tube x WT/STAG2-KO gives 4 groups of 3 in one study; primary needed only 2 groups so PRJNA631146's exact 2x3 design was simpler to wire up.",
+        "groups_available": ["WT Heart rep1-3", "STAG2-KO Heart rep1-3", "WT Neural Tube rep1-3", "STAG2-KO Neural Tube rep1-3"]
+      }
+    },
+    "QuantSeq REV": {
+      "study": "PRJNA1494475",
+      "organism": "Homo sapiens",
+      "protocol_excerpt": "The libraries were prepared using Lexogen QuantSeq 3' mRNA-Seq Library Prep Kit REV according to manufacturer's protocol.",
+      "library_layout": "SINGLE",
+      "groups": {"MIAPaCa2": ["SRR39597164", "SRR39597163", "SRR39597162"],
+                 "PANC1": ["SRR39597167", "SRR39597166", "SRR39597165"]},
+      "reference": {
+        "ensembl_release": 116,
+        "genome_fasta_url": "https://ftp.ensembl.org/pub/release-116/fasta/homo_sapiens/dna/Homo_sapiens.GRCh38.dna.primary_assembly.fa.gz",
+        "gtf_url": "https://ftp.ensembl.org/pub/release-116/gtf/homo_sapiens/Homo_sapiens.GRCh38.116.gtf.gz"
+      },
+      "acceptance_criteria": {
+        "strand_pilot": "featureCounts -s 2 assigns more reads than -s 1 on a pilot STAR BAM (kit is reverse-stranded)",
+        "every_sample_reaches_counts": true,
+        "biological_inference_eligible": true
+      },
+      "runs": [
+        {"accession": "SRR39597164", "sample_title": "MIAPaCa2 cells, 3' mRNA-Seq, Replicate 1", "group": "MIAPaCa2",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR395/064/SRR39597164/SRR39597164.fastq.gz",
+         "fastq_md5": "3d65b031bcabf1ee62a6a355e3927e89", "fastq_bytes": 1060430288, "read_count": 23365438},
+        {"accession": "SRR39597163", "sample_title": "MIAPaCa2 cells, 3' mRNA-Seq, Replicate 2", "group": "MIAPaCa2",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR395/063/SRR39597163/SRR39597163.fastq.gz",
+         "fastq_md5": "42a0437455fcea0f35ad748dfc281a34", "fastq_bytes": 1840401434, "read_count": 38837088},
+        {"accession": "SRR39597162", "sample_title": "MIAPaCa2 cells, 3' mRNA-Seq, Replicate 3", "group": "MIAPaCa2",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR395/062/SRR39597162/SRR39597162.fastq.gz",
+         "fastq_md5": "94686496118911d33a0e5a30da1c68d3", "fastq_bytes": 1699772634, "read_count": 36562793},
+        {"accession": "SRR39597167", "sample_title": "PANC1 cells, 3' mRNA-Seq, Replicate 1", "group": "PANC1",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR395/067/SRR39597167/SRR39597167.fastq.gz",
+         "fastq_md5": "1933c87eb232dad9d3516c59161c5805", "fastq_bytes": 1054633014, "read_count": 22584217},
+        {"accession": "SRR39597166", "sample_title": "PANC1 cells, 3' mRNA-Seq, Replicate 2", "group": "PANC1",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR395/066/SRR39597166/SRR39597166.fastq.gz",
+         "fastq_md5": "52e5797d6839d2e22f26c423fb57fd63", "fastq_bytes": 2443286746, "read_count": 51847707},
+        {"accession": "SRR39597165", "sample_title": "PANC1 cells, 3' mRNA-Seq, Replicate 3", "group": "PANC1",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR395/065/SRR39597165/SRR39597165.fastq.gz",
+         "fastq_md5": "bcc8c3ad6f362b962ac83fd6e76cf8cb", "fastq_bytes": 954684076, "read_count": 20687604}
+      ],
+      "backup_candidate": {
+        "study": "PRJNA1235302", "organism": "Homo sapiens",
+        "reason_not_primary": "same lab/kit/protocol (nuclear-fraction 3' mRNA-Seq REV) run across 4 cell lines x 3 reps (12 samples); primary study's 2-group design (MIAPaCa2 vs PANC1, 3 reps each) is the minimal 6-run fit the task asked for.",
+        "groups_available": ["1CT", "HCT116", "SW480", "SW620"]
+      }
+    },
+    "QuantSeq FWD-UMI": {
+      "study": "PRJEB107189",
+      "organism": "Mus musculus",
+      "protocol_excerpt": "library preparation using QuantSeq 3' mRNA-Seq V2 Library Prep Kit FWD with UDI 12 nt (Lexogen) in combination with UMI Second Strand Synthesis Module for QuantSeq FWD (Lexogen)",
+      "library_layout": "SINGLE",
+      "groups": {"DTA": ["ERR16149159", "ERR16149160", "ERR16149161"],
+                 "S100A4": ["ERR16149164", "ERR16149165", "ERR16149166"]},
+      "reference": {
+        "ensembl_release": 116,
+        "genome_fasta_url": "https://ftp.ensembl.org/pub/release-116/fasta/mus_musculus/dna/Mus_musculus.GRCm39.dna.primary_assembly.fa.gz",
+        "gtf_url": "https://ftp.ensembl.org/pub/release-116/gtf/mus_musculus/Mus_musculus.GRCm39.116.gtf.gz"
+      },
+      "acceptance_criteria": {
+        "umi_spacer_check": "check_spacer(fastq_gz, umi_len=6, spacer='TATA', reads=10000, minimum=0.8) on each run's raw FASTQ, before any trimming",
+        "every_sample_reaches_counts": true,
+        "biological_inference_eligible": true
+      },
+      "note_on_group_selection": "Study has 2 groups (DTA, S100A4) x 5 replicates each; 3 of the 5 replicates per group were pinned to match the 6-run/3-per-group shape. ERR16149162/163 (DTA) and ERR16149167/168 (S100A4) are the two dropped replicates per group, available if more depth is wanted later.",
+      "runs": [
+        {"accession": "ERR16149159", "sample_title": "DTA_1", "group": "DTA",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/ERR161/059/ERR16149159/ERR16149159.fastq.gz",
+         "fastq_md5": "9ee452e8020197d8a59f413ec41056b5", "fastq_bytes": 1200952148, "read_count": 11046218},
+        {"accession": "ERR16149160", "sample_title": "DTA_2", "group": "DTA",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/ERR161/060/ERR16149160/ERR16149160.fastq.gz",
+         "fastq_md5": "d902f4c96fe2dba0d555ea9873727f87", "fastq_bytes": 1160400947, "read_count": 11063837},
+        {"accession": "ERR16149161", "sample_title": "DTA_3", "group": "DTA",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/ERR161/061/ERR16149161/ERR16149161.fastq.gz",
+         "fastq_md5": "037916740b9fb7f86c2dbb741528030e", "fastq_bytes": 1205753626, "read_count": 11230066},
+        {"accession": "ERR16149164", "sample_title": "S100A4_1", "group": "S100A4",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/ERR161/064/ERR16149164/ERR16149164.fastq.gz",
+         "fastq_md5": "6c7dfc25aa0b8f960a740e95c219d473", "fastq_bytes": 1235409549, "read_count": 10604132},
+        {"accession": "ERR16149165", "sample_title": "S100A4_2", "group": "S100A4",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/ERR161/065/ERR16149165/ERR16149165.fastq.gz",
+         "fastq_md5": "ff851fa9889ce925fca7875c6b222d97", "fastq_bytes": 1169315722, "read_count": 11337019},
+        {"accession": "ERR16149166", "sample_title": "S100A4_3", "group": "S100A4",
+         "fastq_url": "https://ftp.sra.ebi.ac.uk/vol1/fastq/ERR161/066/ERR16149166/ERR16149166.fastq.gz",
+         "fastq_md5": "02e654e941b7fa2009db8e92e0cf4441", "fastq_bytes": 1155088043, "read_count": 11184219}
+      ],
+      "backup_candidate": {
+        "study": "PRJEB60464", "organism": "Homo sapiens",
+        "reason_not_primary": "confirmed UMI Second Strand Synthesis Module for QuantSeq FWD, but design is a multi-genotype x multi-treatment panel (C176F/G245S x DMSO/N3a, 3 reps each); primary's plain 2-group x N design needed no sub-selection logic.",
+        "groups_available_example": {"C176F_DMSO": ["ERR10975132", "ERR10975133", "ERR10975134"],
+                                     "G245S_DMSO": ["ERR10975135", "ERR10975136", "ERR10975137"]}
+      },
+      "backup_candidate_2": {
+        "study": "PRJEB59123", "organism": "Mus musculus",
+        "reason_not_primary": "confirmed UMI Second strand synthesis module for QuantSeq FWD, but design crosses 5 mice x 2 doses x 4 timepoints (irradiated tumour organoids); usable but needs a 2-factor design collapse to pick 2 comparable groups."
+      }
+    }
+  },
+  "rejected_candidates": [
+    {"study": "PRJEB62482", "kit": "QuantSeq REV", "reason": "protocol text names Lexogen 3' QuantSeq REV exactly, but library_layout is PAIRED (brief prefers single-end) and sample_title is an anonymized 'Sample N' series with no group/condition label recoverable from ENA metadata alone."},
+    {"study": "PRJNA560977", "kit": "QuantSeq REV", "reason": "protocol text names 'QuantSeq REV kit from Lexogen GmbH', mouse, single-end, but sample_title values ('1985i_S6', '1985L_S49', ...) encode an internal animal/tissue code with no decodable group label, and appear to pair with an unlabelled 4sU-labelling design (matching the run count and naming style of the neighbouring PRJNA566003 SLAM-seq study)."},
+    {"study": "PRJEB84131", "kit": "QuantSeq FWD", "reason": "protocol text names QuantSeq FWD, human, single-end, 3 biological replicates stated in free text ('Experiment was conducted in three biological replicates'), but sample_title is anonymized 'Sample N' with no group encoded, so group membership is not inferable from ENA fields without pulling the ArrayExpress/BioSample XML out-of-band."},
+    {"study": "PRJEB58107", "kit": "QuantSeq FWD-UMI", "reason": "72 mouse runs but every sample_title is 'Sample N' (anonymized); rejected for the same reason as PRJEB84131."},
+    {"study": "PRJEB65357", "kit": "QuantSeq FWD-UMI (candidate)", "reason": "false positive: protocol text contains the substring 'umi' only inside the word 'Illumina'; actual kit is plain QuantSeq FWD (Lexogen #015), no UMI Second Strand Synthesis Module mentioned."},
+    {"study": "PRJEB57768", "kit": "QuantSeq FWD-UMI (candidate)", "reason": "same 'Illumina' false positive as PRJEB65357; kit is plain QuantSeq FWD."},
+    {"study": "PRJEB64226", "kit": "QuantSeq FWD-UMI (candidate)", "reason": "same false positive, this time from 'albUMIn' (BSA) in the cell-sorting buffer recipe; kit is plain QuantSeq 3' mRNA-Seq Library Prep Kit FWD (Lexogen #015), not the UMI module."},
+    {"study": "PRJNA1005186", "kit": "QuantSeq REV (candidate)", "reason": "protocol names QuantSeq 3' mRNA library prep kit REV, but organism is Saccharomyces cerevisiae and library_layout is PAIRED; yeast has an Ensembl genome/GTF but paired-end was deprioritized versus available single-end mammalian alternatives."},
+    {"study": "PRJNA1213792", "kit": "QuantSeq REV (candidate)", "reason": "IP/input CLIP-style design (pum IP/input x w118 IP/input), Drosophila melanogaster, PAIRED; not a plain biological-replicate comparison and paired-end, deprioritized."}
+  ]
+}
