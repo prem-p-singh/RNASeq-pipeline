@@ -90,13 +90,15 @@ Explicit R1/R2 adapters, poly-G policy and minimum retained length configure the
 - **adapter_kit:** a named non-UMI small-RNA kit from [config/small_rna_kits.yaml](config/small_rna_kits.yaml); UMI small-RNA kits are rejected, since UMI-aware counting is not implemented.
 - **mirbase_prefix:** required for `animal`; optional for `plant`, where it only annotates ShortStack loci with known miRNAs and does not change which loci are called.
 - **reference_genome:** required for `plant`; not used by `animal`.
+- **Sample and read records:** external files only. Workbook tables are refused on this tab.
 - Counts are **reads, not molecules**: no UMI deduplication, no isomiR resolution, and the plant route does not call phased siRNA clusters.
 
 ## Development workbook: TAGseq tab
 
 - **kit:** `QuantSeq FWD`, `QuantSeq REV` or `QuantSeq FWD-UMI` from [config/tagseq_kits.yaml](config/tagseq_kits.yaml). In a project configuration the same name goes in `analysis.kit` with `samples.seq_type: tagseq`. Any other name is refused.
 - **reference_genome** and **reference_gtf:** both required; the named-kit route aligns to the genome with STAR and counts with featureCounts.
-- **Strand comes from the kit:** forward for FWD and FWD-UMI, reverse for REV. A Libraries strandedness or `expected_libtype` that disagrees is an error; blank or `unknown` defers to the kit.
+- **Strand comes from the kit:** forward for FWD and FWD-UMI, reverse for REV. An `expected_libtype` that disagrees is an error; blank defers to the kit.
+- **Sample and read records:** external files only. Workbook tables are refused on this tab.
 - **Trimming comes from the kit:** a preprocessing setting that contradicts the kit (for example another `trim_front`) is an error. Reads are single-end Read 1 only.
 - **UMI (FWD-UMI only):** fastp (`--umi --umi_len 6 --umi_skip 4`) moves the 6 nt UMI into the read name and drops the TATA spacer, then applies the 12 nt front trim. `star/gene_counts.tsv` counts reads; `umi/gene_counts.tsv` and the cohort `counts.tsv` count molecules.
 - All three kits are experimental until their public-data checks pass; `tagseq.validated_kits` in `config/spec.yaml` is empty.

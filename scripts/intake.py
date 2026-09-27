@@ -87,6 +87,9 @@ def read_intake(path, sheet_name=None):
             if q.get("required") and q.get("introduced_in", 1) <= version and q["id"] not in answers:
                 errors.append(f"{sheet_name}: missing required question {q['id']}")
         inline = answers.get("metadata_source") == "workbook tables"
+        if inline and sheet_name in ("sRNA-seq", "TAGseq"):
+            errors.append(f"{sources['metadata_source']}: workbook tables are supported for Bulk RNA-seq only; "
+                          "use external files for small RNA and TAG-seq")
         table_records = {}
         for name in list(metadata.SCHEMAS) + ["contrasts"]:
             title = name.title()
@@ -416,7 +419,7 @@ def setup_inputs(record):
             fail("repeated_measures", "Repeated biological units require repeated measures = yes and a subject column")
         for read in tables["reads"]:
             read["uri"] = absolute(read["uri"])
-        if not is_srna and not is_tagseq and kit and any(lib["strandedness"] not in ("unknown", kit["strandedness"]) for lib in tables["libraries"]):
+        if kit and any(lib["strandedness"] not in ("unknown", kit["strandedness"]) for lib in tables["libraries"]):
             fail("library_protocol", f"Libraries strandedness conflicts with {protocol} ({kit['strandedness']})")
     return dict(project_name=a["project_name"], tax_id=tax_id, seq_type=layout,
                 analysis=analysis_out, preprocessing=policy,

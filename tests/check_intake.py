@@ -392,6 +392,16 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
 
     srna_rejected("adapter_kit", "QIAseq miRNA", "UMI")
     srna_rejected("read_config", "paired-end", "single-end")
+    TABLES_REFUSED = "workbook tables are supported for Bulk RNA-seq only"
+    s2[srna_cells["metadata_source"]] = "workbook tables"
+    sr.save(base / "srna_tables.xlsx")
+    try:
+        read_intake(base / "srna_tables.xlsx", "sRNA-seq")
+    except ValueError as exc:
+        assert TABLES_REFUSED in str(exc), str(exc)
+    else:
+        raise AssertionError("sRNA-seq workbook tables accepted")
+    s2[srna_cells["metadata_source"]] = "external files"
 
     # Mixed profile: a plant miRBase code with the animal profile is allowed, but flagged.
     s2[srna_cells["small_rna_profile"]] = "animal"
@@ -489,6 +499,15 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
 
     tagseq_rejected("kit", "don't know", "choose a listed QuantSeq kit")
     tagseq_rejected("read_config", "paired-end", "single-end")
+    s3[tagseq_cells["metadata_source"]] = "workbook tables"
+    tg.save(base / "tagseq_tables.xlsx")
+    try:
+        read_intake(base / "tagseq_tables.xlsx", "TAGseq")
+    except ValueError as exc:
+        assert TABLES_REFUSED in str(exc), str(exc)
+    else:
+        raise AssertionError("TAGseq workbook tables accepted")
+    s3[tagseq_cells["metadata_source"]] = "external files"
 
     # End-to-end: a workbook-launched TAGseq project writes a config.yaml that
     # recommend() selects, on the star_tagseq route.
