@@ -57,13 +57,18 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
                 row[2].value = answers[key]
     w.save(book)
     record = read_intake(book)
-    assert record["schema_version"] == 3
+    assert record["schema_version"] == 4
     inputs = setup_inputs(record)
     assert inputs["tax_id"] == 9606 and inputs["seq_type"] == "rnaseq_paired"
     assert inputs["expected_libtype"] == "ISR" and inputs["model_random_effects"] is None
     assert inputs["metadata_file"] == str(base / "samples.tsv")
     assert inputs["orgdb_strategy"] == "skip" and not inputs["run_enrichment"]
     assert "platform" in record["context_only"]
+    legacy=openpyxl.load_workbook(book)
+    legacy['README']['B2']=3
+    legacy['Bulk RNA-seq'].delete_rows(30,10)
+    legacy.save(base/'schema3.xlsx')
+    assert setup_inputs(read_intake(base/'schema3.xlsx'))['analysis']=={'quantifier':'auto','backend':'auto'}
 
     # Moving the question rows must not change interpretation.
     original = [(s.cell(5, c).value, s.cell(6, c).value) for c in range(1, 6)]
@@ -98,6 +103,29 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     rejected("umi", "don't know", "unknown status", True)
     rejected("input_stage", "counts or processed objects", "Only raw FASTQ", True)
     rejected("umi", None, "required")
+    rejected('analysis_backend', 'magic', 'choose one')
+    rejected('preprocess_minimum_length', 0, 'whole number')
+    rejected('preprocess_minimum_length', 10001, '1..10000', True)
+    rejected('preprocess_adapter_r1', 'INVALID', 'A/C/G/T', True)
+    rejected('preprocess_adapter_r2', 'ACGT', 'adapter_r1', True)
+    rejected('reference_genome', 'custom.fa', 'Incomplete custom reference', True)
+
+    # Explicit methods/references/settings survive the Excel -> setup contract.
+    advanced = dict(analysis_quantifier='star', analysis_backend='edger_ql',
+                    reference_genome='genome.fa', reference_gtf='genes.gtf',
+                    preprocess_poly_g='off', preprocess_adapter_r1='AGATCGGA',
+                    preprocess_minimum_length=25)
+    saved_answers = {key:s[cells[key]].value for key in advanced}
+    for key,value in advanced.items(): s[cells[key]]=value
+    w.save(base/'advanced.xlsx')
+    advanced_inputs = setup_inputs(read_intake(base/'advanced.xlsx'))
+    assert advanced_inputs['analysis'] == {'quantifier':'star','backend':'edger_ql'}
+    assert advanced_inputs['reference_overrides']['genome_fasta_url'] == (base/'genome.fa').as_uri()
+    assert advanced_inputs['reference_overrides']['transcriptome_fasta_url'] is None
+    assert advanced_inputs['preprocessing']['minimum_length'] == 25
+    assert advanced_inputs['preprocessing']['poly_g'] == 'off'
+    rejected('strandedness', "don't know", 'STAR requires known', True)
+    for key,value in saved_answers.items(): s[cells[key]]=value
 
     w["README"]["B2"] = 99
     w.save(base / "future.xlsx")
@@ -146,6 +174,17 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     assert cfg["contrasts"][0]["factor"] == "treatment"
     saved = next((project / "intake").glob("*/source_map.json"))
     assert json.loads(saved.read_text())["sources"]["read_config"].startswith("Bulk RNA-seq!C")
+    advanced_project = base/'advanced project'
+    with patch.object(sys, 'argv', ['setup.py','--intake',str(base/'advanced.xlsx'),
+                                   '--project-dir',str(advanced_project),'--plan-only']), \
+         patch.object(setup, 'resolve_organism', return_value=org), \
+         patch.object(setup, 'resolve_reference_urls', side_effect=AssertionError('Custom reference replaced by lookup')):
+        setup.main()
+    advanced_cfg=yaml.safe_load((advanced_project/'config/config.yaml').read_text())
+    assert advanced_cfg['analysis']['quantifier']=='star' and advanced_cfg['analysis']['backend']=='edger_ql'
+    assert advanced_cfg['reference']['genome_fasta_url']==(base/'genome.fa').as_uri()
+    assert advanced_cfg['reference']['transcriptome_fasta_url'] is None
+    assert advanced_cfg['preprocessing']['minimum_length']==25
     before = (project / "config/config.yaml").read_bytes()
     with patch.object(sys, "argv", argv):
         try:

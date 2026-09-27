@@ -20,7 +20,7 @@
 Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and differential-expression results. Fill an Excel intake or provide explicit TSV/YAML inputs, review the study configuration, and run locally on Linux or through SLURM. Every project has its own configuration, logs and results.
 
 > [!NOTE]
-> **V2 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. The workbook's **schema version 3** describes its file format; the software release is **v2.0.0**.
+> **V2 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. V2 shipped workbook schema 3; this development branch supplies **schema 4**. Workbook schema and software release numbers are separate.
 
 The table and diagram below describe the published v2 tag. For this branch’s added routes and their qualification status, see [next-version development](#next-version-development-unreleased).
 
@@ -355,7 +355,9 @@ This command checks lane/mate integrity and writes per-sample fastp JSON/HTML, r
 
 The development DAG now separates preprocessing from Salmon quantification and retains fastp reports plus a read-loss ledger. `analysis.objectives: [qc]` builds the preprocessing report without a reference or DE model; `[gene_expression]` also produces counts without running inference. The standalone command above remains observation-only; the DAG QC objective performs the configured preprocessing. Contamination screening and named kit profiles are still pending; fastp overrepresentation is a diagnostic, not a contamination verdict.
 
-The main launcher accepts the existing bulk workbook directly:
+The development workbook (schema 4) exposes Salmon/STAR selection, fixed-effect DE method, complete custom reference sets, genomic-decoy choice, poly-G handling, adapters and minimum retained read length. Custom reference paths resolve beside the workbook; supplying a custom set bypasses automatic reference selection. Schemas 1–3 remain readable. Advanced contrasts, repeated-measures models and non-bulk producers are still outside the executable Excel adapter.
+
+The main launcher accepts the bulk workbook directly:
 
 ```bash
 bash "$REPO/submit.sh" --intake /path/study.xlsx -d "$PROJECT" --plan-only

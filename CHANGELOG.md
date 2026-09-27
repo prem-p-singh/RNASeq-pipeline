@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Workbook schema 4 connects bulk quantifier/DE selection, complete custom reference sets, decoy profile and basic preprocessing to generated configuration; older schemas remain readable.
+
 - Independent, observation-only raw QC for canonical non-UMI bulk projects using locked fastp 0.23.4; no reference or statistical design required.
 - Durable per-sample reports and run status, input checksum/mate validation, exact command provenance and protected source reads. Existing output directories are refused to prevent stale results.
 - Separate resumable preprocessing and quantification producers, explicit adapter/quality/poly-G settings, read-loss provenance and an early MultiQC report.

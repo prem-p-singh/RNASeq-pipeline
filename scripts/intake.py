@@ -24,8 +24,8 @@ def read_intake(path, sheet_name=None):
     try:
         version = workbook["README"]["B2"].value if "README" in workbook.sheetnames else None
         version = 1 if version in (None, "") else version
-        if type(version) is not int or version not in (1, 2, 3):
-            raise ValueError("README!B2: unsupported intake schema version; expected 1, 2 or 3")
+        if type(version) is not int or version not in (1, 2, 3, 4):
+            raise ValueError("README!B2: unsupported intake schema version; expected 1, 2, 3 or 4")
         candidates = []
         for name in tabs:
             if name in workbook.sheetnames:
@@ -203,12 +203,45 @@ def setup_inputs(record):
             fail("expected_libtype", f"invalid library type for {a['read_config']}")
     if a["orgdb_strategy"] == "use_existing":
         fail("orgdb_strategy", "This workbook has no OrgDb package field. Use YAML with an explicit package.")
+    quantifier = a.get('analysis_quantifier') or 'auto'
+    backend = a.get('analysis_backend') or 'auto'
+    decoys = None if a.get('reference_decoys') == 'transcriptome only' else 'genome'
+    custom_ref = {key: a.get(field) for key, field in (
+        ('genome_fasta_url', 'reference_genome'), ('transcriptome_fasta_url', 'reference_transcriptome'),
+        ('gtf_url', 'reference_gtf'))}
+    if any(custom_ref.values()):
+        required_refs = ['genome_fasta_url', 'gtf_url'] if quantifier == 'star' else ['transcriptome_fasta_url', 'gtf_url'] + (['genome_fasta_url'] if decoys else [])
+        missing = [key for key in required_refs if not custom_ref[key]]
+        if missing:
+            fail('reference_gtf', 'Incomplete custom reference set: missing ' + ', '.join(missing))
+        custom_ref = {key: (value if '://' in str(value) else Path(absolute(str(value))).as_uri())
+                      if value else None for key, value in custom_ref.items()}
+        custom_ref.update(accession='custom', assembly_name=None, gene_info_url=None)
+    else:
+        custom_ref = None
+    if quantifier == 'star':
+        tables = record.get('metadata_tables')
+        if tables:
+            if any(row['strandedness'] not in ('unstranded', 'forward', 'reverse') for row in tables['libraries']):
+                fail('analysis_quantifier', 'STAR requires known strandedness for every library in Libraries')
+        elif (supplied or expected) not in ({'IU', 'ISF', 'ISR'} if layout == 'rnaseq_paired' else {'U', 'SF', 'SR'}):
+            fail('strandedness', 'STAR requires known strandedness and inward paired orientation')
+    from preprocessing import policy_args
+    policy = dict(poly_g=a.get('preprocess_poly_g') or 'auto',
+                  adapter_r1=str(a.get('preprocess_adapter_r1') or '').upper(),
+                  adapter_r2=str(a.get('preprocess_adapter_r2') or '').upper(),
+                  minimum_length=int(a.get('preprocess_minimum_length') or 15))
+    try:
+        policy, _ = policy_args(policy, layout == 'rnaseq_paired')
+    except ValueError as exc:
+        key = next((key for key in policy if key in str(exc)), 'minimum_length')
+        fail('preprocess_' + key, str(exc))
     enrichment = a["run_enrichment"] == "yes"
     if enrichment and a["orgdb_strategy"] == "skip":
         fail("orgdb_strategy", "skip conflicts with requested GO + KEGG enrichment; select no enrichment or a strategy")
     record["context_only"] = ["contact_email", "tissue_type", "platform", "library_type", "library_kit"]
     record["limitations"] = [
-        "Platform and library preparation are recorded context; the existing bulk processor still uses its release preprocessing defaults.",
+        "Platform and kit names are recorded context; explicit bulk preprocessing controls do not imply kit qualification.",
         "Contact email is recorded but does not configure scheduler notifications.",
         "Multiple libraries per sample, repeated-measures and non-bulk workbook execution remain pending assay qualification.",
     ]
@@ -222,6 +255,8 @@ def setup_inputs(record):
         for read in tables["reads"]:
             read["uri"] = absolute(read["uri"])
     return dict(project_name=a["project_name"], tax_id=tax_id, seq_type=layout,
+                analysis=dict(quantifier=quantifier, backend=backend), preprocessing=policy,
+                reference_overrides=custom_ref, reference_decoys=decoys,
                 metadata_tables=tables,
                 fastq_source=absolute(str(a["fastq_path"])) if not tables else None,
                 metadata_file=absolute(str(a["metadata_file"])) if not tables else None,

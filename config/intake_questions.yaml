@@ -23,10 +23,10 @@
 # -----------------------------------------------------------------------------
 # Questions that appear on EVERY assay tab (project basics, paths, design)
 # -----------------------------------------------------------------------------
-schema_version: 3
+schema_version: 4
 readme:
   - "Fill the Bulk RNA-seq tab for the currently implemented Excel intake. Yellow cells are required; gray cells are optional. Enter literal values, not formulas."
-  - "Current execution: annotated, non-UMI bulk gene expression and differential expression; independent groups, optionally including a batch column."
+  - "Current execution: annotated, non-UMI bulk gene expression and differential expression; Salmon or STAR, explicit fixed-effect methods, independent groups with optional batch."
   - "TAGseq and sRNA-seq tabs are planning questionnaires only. They cannot launch from this workbook. Other planned RNA families have no executable intake yet."
   - "Choose external files or workbook tables. For workbook tables, fill Samples, Libraries and Reads; clear the FASTQ folder and external metadata path."
   - "Keep identifiers as Text before entry. One library per sample is executable; multiple run/lane read pairs within that library are checked and merged."
@@ -39,8 +39,8 @@ readme:
   - "For SLURM, configure your site's profile and run: bash submit.sh -d /path/new_project. See README.md for local Linux execution."
   - "Storage estimates only warn. Actual input, software, scientific-design and filesystem write errors remain failures."
   - "Contact, tissue, platform and kit answers are recorded context. They do not configure notifications, platform-specific trimming or kit-specific processing."
-  - "The current model compares all levels of the primary factor. Advanced contrasts, subject effects, reference overrides and execution settings still require configuration outside this workbook."
-  - "Blank strandedness knowledge is not a reverse-stranded assumption: choose don't know. Salmon detects library type and reports disagreement with declared expectations."
+  - "Bulk method, custom references and basic preprocessing have input fields. Advanced contrasts, subject effects, analysis objectives and executor settings still require configuration outside this workbook."
+  - "Blank strandedness knowledge is not a reverse-stranded assumption: choose don't know. Salmon detects library type and reports disagreement. STAR requires a known declared strand; it does not infer strand."
   - "Do not change the field IDs in column E. Sorting complete rows and editing display labels do not change the field identities."
   - "Full intake and route coverage remains incomplete. See docs/INTAKE_TEMPLATE_AUDIT.md for required fields, implementation gaps and the v2 publication gate."
 
@@ -259,6 +259,89 @@ tabs:
         introduced_in: 2
 
   # ============================ TAGseq / 3'-tag ============================
+      - id: analysis_quantifier
+        text: Bulk quantification method
+        help: auto selects Salmon for gene expression. STAR needs a compatible genome/GTF and known strand.
+        type: dropdown
+        options:
+        - auto
+        - salmon
+        - star
+        default: auto
+        required: false
+        introduced_in: 4
+      - id: analysis_backend
+        text: Differential expression method
+        help: auto selects limma-voom for this independent design. Explicit methods keep the declared model.
+        type: dropdown
+        options:
+        - auto
+        - limma_voom
+        - edger_ql
+        - deseq2
+        default: auto
+        required: false
+        introduced_in: 4
+      - id: reference_genome
+        text: Custom genome FASTA path or URL
+        help: Optional custom reference set. With STAR, provide genome and GTF. With Salmon genomic decoys, also provide transcripts.
+        type: text
+        required: false
+        introduced_in: 4
+      - id: reference_transcriptome
+        text: Custom transcriptome FASTA path or URL
+        help: Salmon custom reference requires transcripts and GTF; genomic decoys additionally need genome. IDs must match annotation.
+        type: text
+        required: false
+        introduced_in: 4
+      - id: reference_gtf
+        text: Custom annotation GTF path or URL
+        help: Use the matching assembly/release. If any custom reference is supplied, provide the complete required set.
+        type: text
+        required: false
+        introduced_in: 4
+      - id: reference_decoys
+        text: Salmon decoy profile
+        help: genome is the new-project default. transcriptome only explicitly disables decoys. STAR does not use this setting.
+        type: dropdown
+        options:
+        - genome
+        - transcriptome only
+        default: genome
+        required: false
+        introduced_in: 4
+      - id: preprocess_poly_g
+        text: Poly-G trimming
+        help: auto uses fastp instrument-header detection. Choose on or off when the library protocol requires it.
+        type: dropdown
+        options:
+        - auto
+        - 'on'
+        - 'off'
+        default: auto
+        required: false
+        introduced_in: 4
+      - id: preprocess_adapter_r1
+        text: Explicit R1 adapter sequence
+        help: Optional A/C/G/T sequence. Blank uses the bulk processor auto-detection. Kit-specific processing is not implied.
+        type: text
+        required: false
+        introduced_in: 4
+      - id: preprocess_adapter_r2
+        text: Explicit R2 adapter sequence
+        help: Paired reads only; also supply R1 adapter. Blank uses the R1 sequence when R1 is explicit.
+        type: text
+        required: false
+        introduced_in: 4
+      - id: preprocess_minimum_length
+        text: Minimum retained read length (nt)
+        help: Bulk minimum after processing. This is not a small-RNA size-selection profile.
+        type: number
+        maximum: 10000
+        default: 15
+        required: false
+        introduced_in: 4
+
   - name: "TAGseq"
     description: |
       PLANNING ONLY: end-tag RNA-seq requires a qualified exact-kit route.

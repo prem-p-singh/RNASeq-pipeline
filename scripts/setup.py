@@ -281,14 +281,14 @@ def resolve_reference_urls(tax_id: int) -> dict:
                 "gene_info_url": None}
 
 
-def unresolved_reference_urls(ref: dict) -> list:
+def unresolved_reference_urls(ref: dict, required_keys=None) -> list:
     """Problems that would make a fetch job fail. Empty list means good to go.
 
     curl does not expand '*', so a wildcard URL is a guaranteed Stage 0 failure;
     catch it here instead of at job time.
     """
     problems = []
-    for key in ("genome_fasta_url", "transcriptome_fasta_url", "gtf_url"):
+    for key in (required_keys if required_keys is not None else ("genome_fasta_url", "transcriptome_fasta_url", "gtf_url")):
         url = ref.get(key) or ""
         if not url or url == "TODO":
             problems.append(f"{key} is unresolved")
@@ -611,6 +611,8 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
     cfg["reference"].pop("ncbi_to_ensembl", None)
 
     cfg["samples"]["seq_type"] = inputs["seq_type"]
+    cfg['analysis'].update(inputs.get('analysis') or {})
+    cfg['preprocessing'].update(inputs.get('preprocessing') or {})
     if inputs.get("metadata_tables"):
         cfg["samples"].update(metadata_dir="metadata", sheet="metadata/samples.tsv")
     if "expected_libtype" in inputs:
@@ -689,7 +691,7 @@ def main():
         (snapshot / "source_map.json").write_text(json.dumps(args.intake_record, indent=2) + "\n")
         dump_yaml(inputs, snapshot / "setup_inputs.yaml")
     org = resolve_organism(int(inputs["tax_id"]))
-    ref = resolve_reference_urls(int(inputs["tax_id"]))
+    ref = inputs.get('reference_overrides') or resolve_reference_urls(int(inputs["tax_id"]))
 
     REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
     if not args.plan_only:
@@ -726,7 +728,8 @@ def main():
 
     # Stop before anything can be submitted if the reference never resolved.
     # The config is still written so it can be corrected by hand.
-    problems = unresolved_reference_urls(ref)
+    required_refs = ['genome_fasta_url', 'gtf_url'] if (inputs.get('analysis') or {}).get('quantifier') == 'star' else ['transcriptome_fasta_url', 'gtf_url'] + (['genome_fasta_url'] if inputs.get('reference_decoys', 'genome') == 'genome' else [])
+    problems = unresolved_reference_urls(ref, required_refs)
     if problems:
         print("\n" + "=" * 60)
         print(" SETUP INCOMPLETE — reference URLs did not resolve")
