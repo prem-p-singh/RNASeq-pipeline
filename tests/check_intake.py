@@ -473,6 +473,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     assert tagseq_inputs["seq_type"] == "tagseq"
     assert tagseq_inputs["analysis"] == {"quantifier": "star", "backend": "auto", "kit": "QuantSeq REV"}
     assert tagseq_inputs["expected_libtype"] == "SR"
+    assert not any("non-bulk workbook execution" in msg for msg in tagseq_record["limitations"]), tagseq_record["limitations"]
 
     def tagseq_rejected(key, value, message):
         old = s3[tagseq_cells[key]].value

@@ -299,7 +299,7 @@ def main():
     wb.save(OUTPUT_XLSX)
     print(f"\nWrote: {OUTPUT_XLSX}")
     print("\nBulk intake: python scripts/setup.py --intake intake_template.xlsx --project-dir /path/new_project")
-    print("Other assay tabs are planning-only. See docs/INTAKE_TEMPLATE_AUDIT.md.")
+    print("Bulk RNA-seq, sRNA-seq and TAGseq tabs launch. Other RNA families have no executable intake yet. See docs/INTAKE_TEMPLATE_AUDIT.md.")
 
 
 if __name__ == "__main__":

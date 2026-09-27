@@ -399,8 +399,12 @@ def setup_inputs(record):
     record["limitations"] = [
         "A named protocol sets adapters and strand only; it is not a kit-level scientific qualification.",
         "Contact email is recorded but does not configure scheduler notifications.",
-        "Multiple libraries per sample and non-bulk workbook execution remain pending assay qualification.",
+        "Multiple libraries per sample remain unsupported.",
     ]
+    if is_srna:
+        record["limitations"].append("The small-RNA route is experimental until its public-data check passes.")
+    if is_tagseq:
+        record["limitations"].append("The named-kit TAG-seq route is experimental until its public-data check passes.")
     if srna_limitation:
         record["limitations"].append(srna_limitation)
     if record["schema_version"] == 1:
