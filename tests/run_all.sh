@@ -89,6 +89,13 @@ run check_artifacts.py       "python3 tests/check_artifacts.py"
 run check_reference_cache.py "python3 tests/check_reference_cache.py"
 run check_metadata.py        "python3 tests/check_metadata.py"
 run check_read_units.py      "python3 tests/check_read_units.py"
+if have_py_mods yaml; then
+    run check_raw_qc.py "python3 tests/check_raw_qc.py"
+    run check_raw_qc_real "python3 tests/check_raw_qc.py --real"
+else
+    skip check_raw_qc.py "needs pyyaml"
+    skip check_raw_qc_real "needs pyyaml and fastp"
+fi
 run check_resources.py       "python3 tests/check_resources.py"
 run check_recommend.py       "python3 tests/check_recommend.py"
 if have_py_mods openpyxl pandas yaml; then

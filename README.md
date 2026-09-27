@@ -340,6 +340,19 @@ Preserve the project, original inputs, reference identity, runtime lock and exac
 
 ## Validation and development
 
+### Next-version development: independent raw QC
+
+The development branch adds an observation-only QC command for canonical non-UMI bulk projects (the Samples/Libraries/Reads intake). Activate the locked Linux environment, then run:
+
+```bash
+python3 "$REPO/scripts/raw_qc.py" -d "$PROJECT" \
+  --out "$PROJECT/raw_qc_run1" --threads 2
+```
+
+This command checks lane/mate integrity and writes per-sample fastp JSON/HTML, read provenance, `manifest.json` and a cohort `index.html`. It needs no reference, Salmon index, annotation or DE model. It disables trimming/filtering and preserves original reads; temporary merged reads are removed after inspection. Use a new output directory for each run. A failure stops the command with a failed status while previously completed reports remain available.
+
+This is the first M2 increment, separate from the default analysis DAG. Legacy single-sheet input, contamination screening, adapter detection, chemistry-specific preprocessing, integrated resume and broader assays remain pending for this command. Duplication and overrepresented-sequence estimates are fastp diagnostics, not proof of contamination. The published v2 analysis path is unchanged.
+
 <img src="assets/section-validation.svg" alt="Validation and development" width="100%" />
 
 ```bash

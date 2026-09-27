@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Independent, observation-only raw QC for canonical non-UMI bulk projects using locked fastp 0.23.4; no reference or statistical design required.
+- Durable per-sample reports and run status, input checksum/mate validation, exact command provenance and protected source reads. Existing output directories are refused to prevent stale results.
+- M2 remains partial: this does not implement contamination screening, chemistry profiles or new assay support.
+
 ## 2.0.0 — 2026-09-23
 
 V2 releases the currently implemented **annotated, non-UMI bulk RNA-seq workflow**. The broader multi-assay roadmap is not part of this release's supported scope. Workbook schema version 3 is independent of software version 2.0.0.
