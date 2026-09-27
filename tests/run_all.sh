@@ -105,6 +105,11 @@ else
 fi
 run check_resources.py       "python3 tests/check_resources.py"
 run check_recommend.py       "python3 tests/check_recommend.py"
+if have_py_mods yaml; then
+    run check_tagseq_kits.py "python3 tests/check_tagseq_kits.py"
+else
+    skip check_tagseq_kits.py "needs pyyaml"
+fi
 if have_py_mods openpyxl pandas yaml; then
     run check_intake.py "python3 tests/check_intake.py"
 else
