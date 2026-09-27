@@ -51,6 +51,7 @@ rule star_quant:
         r2 = lambda wc: _trim_patterns[1].format(sample=wc.sample) if len(_trim_patterns) == 2 else "",
         strand = star_strand,
         gene_tags = "--gene-tags" if UMI_ROUTE else "",
+        warn = "--warn-assignment" if TAGSEQ_KIT else "",
         runtime_identity = RUNTIME_ID,
     threads: 4
     resources:
@@ -63,7 +64,7 @@ rule star_quant:
         python3 {input.helper:q} quant --r1 {params.r1:q} --r2={params.r2:q} \
             --index {params.index:q} --gtf {input.gtf:q} --out {output.folder:q} \
             --sample {wildcards.sample:q} --strand {params.strand} --threads {threads} \
-            --replace-owned {params.gene_tags} > {log:q} 2>&1
+            --replace-owned {params.gene_tags} {params.warn} > {log:q} 2>&1
         """
 
 

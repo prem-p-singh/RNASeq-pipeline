@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Synthetic QuantSeq route check: one 10 kb contig, gene A on the plus strand and
 # gene B on the minus strand, six single-end samples in kit read geometry.
-#   FWD:     12 nt + 50 nt plus-strand insert; 100 reads in A (sense) and 30 in B
-#            (antisense to B) -> A=100, B=0
-#   REV:     the same reads declared REV -> A=0, B=30 (positive control)
+#   FWD:     12 nt + 50 nt plus-strand insert; 100 reads in A (sense) and 20 in B
+#            (antisense to B) -> A=100, B=0, no strand warning
+#   REV:     the same reads declared REV -> A=0, B=20 (positive control); 20/120
+#            assigned is below the 20% floor, so metrics.json warns of a strand mismatch
 #   FWD-UMI: 6 nt UMI + TATA + 12 nt + insert; 20 molecules x 5 identical PCR
 #            duplicates -> 100 reads but 20 molecules on A, plus one read too
 #            short after UMI, spacer and front trim, lost in the preprocessing ledger
@@ -47,7 +48,7 @@ for s in range(6):
         start = rng.randrange(1000, 2950)  # inside A (1-based 1001-3000)
         seq = (umis[m] + 'TATA' if umi else '') + ''.join(rng.choices('ACGT', k=12)) + genome[start:start + 50]
         reads += [(f'{sid}_m{m}_d{d}', seq) for d in range(5 if umi else 1)]
-    for b in range(0 if umi else 30):
+    for b in range(0 if umi else 20):
         start = rng.randrange(5000, 6950)  # inside B (1-based 5001-7000), plus strand = antisense to B
         reads.append((f'{sid}_b{b}', ''.join(rng.choices('ACGT', k=12)) + genome[start:start + 50]))
     if umi:  # 6 + 4 + 12 + 10 nt: 10 nt left after processing, below minimum_length 20
@@ -122,12 +123,14 @@ for s in samples:
     fwd, m = star(root / 'FWD', s)
     assert fwd == {'A': 100, 'B': 0}, (s, fwd)
     assert m['strandedness'] == 1 and m['mapping_rate'] == 1.0 and m['num_assigned'] == 100, m
-    assert m['assignment_summary']['Unassigned_NoFeatures'] == 30, m
+    assert m['assignment_summary']['Unassigned_NoFeatures'] == 20, m
+    assert m['warnings'] == [], m['warnings']
     rev, m = star(root / 'REV', s)
-    assert rev == {'A': 0, 'B': 30}, (s, rev)
-    assert m['strandedness'] == 2 and m['mapping_rate'] == 1.0 and m['num_assigned'] == 30, m
+    assert rev == {'A': 0, 'B': 20}, (s, rev)
+    assert m['strandedness'] == 2 and m['mapping_rate'] == 1.0 and m['num_assigned'] == 20, m
     assert m['assignment_summary']['Unassigned_NoFeatures'] == 100, m
-print('QuantSeq strand: FWD counts A=100, B=0; REV on the same reads counts A=0, B=30')
+    assert len(m['warnings']) == 1 and 'possible strand mismatch' in m['warnings'][0], m['warnings']
+print('QuantSeq strand: FWD counts A=100, B=0; REV on the same reads counts A=0, B=20 and warns')
 
 p = root / 'FWD'
 with open(p / 'results/counts.tsv') as f:
