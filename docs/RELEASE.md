@@ -2,6 +2,19 @@
 
 Release: **v2.0.0**, 2026-09-23. Scope: **Linux x86_64, annotated non-UMI bulk gene expression**. The user authorized publication of the current bulk release; full multi-assay coverage is not a v2 claim.
 
+## Release versions
+
+Each software version groups development milestones (M1–M8). Workbook schema numbers are independent of software versions. A version is tagged only after its source is frozen, required checks pass with zero skips, and evidence covers each advertised capability.
+
+| Version | Scope | Status |
+|---|---|---|
+| 2.0.0 | Annotated non-UMI bulk: Salmon, limma-voom/dream, workbook schema 3 | Released 2026-09-23 |
+| 2.1.0 | Bulk completion: workbook schema 5 with analysis goal, subject models, formula, Contrasts tab and revision reports (M1); named bulk kit profiles, platform poly-G and automatic screening panel (M2); handbook DE default and interaction/paired/continuous design checks (M3); earlier schema 4 and Excel launch/resume (M1); raw QC, preprocessing and screening (M2); Salmon decoys, STAR/featureCounts, DESeq2, edgeR QL and objective selection (M3) | Candidate. Completed M1–M3 code passed 35 checks (0 failed, 0 skipped) and both public routes in Linux job 39010068 (exit 0, 55:09; source archive SHA256 `7fc10ce7987a11b9c195cd74420bab3ecf78c2cd1b3b9c3942d22c803e3afbb5`). Not tagged |
+| 3.0.0 | Named end-tag kits, small RNA and dual organism (M4) | Test data prepared only |
+| Later | Cell/nucleus and spatial (M5), long-read and reference-poor (M6), specialized RNA (M7) | Not started; versions assigned when scoped |
+
+Moved from M1–M2 to the assay milestones that need them: workbook intake for non-bulk assays (M4–M7) and barcode/UMI base protection (M4, with UMI and end-tag routes).
+
 ## Unreleased development qualification
 
 The development branch changes the runtime and adds bulk routes. The sections below this one describe the **v2 tag**, not a qualification claim for the current branch.
@@ -54,6 +67,10 @@ Prerequisites of the three n8n checks were supplied from outside the checkout: N
 | TAG-seq kits, small RNA, dual organism, single cell, spatial, long read, specialized assays | Not on this source | none |
 
 This closes the deployment milestone for the bulk scope of this source. It does not complete the wider assay roadmap, and it is not a published release: publication still requires the hosted workflow to pass on the tagged commit.
+
+### Combined 2.1.0 source
+
+This branch adds the 2.1.0 work (workbook schema 5, named bulk kit profiles, automatic screening panel, design checks; previously qualified alone in job 39010068 with 35 passed, 0 failed, 0 skipped) on top of the deployment-qualified source above. The release gate for the combined source has **38 checks**. Its qualification is pending; the jobs above do not cover it.
 
 Public protocol selection and evidence requirements are recorded in [Public-data qualification](PUBLIC_QUALIFICATION.md). The wider working plan remains incomplete.
 

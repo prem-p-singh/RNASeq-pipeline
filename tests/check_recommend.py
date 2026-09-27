@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from recommend import recommend
+from recommend import recommend, handbook_backend
 
 cfg = {"samples": {"seq_type": "rnaseq_paired"},
        "model": {"fixed_effects": "~ condition", "random_effects": None}}
@@ -42,3 +42,6 @@ star_cfg.pop('reference')
 assert recommend(star_cfg)['route'] == 'fastp_qc'
 assert recommend(star_cfg)['count_treatment'] is None
 print('STAR objective selection, layout/strand validation and QC independence passed')
+# Handbook default for new independent designs; 2 units needs an explicit choice.
+assert [handbook_backend(n) for n in (None, 1, 2, 3, 12, 13)] == [None, None, None, 'deseq2', 'deseq2', 'limma_voom']
+print('handbook backend defaults passed')

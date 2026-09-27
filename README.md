@@ -20,7 +20,7 @@
 Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and differential-expression results. Fill an Excel intake or provide explicit TSV/YAML inputs, review the study configuration, and run locally on Linux or through SLURM. Every project has its own configuration, logs and results.
 
 > [!NOTE]
-> **V2 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. V2 shipped workbook schema 3; this development branch supplies **schema 4**. Workbook schema and software release numbers are separate.
+> **V2 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. V2 shipped workbook schema 3; this development branch supplies **schema 5**. Workbook schema and software release numbers are separate.
 
 The table and diagram below describe the published v2 tag. For this branch’s added routes and their qualification status, see [next-version development](#next-version-development-unreleased).
 
@@ -373,9 +373,9 @@ flowchart TD
     K --> O[Requested coexpression]
 ```
 
-The development DAG now separates preprocessing from Salmon quantification and retains fastp reports plus a read-loss ledger. `analysis.objectives: [qc]` builds the preprocessing report without a reference or DE model; `[gene_expression]` also produces counts without running inference. The standalone command above remains observation-only; the DAG QC objective performs the configured preprocessing. Optional declared-panel screening is available in development; named kit profiles remain pending. Fastp overrepresentation is a diagnostic, not a contamination verdict.
+The development DAG now separates preprocessing from Salmon quantification and retains fastp reports plus a read-loss ledger. `analysis.objectives: [qc]` builds the preprocessing report without a reference or DE model; `[gene_expression]` also produces counts without running inference. The standalone command above remains observation-only; the DAG QC objective performs the configured preprocessing. Optional declared-panel screening is available in development. Named kit profiles in [config/kit_profiles.yaml](config/kit_profiles.yaml) set TruSeq/NEBNext adapters and strand; they are not UMI, end-tag or small-RNA profiles. Fastp overrepresentation is a diagnostic, not a contamination verdict.
 
-The development workbook (schema 4) exposes Salmon/STAR selection, fixed-effect DE method, complete custom reference sets, genomic-decoy choice, poly-G handling, adapters and minimum retained read length. Custom reference paths resolve beside the workbook; supplying a custom set bypasses automatic reference selection. Schemas 1–3 remain readable. Advanced contrasts, repeated-measures models and non-bulk producers are still outside the executable Excel adapter.
+The development workbook (schema 5) exposes the analysis goal (differential expression, expression only or QC only), Salmon/STAR selection, DE method, subject column for repeated measures (random subject with dream, or a fixed subject block for pairing), an optional fixed-effects formula (interactions, continuous covariates), an optional Contrasts tab, complete custom reference sets, genomic-decoy choice, a named library protocol, platform-based poly-G handling, adapters, minimum retained read length and contamination screening. Custom reference paths resolve beside the workbook; supplying a custom set bypasses automatic reference selection. Schemas 1–4 remain readable. Non-bulk producers are still outside the executable Excel adapter.
 
 The main launcher accepts the bulk workbook directly:
 
@@ -385,9 +385,9 @@ bash "$REPO/submit.sh" --intake /path/study.xlsx -d "$PROJECT" --executor local 
 # Or use --executor slurm with the configured site profile.
 ```
 
-Planning needs Python with pandas/openpyxl/PyYAML and R with jsonlite/emmeans; it does not build the scientific runtime or download annotation tables. It may query reference metadata services. A normal launch prepares the locked runtime automatically. Resume accepts the original workbook checksum; changed workbooks require a new project directory. Automated workbook revision/impact reports remain pending.
+Planning needs Python with pandas/openpyxl/PyYAML and R with jsonlite/emmeans; it does not build the scientific runtime or download annotation tables. It may query reference metadata services. A normal launch prepares the locked runtime automatically. Resume accepts the current workbook checksum. A changed workbook prints which settings changed and which stages they reach, then stops; add `--accept-revision` to apply it (the previous configuration is kept under `intake/<old checksum>/`, and Snakemake reruns only affected work). A changed project name still needs a new project directory.
 
-For explicit fixed-effect inference, development configuration accepts `analysis.backend: limma_voom`, `edger_ql`, or `deseq2`; `auto` retains limma-voom. Random-effects models select dream. These methods share count provenance and declared contrasts. DESeq2 uses rounded lengthScaledTPM counts from Salmon or raw integer gene counts from STAR, its own size-factor estimation and Wald statistics; edgeR uses TMM and quasi-likelihood F tests. Neither adds another transcript-length offset. The development runtime adds DESeq2 1.50.2 to the existing package lock.
+For explicit fixed-effect inference, development configuration accepts `analysis.backend: limma_voom`, `edger_ql`, or `deseq2`; `auto` in an existing configuration retains limma-voom. New projects created by setup record the handbook default instead: DESeq2 for 3–12 biological units in the smallest group, limma-voom above 12. Two units per group is exploratory and requires an explicit method choice. Random-effects models select dream. These methods share count provenance and declared contrasts. DESeq2 uses rounded lengthScaledTPM counts from Salmon or raw integer gene counts from STAR, its own size-factor estimation and Wald statistics; edgeR uses TMM and quasi-likelihood F tests. Neither adds another transcript-length offset. The development runtime adds DESeq2 1.50.2 to the existing package lock.
 
 Contrasts may select `numerator` and `denominator` levels instead of `reverse`, or use `type: linear` with named design-coefficient `weights`. Preflight validates these against the actual model. New setup projects default to genomic decoys; existing configurations keep their setting. To enable genome decoys on an existing project, set `reference.decoys: genome` with a compatible `genome_fasta_url`. The builder combines transcriptome and genome, checks identifiers, records hashes and verifies cache reuse. Its default worker request is 64 GB RAM; override rule resources for your reference where appropriate. `decoys: null` explicitly retains the legacy transcriptome-only index. See [Salmon's construction method](https://salmon.readthedocs.io/en/latest/salmon.html).
 
@@ -395,7 +395,7 @@ For genomic alignments and exon-level gene counting, set `analysis.quantifier: s
 
 STAR 2.7.11b and featureCounts 2.1.1 produce sorted/indexed BAMs and raw exon-union gene counts. Only uniquely aligned, unambiguously assigned reads/fragments count; paired mates count as one fragment. Counts have **no transcript-length scaling**. Gene lengths are exon-union lengths. The launcher installs and verifies a separate [locked tool module](environments/star-linux-64.explicit.txt), retaining the core R runtime. Index and alignment workers request 64 GB and 40 GB respectively; these are worker memory requests, not storage limits. Missing declared BAM indexes and gene-length files trigger recovery.
 
-Optional post-preprocessing screening uses FastQ Screen 0.16.0 with Bowtie2 2.5.4. Declare the expected organism and any suspected contaminants as **prebuilt Bowtie2 indexes** in project YAML:
+Optional post-preprocessing screening uses FastQ Screen 0.16.0 with Bowtie2 2.5.4. Declare the expected organism and any suspected contaminants as prebuilt Bowtie2 indexes (`index`) or as FASTA sources (`fasta`: a path, URL, `transcriptome` or `genome`) that the workflow indexes under `screening_panel/`:
 
 ```yaml
 screening:
@@ -404,10 +404,10 @@ screening:
   seed: 1
   references:
     - {name: Host, role: expected, index: /references/host_transcriptome}
-    - {name: PhiX, role: possible_contaminant, index: /references/phix}
+    - {name: PhiX, role: possible_contaminant, fasta: https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_001422.1&rettype=fasta&retmode=text}
 ```
 
-Build each index from your documented, versioned FASTA using `bowtie2-build reference.fa index_basename` in the screening module. Relative index basenames resolve against the project directory. No reference panel is downloaded or chosen automatically. Include an intended pathogen as `expected`, never as an assumed contaminant. The current workbook does not yet expose this panel; add it to the generated project YAML.
+Relative paths resolve against the project directory. FASTA members are downloaded or copied, hashed and indexed with the screening module's bowtie2-build; the build version and FASTA checksum are recorded in `screening_panel/<name>/built.txt`. The workbook's screening answer builds the panel automatically: the project transcriptome (genome for STAR) as expected, PhiX, and any extra `name=FASTA` entries as possible contaminants. Include an intended pathogen as `expected`, never as an assumed contaminant.
 
 The launcher prepares the separate [screening runtime](environments/screen-linux-64.explicit.txt) only when enabled. Uniform seeded sampling retains paired fragments together, then screens mates separately: reported counts are **reads, not fragments**. Per-sample `screening/screening.json`, `.tsv` and `.html` record sampling, reference-file checksums, exclusive/shared matches and zero reads removed. Disabled runs explicitly say `not_performed`. Screening neither excludes samples nor removes reads. Shared matches are ambiguous; matches are not organism abundance or proof of contamination, and absence of a match cannot rule out organisms omitted from the panel. Bowtie2 is not splice-aware: prefer a compatible host transcriptome for RNA screening and interpret genomic screens accordingly. Panel sensitivity and study-specific thresholds still need qualification.
 

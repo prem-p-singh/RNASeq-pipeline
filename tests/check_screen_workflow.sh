@@ -52,4 +52,34 @@ from pathlib import Path
 p=Path(sys.argv[1]);assert len(list((p/'results/quant').glob('*/screening/screening.tsv')))==6
 assert not list((p/'results/quant').rglob('*.trim.fastq.gz'))
 PY
-echo 'Screen QC-only DAG, temporary read lifetime, resume and missing-output recovery passed'
+# Automatic panel: FASTA members (project transcriptome keyword, local file) are indexed by the DAG.
+proj="$TASK_TMP/fasta panel"
+python3 "$REPO/tests/fixtures/fastq_project.py" build "$proj" "$REPO" paired
+python3 - "$proj" <<'PY'
+import random,sys,yaml
+from pathlib import Path
+p=Path(sys.argv[1]);f=p/'config/config.yaml';c=yaml.safe_load(f.read_text())
+rng=random.Random(7)
+(p/'inputs/other.fa').write_text('>other\n'+''.join(rng.choice('ACGT') for _ in range(5000))+'\n')
+c['analysis']={'objectives':['qc']}
+c['screening']={'enabled':True,'fragments':100,'seed':42,'references':[
+ {'name':'Host','role':'expected','fasta':'transcriptome'},
+ {'name':'Other','role':'possible_contaminant','fasta':'inputs/other.fa'}]}
+f.write_text(yaml.safe_dump(c))
+PY
+python3 "$REPO/scripts/preflight.py" -d "$proj"
+if ! run_workflow "$proj" "$REPO" "$TASK_TMP/panel.log"; then
+ tail -70 "$TASK_TMP/panel.log"; exit 1
+fi
+python3 - "$proj" <<'PY'
+import json,sys
+from pathlib import Path
+p=Path(sys.argv[1])
+assert all('version' in (p/f'screening_panel/{n}/built.txt').read_text() for n in ('Host','Other'))
+for ledger in (p/'results/quant').glob('*/screening/screening.json'):
+ d=json.loads(ledger.read_text()); assert d['status']=='completed'
+ assert all('screening_panel' in r['path'] for ref in d['references'] for r in ref['files'])
+ by={(r['mate'],r['reference']):r for r in d['results']}
+ assert all(by[(m,'Host')]['exclusive_to_reference']>80 and by[(m,'Other')]['exclusive_to_reference']<5 for m in ('R1','R2')),d['results']
+PY
+echo 'Screen QC-only DAG, temporary read lifetime, resume, missing-output recovery and automatic FASTA panel passed'

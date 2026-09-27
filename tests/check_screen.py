@@ -12,10 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from screen_reads import screen, sample_reads, validate, index_files
 for bad in ({'enabled': 'true'}, {'enabled': True}, {'fragments': 0}, {'seed': -1},
-            {'references': [{'name':'X', 'index':'x', 'role':'unexpected'}]}):
+            {'references': [{'name':'X', 'index':'x', 'role':'unexpected'}]},
+            {'references': [{'name':'X', 'index':'x', 'fasta':'x.fa', 'role':'expected'}]}):
     try: validate(bad)
     except ValueError: pass
     else: raise AssertionError(bad)
+# FASTA members are indexed by the workflow; the declared panel accepts them.
+assert validate({'enabled': True, 'references': [{'name': 'Host', 'role': 'expected', 'fasta': 'transcriptome'},
+                 {'name': 'PhiX', 'role': 'possible_contaminant', 'fasta': 'https://example.org/phix.fa'}]})['enabled']
 with tempfile.TemporaryDirectory() as temp:
     p = Path(temp); source = p / 'source with spaces.fq.gz'
     with gzip.open(source, 'wt') as f:

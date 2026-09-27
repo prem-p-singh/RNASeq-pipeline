@@ -12,6 +12,18 @@ def requires_inference(cfg):
     return isinstance(objectives, list) and bool(set(x for x in objectives if isinstance(x, str)) & {"differential_expression", "enrichment"})
 
 
+def handbook_backend(min_units):
+    """Handbook default for a new independent fixed-effect design (ST01/ST02).
+
+    Applied once at project setup and written into the config, so existing
+    projects keep their declared backend. Two units per group is exploratory
+    and must be chosen explicitly; fewer cannot be tested.
+    """
+    if min_units is None or min_units < 3:
+        return None
+    return "deseq2" if min_units <= 12 else "limma_voom"
+
+
 def recommend(cfg, n_samples=None):
     policy = yaml.safe_load(POLICY.read_text())
     seq = cfg.get("samples", {}).get("seq_type")

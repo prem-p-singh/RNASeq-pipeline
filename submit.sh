@@ -37,6 +37,7 @@ Usage: submit.sh [options] [-- snakemake args...]
   -n, --dry-run           show the DAG after preparing/verifying the runtime
       --intake PATH       completed Excel workbook; create or resume its project
       --intake-sheet NAME  select an assay worksheet explicitly
+      --accept-revision   apply a changed workbook to its existing project
       --plan-only         preflight and storage plan only; no environment build
       --executor MODE     local or slurm (default: slurm)
       --cores N           local CPU budget (default: 4)
@@ -56,6 +57,7 @@ EXECUTOR=slurm
 CORES=4
 INTAKE=""
 INTAKE_SHEET=""
+ACCEPT_REVISION=0
 PASSTHRU=()
 
 while [ $# -gt 0 ]; do
@@ -75,6 +77,7 @@ while [ $# -gt 0 ]; do
         --cores)         CORES="$2"; shift 2 ;;
         --intake)        INTAKE="$2"; shift 2 ;;
         --intake-sheet)  INTAKE_SHEET="$2"; shift 2 ;;
+        --accept-revision) ACCEPT_REVISION=1; shift ;;
         -h|--help)       usage; exit 0 ;;
         --)              shift; PASSTHRU=("$@"); break ;;
         -*)              echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -141,19 +144,36 @@ fi
 
 if [ -n "$INTAKE" ]; then
     if [ -f "$CONFIG" ]; then
-        # Resume only the same snapshotted intake; never silently overwrite results.
-        python3 - "$INTAKE" "$PROJDIR" "$INTAKE_SHEET" <<'PY_INTAKE'
+        # Resume the current snapshotted intake. A changed workbook is reported,
+        # and replaces the configuration only with --accept-revision.
+        status=0
+        python3 - "$INTAKE" "$PROJDIR" "$INTAKE_SHEET" <<'PY_INTAKE' || status=$?
 import hashlib,json,sys
 from pathlib import Path
 book,project,sheet=Path(sys.argv[1]),Path(sys.argv[2]),sys.argv[3]
-digest=hashlib.sha256(book.read_bytes()).hexdigest()
-snapshot=project/'intake'/digest/'source_map.json'
-if not snapshot.is_file():
-    sys.exit('Changed or unsnapshotted intake: use a new project directory to preserve existing results.')
-record=json.loads(snapshot.read_text())
+root = project/'intake'
+if (root/'current').is_file():
+    current = (root/'current').read_text().strip()
+else:
+    found = [d.name for d in root.glob('*') if (d/'setup_inputs.yaml').is_file()] if root.is_dir() else []
+    current = found[0] if len(found) == 1 else None
+if current is None:
+    sys.exit('Project has no single current intake snapshot; use a new project directory.')
+if hashlib.sha256(book.read_bytes()).hexdigest() != current:
+    sys.exit(3)
+record=json.loads((root/current/'source_map.json').read_text())
 if sheet and sheet != record['sheet']:
     sys.exit('Selected worksheet differs from this project intake; use a new project directory.')
 PY_INTAKE
+        if [ "$status" -eq 3 ]; then
+            INTAKE_ARGS=(--intake "$INTAKE" --project-dir "$PROJDIR")
+            [ -z "$INTAKE_SHEET" ] || INTAKE_ARGS+=(--intake-sheet "$INTAKE_SHEET")
+            if [ "$ACCEPT_REVISION" -eq 1 ]; then INTAKE_ARGS+=(--revision apply); else INTAKE_ARGS+=(--revision report); fi
+            [ "$PLAN_ONLY" -eq 0 ] || INTAKE_ARGS+=(--plan-only)
+            python3 "$REPO/scripts/setup.py" "${INTAKE_ARGS[@]}"
+        elif [ "$status" -ne 0 ]; then
+            exit "$status"
+        fi
     else
         INTAKE_ARGS=(--intake "$INTAKE" --project-dir "$PROJDIR")
         [ -z "$INTAKE_SHEET" ] || INTAKE_ARGS+=(--intake-sheet "$INTAKE_SHEET")
