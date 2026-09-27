@@ -41,16 +41,18 @@ while len(umis) < 21:  # pairwise >= 3 mismatches, so no directional UMI merging
     if all(sum(a != b for a, b in zip(u, v)) >= 3 for v in umis):
         umis.append(u)
 sheet, expected = [], {}
+# FWD kits carry 12 random-priming bases that the kit profile trims; REV reads start at the insert.
+prefix = (lambda: '') if kit == 'QuantSeq REV' else (lambda: ''.join(rng.choices('ACGT', k=12)))
 for s in range(6):
     sid = f'S{s+1}'
     reads = []
     for m in range(20 if umi else 100):
         start = rng.randrange(1000, 2950)  # inside A (1-based 1001-3000)
-        seq = (umis[m] + 'TATA' if umi else '') + ''.join(rng.choices('ACGT', k=12)) + genome[start:start + 50]
+        seq = (umis[m] + 'TATA' if umi else '') + prefix() + genome[start:start + 50]
         reads += [(f'{sid}_m{m}_d{d}', seq) for d in range(5 if umi else 1)]
     for b in range(0 if umi else 20):
         start = rng.randrange(5000, 6950)  # inside B (1-based 5001-7000), plus strand = antisense to B
-        reads.append((f'{sid}_b{b}', ''.join(rng.choices('ACGT', k=12)) + genome[start:start + 50]))
+        reads.append((f'{sid}_b{b}', prefix() + genome[start:start + 50]))
     if umi:  # 6 + 4 + 12 + 10 nt: 10 nt left after processing, below minimum_length 20
         reads.append((f'{sid}_short', umis[20] + 'TATA' + ''.join(rng.choices('ACGT', k=22))))
         expected[sid] = {seq[:6]: seq[-50:] for _, seq in reads[:-1]}  # UMI -> insert
