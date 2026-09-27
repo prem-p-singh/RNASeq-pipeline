@@ -83,12 +83,16 @@ STAR_ROUTE = RECOMMENDATION["route"] in ("star_counts", "star_tagseq")
 SMALL_RNA_ROUTE = RECOMMENDATION["route"] in ("small_rna_animal", "small_rna_plant")
 PLANT_SRNA_ROUTE = RECOMMENDATION["route"] == "small_rna_plant"
 # Plant counts are one cohort matrix (ShortStack clusters loci jointly); the per-sample product is its QC record.
-QUANT_PRODUCT = ("star/umi_gene_counts.tsv" if UMI_ROUTE else "star/gene_counts.tsv" if STAR_ROUTE else "small_rna/metrics.json" if PLANT_SRNA_ROUTE
+QUANT_PRODUCT = ("umi/gene_counts.tsv" if UMI_ROUTE else "star/gene_counts.tsv" if STAR_ROUTE else "small_rna/metrics.json" if PLANT_SRNA_ROUTE
                  else "small_rna/counts.tsv" if SMALL_RNA_ROUTE else "quant.sf")
 
 # --- Load sample sheet ---------------------------------------------------
 import metadata as _metadata
 CANONICAL_INPUTS = _metadata.execution_inputs(Path.cwd(), config)
+if TAGSEQ_KIT:
+    # The kit fixes the strand; a declared strand that disagrees is an error, not overridden.
+    _tagseq.check_strand(TAGSEQ_KIT, {k: v["expected_libtype"] for k, v in CANONICAL_INPUTS.items()}
+                         if CANONICAL_INPUTS is not None else {"samples.expected_libtype": config["samples"].get("expected_libtype")})
 if STAR_ROUTE and not TAGSEQ_KIT and CANONICAL_INPUTS is not None:
     for sample_id, library in CANONICAL_INPUTS.items():
         if library['expected_libtype'] not in ('U', 'SF', 'SR', 'IU', 'ISF', 'ISR'):

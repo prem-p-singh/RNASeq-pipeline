@@ -69,13 +69,16 @@ rule star_quant:
 
 # FWD-UMI: collapse reads to molecules per gene. Every annotated gene is written
 # (zero when unobserved) so the table matches the STAR gene_counts.tsv gene set.
+# Kept outside star/ because that folder is star_quant's directory() output.
 rule umi_gene_counts:
     input:
         tagged = QUANT / "{sample}/star/Aligned.sortedByCoord.out.bam.featureCounts.bam",
         genes = QUANT / "{sample}/star/gene_counts.tsv",
+        helper = REPO_DIR / "scripts/tagseq.py",
     output:
-        counts = QUANT / "{sample}/star/umi_gene_counts.tsv",
+        counts = QUANT / "{sample}/umi/gene_counts.tsv",
     params:
+        scripts = str(REPO_DIR / "scripts"),
         runtime_identity = RUNTIME_ID,
     resources:
         mem_mb = 8000,
@@ -89,6 +92,6 @@ rule umi_gene_counts:
         umi_tools count --per-gene --gene-tag=XT --assigned-status-tag=XS \
             --extract-umi-method=read_id --umi-separator=: \
             -I "$tmp/s.bam" -S "$tmp/c.tsv" -L {log:q}
-        python3 -c 'import csv,sys; genes=[r[0] for r in list(csv.reader(open(sys.argv[1]),delimiter="\\t"))[1:]]; r=csv.reader(open(sys.argv[2]),delimiter="\\t"); assert next(r)==["gene","count"]; n=dict(r); assert set(n)<=set(genes), "UMI genes outside annotation"; w=open(sys.argv[3],"w"); w.write("gene_id\\tcount\\n"); [w.write(f"{{g}}\\t{{n.get(g,0)}}\\n") for g in genes]' \
-            {input.genes:q} "$tmp/c.tsv" {output.counts:q}
+        python3 -c 'import sys; sys.path.insert(0, sys.argv[1]); from tagseq import umi_table; umi_table(*sys.argv[2:])' \
+            {params.scripts:q} {input.genes:q} "$tmp/c.tsv" {output.counts:q}
         """

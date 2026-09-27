@@ -63,3 +63,31 @@ except ValueError as exc:
 else:
     raise AssertionError('conflicting kit key accepted')
 print('TAG-seq kit policy merge passed')
+
+from tagseq import umi_table
+with tempfile.TemporaryDirectory() as t:
+    genes, umis, out = Path(t, 'gene_counts.tsv'), Path(t, 'c.tsv'), Path(t, 'out.tsv')
+    genes.write_text('gene_id\tcount\ng2\t5\ng1\t0\ng3\t9\n')
+    umis.write_text('gene\tcount\ng3\t4\ng2\t2\n')
+    umi_table(genes, umis, out)
+    assert out.read_text() == 'gene_id\tcount\ng2\t2\ng1\t0\ng3\t4\n', out.read_text()  # STAR order, zero-fill
+    for text, word in (('gene\tcount\ngX\t1\n', 'outside the annotation'), ('Gene\tCount\ng1\t1\n', 'header')):
+        umis.write_text(text)
+        try:
+            umi_table(genes, umis, out)
+        except ValueError as exc:
+            assert word in str(exc), exc
+        else:
+            raise AssertionError(f'accepted bad umi_tools table: {text!r}')
+print('UMI molecule table passed')
+
+from tagseq import check_strand
+check_strand(fwd, {'s1': 'SF', 's2': None, 's3': '', 's4': 'unknown'})  # blank/unknown defer to the kit
+check_strand(rev, {'s1': 'SR'})
+try:
+    check_strand(rev, {'s1': 'SR', 's2': 'SF'})
+except ValueError as exc:
+    assert 's2' in str(exc) and 's1' not in str(exc) and 'SR' in str(exc), exc
+else:
+    raise AssertionError('conflicting expected_libtype accepted')
+print('TAG-seq kit strand check passed')

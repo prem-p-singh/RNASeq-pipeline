@@ -27,6 +27,8 @@ star_route <- umi_route || identical(snakemake@params$count_source, "star")
 small_rna_matrix <- identical(snakemake@params$count_source, "small_rna_matrix")  # plant: one ShortStack cohort matrix
 small_rna_route <- small_rna_matrix || identical(snakemake@params$count_source, "small_rna")
 table_route <- star_route || small_rna_route  # per-sample gene_id/count tables in a subfolder
+# STAR lengths and metrics sit in {sample}/star; UMI molecule tables in {sample}/umi.
+star_dir <- function(p) if (umi_route) file.path(dirname(dirname(p)), "star") else dirname(p)
 
 if (!table_route) {
 # --- Build tx2gene from GTF --------------------------------------------
@@ -93,7 +95,7 @@ if (table_route) {
   if (small_rna_route) raw_counts[is.na(raw_counts)] <- 0  # absent miRNA = zero reads
   dimnames(raw_counts) <- list(genes, names(quant_files))
   lengths <- if (star_route) do.call(cbind, lapply(quant_files, function(p) {
-    x <- read_tsv(file.path(dirname(p), "gene_lengths.tsv"), col_types = cols(gene_id = col_character(), .default = col_double()))
+    x <- read_tsv(file.path(star_dir(p), "gene_lengths.tsv"), col_types = cols(gene_id = col_character(), .default = col_double()))
     if (anyDuplicated(x$gene_id) || !setequal(x$gene_id, genes)) stop("STAR length gene IDs differ from counts")
     x$exonic_bases[match(genes, x$gene_id)]
   }))
@@ -210,7 +212,7 @@ sample_disposition <- function(qc, min_map, min_reads, policy_on) {
 }
 
 qc_rows <- lapply(quant_files, function(q) {
-  p <- file.path(dirname(q), "metrics.json")
+  p <- file.path(star_dir(q), "metrics.json")
   if (!file.exists(p)) return(NULL)
   m <- fromJSON(p)
   data.frame(sample_id       = m$sample,

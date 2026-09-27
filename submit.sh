@@ -226,7 +226,8 @@ if [ "$PLAN_ONLY" -eq 0 ] && python3 -c 'import json,sys;sys.exit(not json.load(
 fi
 if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(json.load(open("gates/recommendation.json"))["count_treatment"])')" = umi_gene_counts ]; then
     UMI_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module umi)
-    export PATH="$ENV_PREFIX/bin:$UMI_PREFIX/bin:$PATH"
+    # Core first, then the STAR lock (star_quant's samtools), then umi_tools.
+    export PATH="$ENV_PREFIX/bin:$STAR_PREFIX/bin:$UMI_PREFIX/bin:$PATH"
     cp "$UMI_PREFIX/environment_report.json" gates/umi_environment_report.json
 fi
 
