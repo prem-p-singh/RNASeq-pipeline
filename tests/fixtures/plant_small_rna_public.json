@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "status": "selected_not_qualified",
+  "organism": "Arabidopsis thaliana",
+  "mirbase_prefix": "ath",
+  "count_unit": "read",
+  "biological_inference_eligible": false,
+  "runs": [
+    {"accession": "SRR3222443"},
+    {"accession": "SRR3222444"},
+    {"accession": "SRR3222445"}
+  ],
+  "ena_filereport_url_template": "https://www.ebi.ac.uk/ena/portal/api/filereport?accession={0}&result=read_run&fields=fastq_ftp,fastq_md5,fastq_bytes",
+  "genome_source": {
+    "url": "https://plantsmallrnagenes.science.psu.edu/ath-b10/Arabidopsis_thalianaTAIR10.fa",
+    "note": "TAIR10 genome FASTA; SHA256 unknown at authoring time, recorded into download_manifest.json on first download."
+  },
+  "mature_mirna_source": {
+    "url": "https://mirbase.org/download/mature.fa",
+    "prefix": "ath",
+    "note": "Full miRBase mature.fa; SHA256 unknown at authoring time, recorded on first download. Filtered to the ath prefix by scripts/small_rna.py:mature_reference."
+  },
+  "acceptance_plan": [
+    "Resolve each run's FASTQ URL from the ENA filereport API at prepare time; verify ENA md5 and byte size before analysis.",
+    "Record genome and mature-miRNA source checksums on first download; pin them thereafter.",
+    "At least 90% of trimmed reads must be 20-24 nt (computed from the trimmed FASTQ; fastp's JSON carries no length histogram).",
+    "ShortStack loci must include both DicerCall 21 and DicerCall 24 among the cohort.",
+    "ath-miR156, ath-miR166 and ath-miR319 families must be annotated MIRNA or matched in Known_miRNAs.",
+    "A repeat run on the same inputs must give an identical count matrix.",
+    "Do not treat these technical runs as independent biological replicates or qualify biological DE."
+  ],
+  "acceptance_thresholds": {
+    "min_trimmed_20_24nt_fraction": 0.9,
+    "required_dicer_calls": ["21", "24"],
+    "known_mirna_families": ["ath-miR156", "ath-miR166", "ath-miR319"],
+    "repeat_run_identical_counts": true
+  }
+}

@@ -10,7 +10,7 @@ Each software version groups development milestones (M1–M8). Workbook schema n
 |---|---|---|
 | 2.0.0 | Annotated non-UMI bulk: Salmon, limma-voom/dream, workbook schema 3 | Released 2026-09-23 |
 | 2.1.0 | Bulk completion: workbook schema 5 with analysis goal, subject models, formula, Contrasts tab and revision reports (M1); named bulk kit profiles, platform poly-G and automatic screening panel (M2); handbook DE default and interaction/paired/continuous design checks (M3); earlier schema 4 and Excel launch/resume (M1); raw QC, preprocessing and screening (M2); Salmon decoys, STAR/featureCounts, DESeq2, edgeR QL and objective selection (M3) | Candidate. Completed M1–M3 code passed 35 checks (0 failed, 0 skipped) and both public routes in Linux job 39010068 (exit 0, 55:09; source archive SHA256 `7fc10ce7987a11b9c195cd74420bab3ecf78c2cd1b3b9c3942d22c803e3afbb5`). Not tagged |
-| 3.0.0 | Named end-tag kits, small RNA and dual organism (M4) | Test data prepared only |
+| 3.0.0 | Named end-tag kits, small RNA and dual organism (M4) | Small-RNA animal/plant routes implemented and code-level checked; public-data fixtures, prepare scripts and `tests/check_small_rna_public.sh` prepared locally. FARM qualification not yet run: both profiles remain `experimental`, `srnaseq.validated_kits` stays empty |
 | Later | Cell/nucleus and spatial (M5), long-read and reference-poor (M6), specialized RNA (M7) | Not started; versions assigned when scoped |
 
 Moved from M1–M2 to the assay milestones that need them: workbook intake for non-bulk assays (M4–M7) and barcode/UMI base protection (M4, with UMI and end-tag routes).
@@ -114,7 +114,7 @@ The scientific GitHub Actions workflow repeats these checks. The lightweight wor
 
 | Area | Boundary |
 |---|---|
-| RNA-seq coverage | STAR alignment, DESeq2/edgeR inference adapters, UMI handling, single-cell, spatial, small-RNA, long-read, dual-organism and specialized assays remain unimplemented. Installed libraries do not imply an enabled route. |
+| RNA-seq coverage | STAR alignment and DESeq2/edgeR inference adapters are implemented and released. Small-RNA (animal Bowtie 1, plant ShortStack) is implemented as an `experimental`, unqualified development route (3.0.0). UMI handling, single-cell, spatial, long-read, dual-organism and specialized assays remain unimplemented. Installed libraries do not imply an enabled route. |
 | TAG-seq | A provisional route exists, but no named kit is qualified. |
 | Statistical generalization | Synthetic fixtures and a small public smoke dataset do not validate every organism, design or contrast. The suite checks repeated-measures design/replication logic but does not qualify an end-to-end dream fit; mixed-model inference remains provisional. |
 | Annotation | GO has a local fixture. Live NCBI annotation construction, live KEGG results, annotation snapshot reproducibility and the eggNOG fallback are not certified by that fixture. Missing prerequisites and failures must remain visible in status files. |

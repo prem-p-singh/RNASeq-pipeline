@@ -83,3 +83,11 @@ Explicit R1/R2 adapters, poly-G policy and minimum retained length configure the
 - **Screening:** yes builds the panel described in the README; extra references use `name=FASTA` pairs.
 - **DE method `auto`:** setup records the handbook default for the new project (DESeq2 for 3–12 biological units in the smallest group, limma-voom above 12, dream with a random subject). Two units per group needs an explicit method.
 - **Revisions:** see `--accept-revision` in the README.
+
+## Development workbook: sRNA-seq tab
+
+- **small_rna_profile:** `animal` (Bowtie 1 to the species' mature miRNAs from miRBase) or `plant` (ShortStack loci on the genome). Both are experimental until a named public-data check passes.
+- **adapter_kit:** a named non-UMI small-RNA kit from [config/small_rna_kits.yaml](config/small_rna_kits.yaml); UMI small-RNA kits are rejected, since UMI-aware counting is not implemented.
+- **mirbase_prefix:** required for `animal`; optional for `plant`, where it only annotates ShortStack loci with known miRNAs and does not change which loci are called.
+- **reference_genome:** required for `plant`; not used by `animal`.
+- Counts are **reads, not molecules**: no UMI deduplication, no isomiR resolution, and the plant route does not call phased siRNA clusters.

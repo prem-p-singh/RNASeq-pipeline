@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-Nothing yet beyond 2.1.0.
+- Small-RNA animal route (Bowtie 1 to species mature miRNAs, unique-hit counting) and plant route (ShortStack 4.1.0 joint loci, DicerCall size classes) via the workbook's sRNA-seq tab or direct project configuration. Both routes count reads, not molecules: no UMI deduplication, no isomiR resolution, no phased-siRNA calling. Named non-UMI kit profiles live in `config/small_rna_kits.yaml`; UMI small-RNA kits are rejected.
+- Public-data fixtures and local checks prepared for both routes (`tests/fixtures/small_rna_public.json` and `plant_small_rna_public.json`, their `prepare_*.py` downloaders, and `tests/check_small_rna_public.sh --animal|--plant`). Acceptance thresholds are fixed before any run: animal needs count conservation, a median |log2 pool A/B ratio| within 0.5 of the published ratio for well-covered Table S2 sequences, and Spearman >= 0.9 against published per-run counts; plant needs >=90% of trimmed reads 20-24 nt, both DicerCall 21 and 24 present, ath-miR156/166/319 annotated or matched, and a repeat run giving an identical count matrix. Both routes stay `experimental` and `config/spec.yaml`'s `srnaseq.validated_kits` stays empty until a FARM run passes these checks.
 
 ## 2.1.0 — candidate, not yet released
 
