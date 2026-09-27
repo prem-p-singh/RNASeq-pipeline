@@ -45,3 +45,13 @@ print('STAR objective selection, layout/strand validation and QC independence pa
 # Handbook default for new independent designs; 2 units needs an explicit choice.
 assert [handbook_backend(n) for n in (None, 1, 2, 3, 12, 13)] == [None, None, None, 'deseq2', 'deseq2', 'limma_voom']
 print('handbook backend defaults passed')
+srna_cfg = {'samples': {'seq_type': 'srnaseq'},
+            'analysis': {'objectives': ['gene_expression'], 'small_rna_profile': 'animal', 'small_rna_kit': 'TruSeq Small RNA'},
+            'reference': {'mature_mirna_url': 'file:///mature.fa'}, 'organism': {'mirbase_prefix': 'hsa'}}
+r = recommend(srna_cfg)
+assert (r['status'], r['route'], r['count_treatment']) == ('selected', 'small_rna_animal', 'raw_small_rna_counts'), r
+for key in ('small_rna_profile', 'small_rna_kit'):
+    assert recommend({**srna_cfg, 'analysis': {**srna_cfg['analysis'], key: None}})['status'] == 'blocked'
+assert recommend({**srna_cfg, 'organism': {}})['status'] == 'blocked'
+assert recommend({**srna_cfg, 'reference': {}})['status'] == 'blocked'
+print('animal small-RNA route selection passed')

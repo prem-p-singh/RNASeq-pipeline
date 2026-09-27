@@ -14,7 +14,7 @@ analysis:
   backend: auto
   quantifier: auto  # auto: Salmon for gene expression, STAR for alignment objectives
   umi: false
-  small_rna_profile: null                       # e.g. "small_rna" to enable the small-RNA route
+  small_rna_profile: null                       # "animal" with samples.seq_type srnaseq: Bowtie to species mature miRNAs
   small_rna_kit: null                            # kit name in config/small_rna_kits.yaml, e.g. "TruSeq Small RNA"
 
 preprocessing:
@@ -44,6 +44,7 @@ organism:
   common_name: "grape"                          # free text, for reports
   scientific_name: "Vitis vinifera"
   tax_id: 29760                                 # NCBI taxID (for make_orgdb.R)
+  mirbase_prefix: null                          # miRBase species code for small-RNA routes, e.g. "hsa"
   kegg_code: "vvi"                              # KEGG 3-letter code, or null to skip KEGG
   orgdb_package: "org.Vvinifera.eg.db"          # Bioconductor name or local-built name
 
@@ -86,6 +87,7 @@ reference:
   # URLs must be concrete filenames. A '*' here is a guaranteed Stage 0 failure:
   # curl does not expand globs. setup.py refuses to finish if one slips through.
   genome_fasta_url: null  # required when decoys: genome
+  mature_mirna_url: null  # miRBase mature.fa (small-RNA animal route)
   transcriptome_fasta_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_rna.fna.gz"
   gtf_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_genomic.gtf.gz"
   annotation_tsv:                               # NCBI/Ensembl-style gene-info table

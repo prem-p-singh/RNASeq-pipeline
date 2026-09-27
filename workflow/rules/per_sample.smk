@@ -30,7 +30,7 @@ rule preprocess_sample:
         url2 = lambda wc: shlex.quote(str(get_fastq_url_r2(wc))),
         reads_json = lambda wc: shlex.quote(json.dumps(CANONICAL_INPUTS[wc.sample]) if CANONICAL_INPUTS is not None else ""),
         delete_intermediates = str(config["hpc"].get("delete_fastq_after_quant", True)).lower(),
-        policy = lambda wc: shlex.quote(json.dumps(config["preprocessing"], sort_keys=True)),
+        policy = lambda wc: shlex.quote(json.dumps(PREPROCESSING, sort_keys=True)),
         seq_type = config["samples"]["seq_type"],
         outdir = lambda wc: str(QUANT / wc.sample),
     threads: 4

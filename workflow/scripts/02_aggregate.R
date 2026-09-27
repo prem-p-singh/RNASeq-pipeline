@@ -23,8 +23,10 @@ out_disposition <- snakemake@output$disposition
 
 cfg <- snakemake@config
 star_route <- identical(snakemake@params$count_source, "star")
+small_rna_route <- identical(snakemake@params$count_source, "small_rna")
+table_route <- star_route || small_rna_route  # per-sample gene_id/count tables in a subfolder
 
-if (!star_route) {
+if (!table_route) {
 # --- Build tx2gene from GTF --------------------------------------------
 # makeTxDbFromGFF moved from GenomicFeatures to txdbmaker in Bioconductor 3.19.
 # Pick whichever the installed release provides so this works on both.
@@ -53,7 +55,7 @@ stopifnot("sample_id" %in% names(sheet))
 
 # --- Match quant files to samples --------------------------------------
 # quant_files come as "results/.../quant/{sample}/quant.sf"
-sample_ids <- if (star_route) basename(dirname(dirname(quant_files))) else basename(dirname(quant_files))
+sample_ids <- if (table_route) basename(dirname(dirname(quant_files))) else basename(dirname(quant_files))
 names(quant_files) <- sample_ids
 quant_files <- quant_files[match(sheet$sample_id, names(quant_files))]
 quant_files <- quant_files[!is.na(quant_files)]
@@ -68,28 +70,30 @@ if (length(quant_files) == 0) stop("No quant files matched sample sheet")
 # and do not scale with transcript length, so applying the correction would
 # distort them.
 seq_type <- cfg$samples$seq_type
-counts_from_abundance <- if (star_route || identical(seq_type, "tagseq")) "no" else "lengthScaledTPM"
+counts_from_abundance <- if (table_route || identical(seq_type, "tagseq")) "no" else "lengthScaledTPM"
 
-message("Importing ", length(quant_files), if (star_route) " gene-count tables " else " quant.sf files ",
+message("Importing ", length(quant_files), if (table_route) " gene-count tables " else " quant.sf files ",
         "(seq_type=", seq_type, ", countsFromAbundance=",
         counts_from_abundance, ")")
-if (star_route) {
+if (table_route) {
   tables <- lapply(quant_files, function(p) read_tsv(p, col_types = cols(gene_id = col_character(), .default = col_double())))
-  genes <- tables[[1]]$gene_id
+  # Small-RNA tables list only observed miRNAs; STAR tables list every annotated gene.
+  genes <- if (star_route) tables[[1]]$gene_id else sort(unique(unlist(lapply(tables, function(x) x$gene_id))))
   if (!length(genes) || anyNA(genes) || any(!nzchar(genes)) ||
-      any(!vapply(tables, function(x) !anyDuplicated(x$gene_id) && setequal(x$gene_id, genes), logical(1))))
-    stop("STAR gene sets differ across libraries")
+      any(!vapply(tables, function(x) !anyDuplicated(x$gene_id) && (small_rna_route || setequal(x$gene_id, genes)), logical(1))))
+    stop(snakemake@params$count_source, " gene sets differ across libraries")
   raw_counts <- do.call(cbind, lapply(tables, function(x) x$count[match(genes, x$gene_id)]))
+  if (small_rna_route) raw_counts[is.na(raw_counts)] <- 0  # absent miRNA = zero reads
   dimnames(raw_counts) <- list(genes, names(quant_files))
-  lengths <- do.call(cbind, lapply(quant_files, function(p) {
+  lengths <- if (star_route) do.call(cbind, lapply(quant_files, function(p) {
     x <- read_tsv(file.path(dirname(p), "gene_lengths.tsv"), col_types = cols(gene_id = col_character(), .default = col_double()))
     if (anyDuplicated(x$gene_id) || !setequal(x$gene_id, genes)) stop("STAR length gene IDs differ from counts")
     x$exonic_bases[match(genes, x$gene_id)]
   }))
-  dimnames(lengths) <- dimnames(raw_counts)
+  if (star_route) dimnames(lengths) <- dimnames(raw_counts)
   if (any(!is.finite(raw_counts)) || any(raw_counts < 0) || any(raw_counts != round(raw_counts)) ||
-      any(!is.finite(lengths)) || any(lengths <= 0))
-    stop("Invalid STAR count/length matrices")
+      (star_route && (any(!is.finite(lengths)) || any(lengths <= 0))))
+    stop("Invalid ", snakemake@params$count_source, " count/length matrices")
   txi <- list(counts = raw_counts, length = lengths, abundance = NULL, countsFromAbundance = "no")
 } else {
   txi <- tximport(quant_files, type = "salmon", tx2gene = tx2gene,
@@ -126,6 +130,11 @@ if (star_route) {
   count_provenance$count_unit <- if (identical(seq_type, "rnaseq_paired")) "fragments" else "reads"
   count_provenance$length_definition <- "union of annotated exons; not effective transcript length"
   count_provenance$rationale <- "Raw gene-assigned genomic counts; no transcript-length scaling or additional offset"
+}
+if (small_rna_route) {
+  count_provenance$quantifier <- "bowtie_mature_mirna"
+  count_provenance$count_unit <- "reads"
+  count_provenance$rationale <- "Raw unique-hit mature miRNA read counts; multi-mapping reads excluded; no length scaling"
 }
 
 # --- Optional gene-info merge -----------------------------------------

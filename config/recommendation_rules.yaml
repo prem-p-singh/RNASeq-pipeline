@@ -16,6 +16,12 @@ routes:
     rule_ids: [AS02, UP04, CT03]
     handbook_ids: [H18, H35]
     count_treatment: 'no'
+small_rna_routes:  # srnaseq, keyed by analysis.small_rna_profile
+  animal:
+    route: small_rna_animal
+    rule_ids: []
+    handbook_ids: []
+    count_treatment: raw_small_rna_counts
 objectives: [alignment, qc, gene_expression, differential_expression, enrichment, coexpression]
 backends:
   fixed: {name: limma_voom, rule_ids: [ST01, ST02]}

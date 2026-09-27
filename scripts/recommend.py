@@ -31,7 +31,16 @@ def recommend(cfg, n_samples=None):
     objectives = analysis.get("objectives", ["gene_expression", "differential_expression"])
     issues = []
     route = policy["routes"].get(seq)
-    if route is None:
+    if seq == "srnaseq":
+        route = policy["small_rna_routes"].get(analysis.get("small_rna_profile"))
+        if route is None:
+            issues.append(f"analysis.small_rna_profile must be one of {sorted(policy['small_rna_routes'])}")
+        for value, name in ((analysis.get("small_rna_kit"), "analysis.small_rna_kit"),
+                            ((cfg.get("reference") or {}).get("mature_mirna_url"), "reference.mature_mirna_url"),
+                            ((cfg.get("organism") or {}).get("mirbase_prefix"), "organism.mirbase_prefix")):
+            if not value:
+                issues.append(f"Small-RNA routes require {name}")
+    elif route is None:
         issues.append(f"No implemented route for assay/layout {seq!r}")
     if not isinstance(objectives, list) or not objectives or not all(isinstance(x, str) for x in objectives):
         issues.append("analysis.objectives must be a nonempty list of objective names")
@@ -83,7 +92,7 @@ def recommend(cfg, n_samples=None):
                    "fixed_effects": cfg.get("model", {}).get("fixed_effects"),
                    "random_effects": cfg.get("model", {}).get("random_effects")},
         "reasons": ["QC-only preprocessing needs no quantifier, reference or statistical model." if qc_only else
-                    f"Selected {quantifier} for the declared expression/alignment objectives.",
+                    f"Selected {'bowtie' if seq == 'srnaseq' else quantifier} for the declared expression/alignment objectives.",
                     "The declared dependence structure selects the statistical backend." if inference else
                     "No differential-inference objective was requested; no DE model will be fitted.",
                     "Sample count informs replication/QC checks; it does not silently change the model."],

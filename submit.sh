@@ -219,6 +219,11 @@ if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(json.load(open("
     export PATH="$STAR_PREFIX/bin:$PATH"
     cp "$STAR_PREFIX/environment_report.json" gates/star_environment_report.json
 fi
+if [ "$PLAN_ONLY" -eq 0 ] && python3 -c 'import json,sys;sys.exit(not json.load(open("gates/recommendation.json"))["route"].startswith("small_rna_"))'; then
+    SRNA_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module srna)
+    export PATH="$SRNA_PREFIX/bin:$PATH"
+    cp "$SRNA_PREFIX/environment_report.json" gates/srna_environment_report.json
+fi
 
 if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(str(json.load(open("gates/preflight_plan.json"))["screening"]["enabled"]).lower())')" = true ]; then
     SCREEN_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module screen)

@@ -123,8 +123,8 @@ expect("wrong type",
        rc=1, has=["CFG003"])
 
 # --- 3. scope: an assay the pipeline does not implement ---------------
-expect("srnaseq", project("srna", BALANCED, seq_type="srnaseq"),
-       rc=1, has=["SCP001"])
+expect("srnaseq without a profile", project("srna", BALANCED, seq_type="srnaseq"),
+       rc=1, has=["SCP003"])
 expect("nonsense assay", project("nonsense", BALANCED, seq_type="nanopore_direct"),
        rc=1, has=["SCP001"])
 # bulk paired is in scope and carries no kit warning

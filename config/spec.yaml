@@ -37,8 +37,8 @@ scope:
         length-corrected. Verified against no kit yet: treat as provisional.
       validated_kits: []
     srnaseq:
-      supported: false
-      reason: "Separate preprocessing and reference logic; not implemented."
+      supported: true
+      validated_kits: []
 
   # Which DE backend a design requires. Never rescue an unsupported design by
   # silently simplifying it: that answers a different question.

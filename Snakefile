@@ -52,10 +52,15 @@ if _cfg_blocking:
 from recommend import recommend as _recommend, requires_inference
 from preprocessing import policy_args
 from screen_reads import validate as validate_screen, index_files
-policy_args(config["preprocessing"], config["samples"]["seq_type"] == "rnaseq_paired")
+from small_rna import load_kit, kit_policy
 RECOMMENDATION = _recommend(config)
 if RECOMMENDATION["issues"]:
     raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
+# Small-RNA kits fix the adapter and size window; the kit table wins over the generic policy.
+PREPROCESSING = config["preprocessing"]
+if config["samples"]["seq_type"] == "srnaseq":
+    PREPROCESSING = PREPROCESSING | kit_policy(load_kit(config["analysis"]["small_rna_kit"]))
+policy_args(PREPROCESSING, config["samples"]["seq_type"] == "rnaseq_paired")
 
 SCREEN_POLICY = validate_screen(config["screening"])
 # FASTA panel members (transcriptome, genome, path or URL) are indexed in the
@@ -69,7 +74,8 @@ SCREEN_RUN_POLICY = dict(SCREEN_POLICY, references=[
 
 QC_ONLY = set(config["analysis"]["objectives"]) == {"qc"}
 STAR_ROUTE = RECOMMENDATION["route"] == "star_counts"
-QUANT_PRODUCT = "star/gene_counts.tsv" if STAR_ROUTE else "quant.sf"
+SMALL_RNA_ROUTE = RECOMMENDATION["route"] == "small_rna_animal"
+QUANT_PRODUCT = "star/gene_counts.tsv" if STAR_ROUTE else "small_rna/counts.tsv" if SMALL_RNA_ROUTE else "quant.sf"
 
 # --- Load sample sheet ---------------------------------------------------
 import metadata as _metadata
@@ -124,7 +130,17 @@ SALMON_DECOYS = _ref_cfg.get("decoys") or None
 # in annotation release, k-mer or decoy status shared one directory and
 # consumed each other's index. The digest below covers all of them.
 import star_counts as _star
-CACHE_KEY = "unused-qc" if QC_ONLY else (_star.cache_key(_ref_cfg) if STAR_ROUTE else _refcache.cache_key(_ref_cfg, SALMON_KMER, SALMON_DECOYS))
+if QC_ONLY:
+    CACHE_KEY = "unused-qc"
+elif STAR_ROUTE:
+    CACHE_KEY = _star.cache_key(_ref_cfg)
+elif SMALL_RNA_ROUTE:
+    CACHE_KEY = "srna-" + hashlib.sha256(json.dumps({
+        "mature_mirna_url": _ref_cfg.get("mature_mirna_url"),
+        "genome_fasta_url": _ref_cfg.get("genome_fasta_url"),
+        "mirbase_prefix": config["organism"].get("mirbase_prefix")}, sort_keys=True).encode()).hexdigest()[:16]
+else:
+    CACHE_KEY = _refcache.cache_key(_ref_cfg, SALMON_KMER, SALMON_DECOYS)
 if _ref_cache:
     REF = Path(os.path.expanduser(str(_ref_cache))) / CACHE_KEY
 else:
@@ -132,7 +148,7 @@ else:
 
 # Refuse an entry that is incomplete or was built from other parameters,
 # rather than reading whatever happens to sit at that path.
-if not QC_ONLY and not STAR_ROUTE and _ref_cache and REF.exists():
+if not QC_ONLY and not STAR_ROUTE and not SMALL_RNA_ROUTE and _ref_cache and REF.exists():
     _entry_issues = _refcache.verify_entry(REF, _ref_cfg, SALMON_KMER, SALMON_DECOYS)
     _fatal = [i for i in _entry_issues if not i.startswith(("missing ", "empty "))]
     if _fatal:
@@ -158,6 +174,8 @@ _lock_path = REPO_DIR / "environments/linux-64.explicit.txt"
 RUNTIME_ID = hashlib.sha256(_lock_path.read_bytes()).hexdigest() if _lock_path.exists() else "unlocked"
 if STAR_ROUTE:
     RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/star-linux-64.explicit.txt").read_bytes()).hexdigest()
+if SMALL_RNA_ROUTE:
+    RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/srna-linux-64.explicit.txt").read_bytes()).hexdigest()
 
 
 if SCREEN_POLICY["enabled"]:
@@ -181,6 +199,7 @@ include: "workflow/rules/retrieve.smk"
 include: "workflow/rules/build_orgdb.smk"
 include: "workflow/rules/per_sample.smk"
 include: "workflow/rules/star.smk"
+include: "workflow/rules/small_rna.smk"
 include: "workflow/rules/qc_report.smk"
 include: "workflow/rules/aggregate.smk"
 
@@ -196,15 +215,18 @@ def all_targets():
         # Stage 1 — one quant.sf per sample
         *expand(str(QUANT / "{sample}" / QUANT_PRODUCT), sample=SAMPLES),
         *(expand(str(QUANT / "{sample}/read_preparation.json"), sample=SAMPLES) if CANONICAL_INPUTS is not None else []),
-        # Stage 1b — comparative QC report (before/after-clean charts + MultiQC)
-        OUT / "qc_report/qc_report.done",
-        OUT / "qc_report/qc_charts.html",
-        OUT / "qc_report/comparative_charts.png",
-        OUT / "qc_report/alignment_summary.tsv",
-        OUT / "qc_report/multiqc/multiqc_report.html",
         # Stage 2 — aggregated counts
         OUT / "counts.tsv",
     ]
+    # Stage 1b — comparative QC report (before/after-clean charts + MultiQC).
+    # ponytail: the report reads Salmon/STAR logs only; small-RNA runs rely on
+    # the preprocessing report and small_rna/metrics.json until it learns Bowtie.
+    if not SMALL_RNA_ROUTE:
+        targets += [OUT / "qc_report/qc_report.done",
+                    OUT / "qc_report/qc_charts.html",
+                    OUT / "qc_report/comparative_charts.png",
+                    OUT / "qc_report/alignment_summary.tsv",
+                    OUT / "qc_report/multiqc/multiqc_report.html"]
     if STAR_ROUTE:
         targets.extend(expand(str(QUANT / "{sample}/star/Aligned.sortedByCoord.out.bam{suffix}"),
                               sample=SAMPLES, suffix=["", ".bai"]))
