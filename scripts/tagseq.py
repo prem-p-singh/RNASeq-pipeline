@@ -19,15 +19,16 @@ def kit_policy(kit):
                 umi_skip=kit['umi_skip'], poly_x=kit['poly_x'], minimum_length=20)
 
 
-def merge_policy(preprocessing, kit):
-    """The kit wins over defaults; a config that sets a kit key to another value is refused."""
+def merge_policy(preprocessing, kit, policy_of=kit_policy, name='TAG-seq kit', key='analysis.kit'):
+    """The kit wins over defaults; a config that sets a kit key to another value is refused.
+    Shared by the small-RNA kits (their policy_of, name and config key)."""
     from preprocessing import DEFAULTS
-    policy = kit_policy(kit)
+    policy = policy_of(kit)
     clashes = sorted(k for k, v in policy.items()
                      if k in preprocessing and preprocessing[k] not in (v, DEFAULTS[k]))
     if clashes:
-        raise ValueError('The TAG-seq kit sets ' + ', '.join(f'preprocessing.{k}' for k in clashes)
-                         + '; remove them from the config or drop analysis.kit')
+        raise ValueError(f'The {name} sets ' + ', '.join(f'preprocessing.{k}' for k in clashes)
+                         + f'; remove them from the config or drop {key}')
     return preprocessing | policy
 
 

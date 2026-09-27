@@ -20,6 +20,19 @@ else:
     raise AssertionError('UMI small-RNA kit accepted')
 print('small RNA kit table passed')
 
+# The Snakefile merges the kit over config preprocessing with the TAG-seq merge: conflicts are refused.
+from tagseq import merge_policy
+from preprocessing import DEFAULTS
+merged = merge_policy(dict(DEFAULTS, qualified_quality_phred=20), truseq, kit_policy, 'small-RNA kit', 'analysis.small_rna_kit')
+assert merged['length_limit'] == 30 and merged['poly_g'] == 'on' and merged['qualified_quality_phred'] == 20
+try:
+    merge_policy(dict(DEFAULTS, length_limit=50), truseq, kit_policy, 'small-RNA kit', 'analysis.small_rna_kit')
+except ValueError as exc:
+    assert 'small-RNA kit sets preprocessing.length_limit' in str(exc) and 'analysis.small_rna_kit' in str(exc), exc
+else:
+    raise AssertionError('small-RNA kit conflict silently overridden')
+print('small RNA kit policy merge passed')
+
 from preprocessing import loss_summary
 fake = {'summary': {'before_filtering': {'total_reads': 100}, 'after_filtering': {'total_reads': 70, 'read1_mean_length': 22}},
         'filtering_result': {'passed_filter_reads': 70, 'too_short_reads': 10, 'too_long_reads': 20,
@@ -38,6 +51,10 @@ with tempfile.TemporaryDirectory() as t:
     (t / 'mature.fa').write_text('>hsa-miR-1 MIMAT1\nUGGAAUGUAAAGAAGUAUGUAU\n>mmu-miR-1 MIMAT2\nUGGAAUGUAAAGAAGUAUGUAU\n')
     assert mature_reference(t / 'mature.fa', 'hsa', t / 'ref.fa') == 1
     assert (t / 'ref.fa').read_text() == '>hsa-miR-1\nTGGAATGTAAAGAAGTATGTAT\n'
+    # miRBase-style records wrapped over several lines are one sequence, not fragments.
+    (t / 'wrapped.fa').write_text('>hsa-miR-9 MIMAT3\nUCUUUGGUUA\nUCUAGCUGUAUGA\n>hsa-miR-10\nUACCCUGUAG\n')
+    assert mature_reference(t / 'wrapped.fa', 'hsa', t / 'w.fa') == 2
+    assert (t / 'w.fa').read_text() == '>hsa-miR-9\nTCTTTGGTTATCTAGCTGTATGA\n>hsa-miR-10\nTACCCTGTAG\n'
     try:
         mature_reference(t / 'mature.fa', 'vvx', t / 'none.fa')
     except ValueError as exc:
@@ -60,6 +77,41 @@ with tempfile.TemporaryDirectory() as t:
     assert (m['sample'], m['num_reads_processed'], m['num_assigned']) == ('S1', 3, 1)
     assert abs(m['mapping_rate'] - 2 / 3) < 1e-12
 print('animal miRNA reference and counting passed')
+
+# Shared-cache index: staged under the build lock, published whole, reused only for the same request.
+import os
+import stat
+from small_rna import build_mature_index
+with tempfile.TemporaryDirectory() as t:
+    t = Path(t)
+    (t / 'bin').mkdir()
+    fake = t / 'bin/bowtie-build'  # stands in for Bowtie: writes one index file beside the FASTA
+    fake.write_text('#!/bin/sh\necho built > "$2.1.ebwt"\n')
+    fake.chmod(fake.stat().st_mode | stat.S_IEXEC)
+    os.environ['PATH'] = f"{t / 'bin'}{os.pathsep}{os.environ['PATH']}"
+    (t / 'mature.fa').write_text('>hsa-miR-1\nUGGAAUGUAAAGAAGUAUGUAU\n>mmu-miR-1\nUGGAAUGUAAAGAAGUAUGUAU\n')
+    dest = t / 'cache/key/mature_mirna'
+    dest.mkdir(parents=True)  # Snakemake pre-creates the directory output's parent tree
+    saved = build_mature_index(t / 'mature.fa', 'hsa', dest)
+    assert saved['mature_mirnas'] == 1 and (dest / 'complete.json').is_file()
+    assert sorted(p.name for p in dest.iterdir()) == ['complete.json', 'mature_species.fa', 'mature_species.fa.1.ebwt']
+    assert not list((t / 'cache/key').glob('.mature-*')) and not (t / 'cache/key/mature_mirna.lock').exists()
+    assert build_mature_index(t / 'mature.fa', 'hsa', dest) == saved  # reuse, no rebuild
+    try:
+        build_mature_index(t / 'mature.fa', 'mmu', dest)
+    except ValueError as exc:
+        assert 'another source or prefix' in str(exc)
+    else:
+        raise AssertionError('mature index reused for another prefix')
+    (t / 'partial').mkdir()
+    (t / 'partial/mature_species.fa').write_text('>x\nA\n')
+    try:
+        build_mature_index(t / 'mature.fa', 'hsa', t / 'partial')
+    except ValueError as exc:
+        assert 'Incomplete' in str(exc)
+    else:
+        raise AssertionError('incomplete mature index reused')
+print('mature miRNA index build, publish and reuse passed')
 
 from small_rna import shortstack_command, shortstack_matrix, matrix_metrics
 cmd = shortstack_command('g.fa', ['S1.fq.gz', 'S2.fq.gz'], 'known.fa', 'out', 4)

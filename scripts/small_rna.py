@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 """Small-RNA kit profiles, mature-miRNA references and read counting."""
 import csv
+import hashlib
 import json
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 import yaml
+
+from reference_cache import BuildLock, publish
 
 TABLE = yaml.safe_load((Path(__file__).resolve().parent.parent / 'config/small_rna_kits.yaml').read_text())
 
@@ -23,39 +28,86 @@ def kit_policy(kit):
 
 
 def mature_reference(mature_fa, prefix, out):
-    """Species mature miRNAs from miRBase mature.fa, RNA to DNA alphabet."""
-    records, keep, name = [], False, None
+    """Species mature miRNAs from miRBase mature.fa, RNA to DNA alphabet; wrapped records are joined."""
+    records, keep = [], False
     for line in Path(mature_fa).read_text().splitlines():
         if line.startswith('>'):
             name = line[1:].split()[0]
             keep = name.startswith(prefix + '-')
+            if keep:
+                records.append((name, []))
         elif keep:
-            records.append((name, line.strip().upper().replace('U', 'T')))
+            records[-1][1].append(line.strip().upper().replace('U', 'T'))
     if not records:
         raise ValueError(f'No mature miRNAs with prefix {prefix!r}; check the miRBase species code')
-    Path(out).write_text(''.join(f'>{n}\n{s}\n' for n, s in records))
+    Path(out).write_text(''.join(f'>{n}\n{"".join(s)}\n' for n, s in records))
     return len(records)
 
 
+def build_mature_index(mature_fa, prefix, destination):
+    """Species reference plus Bowtie index for the shared cache: built in a staging directory
+    under the cache build lock and published whole; complete.json marks a finished entry."""
+    dest = Path(destination).resolve()
+    with Path(mature_fa).open('rb') as f:
+        request = dict(prefix=prefix, source_sha256=hashlib.file_digest(f, 'sha256').hexdigest())
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    with BuildLock(dest):
+        # Snakemake creates parent directories for the declared child output.
+        if dest.is_dir() and not any(dest.iterdir()):
+            dest.rmdir()
+        if dest.exists():
+            marker = dest / 'complete.json'
+            if not marker.is_file():
+                raise ValueError(f'Incomplete existing mature-miRNA index {dest}; remove it to rebuild')
+            saved = json.loads(marker.read_text())
+            if saved['request'] != request:
+                raise ValueError(f'Existing mature-miRNA index {dest} was built from another source or prefix')
+            return saved
+        with tempfile.TemporaryDirectory(prefix='.mature-', dir=dest.parent) as tmp:
+            stage = Path(tmp) / 'index'
+            stage.mkdir()
+            fa = stage / 'mature_species.fa'
+            n = mature_reference(mature_fa, prefix, fa)
+            subprocess.run(['bowtie-build', str(fa), str(fa)], check=True)
+            saved = dict(schema_version=1, request=request, mature_mirnas=n)
+            (stage / 'complete.json').write_text(json.dumps(saved, indent=2) + '\n')
+            publish(stage, dest)
+    return saved
+
+
 def count_alignments(sam, out_tsv):
-    """Unique hits count per miRNA; a read aligned more than once is reported, never split."""
-    hits, unaligned = {}, set()
-    with open(sam) as fh:  # streamed: -a output for 20-30M reads does not fit in memory as text
+    """Unique hits count per miRNA; a read aligned more than once is reported, never split.
+
+    Streamed one read at a time: Bowtie writes every alignment of a read on consecutive
+    lines, so a change of read name closes that read. Memory is one read's hits, not the file.
+    """
+    counts, totals = {}, dict(unique=0, multi_mapped=0, unaligned=0)
+
+    def close(refs):
+        if not refs:
+            totals['unaligned'] += 1
+        elif len(refs) == 1:
+            counts[refs[0]] = counts.get(refs[0], 0) + 1
+            totals['unique'] += 1
+        else:
+            totals['multi_mapped'] += 1
+
+    previous, refs = None, []
+    with open(sam) as fh:
         for line in fh:
             if line.startswith('@'):
                 continue
             read, flag, ref = line.split('\t', 3)[:3]
-            if int(flag) & 4:
-                unaligned.add(read)
-            else:
-                hits.setdefault(read, []).append(ref)
-    counts = {}
-    for refs in hits.values():
-        if len(refs) == 1:
-            counts[refs[0]] = counts.get(refs[0], 0) + 1
+            if read != previous:
+                if previous is not None:
+                    close(refs)
+                previous, refs = read, []
+            if not int(flag) & 4:
+                refs.append(ref)
+    if previous is not None:
+        close(refs)
     Path(out_tsv).write_text('gene_id\tcount\n' + ''.join(f'{g}\t{c}\n' for g, c in sorted(counts.items())))
-    return dict(unique=sum(counts.values()), multi_mapped=sum(len(r) > 1 for r in hits.values()),
-                unaligned=len(unaligned))
+    return totals
 
 
 def count_metrics(sam, out_tsv, metrics_json, sample):
@@ -117,5 +169,5 @@ def matrix_metrics(matrix_tsv, preprocessing_json, sample, metrics_json):
 
 
 if __name__ == '__main__':
-    {'reference': mature_reference, 'count': count_metrics, 'shortstack_matrix': shortstack_matrix,
+    {'index': build_mature_index, 'count': count_metrics, 'shortstack_matrix': shortstack_matrix,
      'plant_metrics': matrix_metrics}[sys.argv[1]](*sys.argv[2:])

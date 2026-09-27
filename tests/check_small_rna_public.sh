@@ -95,9 +95,14 @@ if mode == "--animal":
             observed[sample] = {r["gene_id"].removeprefix("pub-"): int(r["count"])
                                  for r in csv.DictReader(f, delimiter="\t")}
         metrics = json.loads((proj / f"results/quant/{sample}/small_rna/metrics.json").read_text())
-        total = sum(metrics["alignment_summary"].values())
-        assert metrics["num_reads_processed"] == total, \
-            f"{sample}: count conservation failed, {metrics['num_reads_processed']} reads in vs {total} kept+lost"
+        # Conservation against the fastp ledger: every raw read is kept or in one loss category,
+        # and Bowtie saw exactly the kept reads.
+        ledger = json.loads((proj / f"results/quant/{sample}/preprocessing.json").read_text())
+        lost = sum(n for k, n in ledger["filtering_result"].items() if k != "passed_filter_reads")
+        assert ledger["reads_before"] == ledger["reads_after"] + lost, \
+            f"{sample}: count conservation failed, {ledger['reads_before']} reads in vs {ledger['reads_after']} kept + {lost} lost"
+        assert metrics["num_reads_processed"] == ledger["reads_after"], \
+            f"{sample}: Bowtie processed {metrics['num_reads_processed']} reads, preprocessing kept {ledger['reads_after']}"
         pub = {}
         with gzip.open(data / f"{run['accession']}.published_counts.txt.gz", "rt") as f:
             for line in f:

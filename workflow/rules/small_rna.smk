@@ -1,10 +1,14 @@
 # Small-RNA animal route: Bowtie 1 to species mature miRNAs, unique hits counted.
 # Tools come from the srna module (submit.sh adds it for small_rna_* routes).
+# The species FASTA and its Bowtie index sit in the shared reference cache, so they are
+# built in a staging directory under the cache build lock and published whole;
+# consumers depend on complete.json, written last.
 rule mature_mirna_reference:
     input:
         helper = REPO_DIR / "scripts/small_rna.py",
     output:
-        fa = REF / "mature_species.fa",
+        index = directory(REF / "mature_mirna"),
+        marker = REF / "mature_mirna/complete.json",
     params:
         url = config["reference"]["mature_mirna_url"],
         prefix = config["organism"]["mirbase_prefix"],
@@ -17,16 +21,16 @@ rule mature_mirna_reference:
     shell:
         """
         set -euo pipefail
-        bash {REPO_DIR:q}/workflow/scripts/fetch_reference_file.sh --url {params.url:q} --out {output.fa:q}.all --kind fasta > {log:q} 2>&1
-        python3 {input.helper:q} reference {output.fa:q}.all {params.prefix:q} {output.fa:q} >> {log:q} 2>&1
-        bowtie-build {output.fa:q} {output.fa:q} >> {log:q} 2>&1
+        tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
+        bash {REPO_DIR:q}/workflow/scripts/fetch_reference_file.sh --url {params.url:q} --out "$tmp/mature.fa.all" --kind fasta > {log:q} 2>&1
+        python3 {input.helper:q} index "$tmp/mature.fa.all" {params.prefix:q} {output.index:q} >> {log:q} 2>&1
         """
 
 # -v 0: exact matches; -a --best --strata: report every equally best hit so
 # multi-mapping reads are seen and excluded; --norc: mature miRNA reads are sense.
 rule small_rna_counts:
     input:
-        ref = REF / "mature_species.fa",
+        index = REF / "mature_mirna/complete.json",
         trims = lambda wc: [p.format(sample=wc.sample) for p in _trim_patterns],
         preprocessing = QUANT / "{sample}/preprocessing.json",
         helper = REPO_DIR / "scripts/small_rna.py",
@@ -34,6 +38,7 @@ rule small_rna_counts:
         counts = QUANT / "{sample}/small_rna/counts.tsv",
         metrics = QUANT / "{sample}/small_rna/metrics.json",
     params:
+        ref = str(REF / "mature_mirna/mature_species.fa"),
         runtime_identity = RUNTIME_ID,
     threads: 4
     resources:
@@ -45,7 +50,7 @@ rule small_rna_counts:
         """
         set -euo pipefail
         tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
-        bowtie -p {threads} -v 0 -a --best --strata --norc -S -x {input.ref:q} \
+        bowtie -p {threads} -v 0 -a --best --strata --norc -S -x {params.ref:q} \
             {input.trims:q} "$tmp/a.sam" 2> {log:q}
         python3 {input.helper:q} count "$tmp/a.sam" {output.counts:q} {output.metrics:q} {wildcards.sample:q} >> {log:q} 2>&1
         """
@@ -58,14 +63,14 @@ if PLANT_SRNA_ROUTE:
     rule shortstack_run:
         input:
             genome = REF / "genome.fa",
-            known = [REF / "mature_species.fa"] if config["reference"].get("mature_mirna_url") else [],
+            known = [REF / "mature_mirna/complete.json"] if config["reference"].get("mature_mirna_url") else [],
             trims = expand(str(QUANT / "{sample}/{sample}.trim.fastq.gz"), sample=SAMPLES),
             helper = REPO_DIR / "scripts/small_rna.py",
         output:
             counts = OUT / "small_rna_counts.tsv",
             loci = OUT / "small_rna_loci.tsv",
         params:
-            known = str(REF / "mature_species.fa") if config["reference"].get("mature_mirna_url") else "",
+            known = str(REF / "mature_mirna/mature_species.fa") if config["reference"].get("mature_mirna_url") else "",
             runtime_identity = RUNTIME_ID,
         threads: 8
         resources:

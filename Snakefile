@@ -58,12 +58,13 @@ RECOMMENDATION = _recommend(config)
 if RECOMMENDATION["issues"]:
     raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
 # Small-RNA and named TAG-seq kits fix adapter, trimming and UMI settings; the kit table wins
-# over the generic policy (a TAG-seq config that sets a kit key to another value is refused).
+# over the generic policy, and a config that sets a kit key to another value is refused.
 TAGSEQ_KIT = _tagseq.load_kit(config["analysis"]["kit"]) if RECOMMENDATION["route"] == "star_tagseq" else None
 UMI_ROUTE = RECOMMENDATION["count_treatment"] == "umi_gene_counts"
 PREPROCESSING = config["preprocessing"]
 if config["samples"]["seq_type"] == "srnaseq":
-    PREPROCESSING = PREPROCESSING | kit_policy(load_kit(config["analysis"]["small_rna_kit"]))
+    PREPROCESSING = _tagseq.merge_policy(PREPROCESSING, load_kit(config["analysis"]["small_rna_kit"]),
+                                         kit_policy, "small-RNA kit", "analysis.small_rna_kit")
 if TAGSEQ_KIT:
     PREPROCESSING = _tagseq.merge_policy(PREPROCESSING, TAGSEQ_KIT)
 policy_args(PREPROCESSING, config["samples"]["seq_type"] == "rnaseq_paired")
