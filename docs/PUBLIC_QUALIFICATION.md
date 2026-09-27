@@ -31,6 +31,12 @@ These are source candidates, **not implemented or qualified capabilities**. Down
 
 The official 10x PBMC v3 page specifies one donor, 1,222 called cells, a 28-base R1 (16-base cell barcode plus 12-base UMI), 91-base transcript R2 and an 8-base I7 sample index; its published outputs used Cell Ranger 3.0.0 with `--expect-cells=1000`. These are comparison metadata for this particular example, not universal 10x defaults. Download URLs, input hashes and version-specific comparison tolerances must still be frozen before execution. [Dataset source](https://www.10xgenomics.com/datasets/1-k-pbm-cs-from-a-healthy-donor-v-3-chemistry-3-standard-3-0-0).
 
+### Selected TruSeq technical controls
+
+The [pinned fixture manifest](../tests/fixtures/small_rna_public.json) selects GSE94585 Lab1 SynthA/SynthB technical replicate 1: **SRR5234383 / GSM2478899** and **SRR5234463 / GSM2478919**. GEO metadata, ENA run aliases/file sizes/MD5s, the publication's supplementary workbook and published exceRpt count tables establish their identities. The reference source is Table S2 of [Giraldez et al.](https://doi.org/10.1038/nbt.4183); the adapter is taken from [Illumina's TruSeq Small RNA documentation](https://support-docs.illumina.com/SHARE/AdapterSequences/Content/TruSeq-SmallRNA.htm).
+
+`python3 tests/fixtures/prepare_small_rna_public.py NEW_DIRECTORY` downloads the pinned files and verifies identities. It derives FASTA and expected pool ratios while recording three duplicated sequence IDs with conflicting alias/biotype labels. The 334 table rows contain 331 distinct IDs/sequences; duplicates retain their original labels in the derivation record. Linux fixture preparation passed in job 38994949, including both FASTQ size/MD5 checks and the pinned source/count-table SHA256 checks. This preparation step is **not a small-RNA analysis route or qualification pass**. The fixture includes 15–90 nt synthetic targets, so a universal 18–30 nt filter would discard intentional controls. These two technical libraries cannot qualify biological differential expression.
+
 ## Evidence recorded for each profile
 
 1. Accession, source URL/revision, retrieval date, file size and SHA256; document any deterministic subsetting or reference derivation.
