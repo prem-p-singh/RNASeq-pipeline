@@ -154,13 +154,15 @@ def shortstack_matrix(counts_txt, results_txt, out_counts, out_loci):
     head = rows[0]
     if head[:3] != ['Coords', 'Name', 'MIRNA'] or len(head) < 4:
         raise ValueError(f'{counts_txt}: expected Coords, Name, MIRNA then one column per sample; got {head}')
-    Path(out_counts).write_text('\t'.join(['gene_id'] + head[3:]) + '\n' +
+    # ShortStack 4.1 names each column '<read file stem>_condensed' (it collapses identical reads).
+    samples = [h.removesuffix('_condensed') for h in head[3:]]
+    Path(out_counts).write_text('\t'.join(['gene_id'] + samples) + '\n' +
                                 ''.join('\t'.join([r[1]] + r[3:]) + '\n' for r in rows[1:]))
-    keep = ['Name', 'Chrom', 'Start', 'End', 'Strand', 'DicerCall', 'MIRNA', 'Known_miRNAs']
-    # Known_miRNAs may be absent without --known_miRNAs; the counts matrix must not fail on the loci table.
+    # ShortStack 4.1 Results.txt ends with DicerCall and MIRNA; known-miRNA matches go to known_miRNAs.gff3.
+    keep = ['Name', 'Chrom', 'Start', 'End', 'Strand', 'DicerCall', 'MIRNA']
     with open(results_txt) as fh:
         loci = list(csv.DictReader(fh, delimiter='\t'))
-    Path(out_loci).write_text('\t'.join(keep) + '\n' + ''.join('\t'.join(r[k] if k != 'Known_miRNAs' else r.get(k, 'NA') for k in keep) + '\n' for r in loci))
+    Path(out_loci).write_text('\t'.join(keep) + '\n' + ''.join('\t'.join(r[k] for k in keep) + '\n' for r in loci))
     return len(rows) - 1
 
 

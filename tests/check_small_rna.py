@@ -123,21 +123,17 @@ with tempfile.TemporaryDirectory() as t:
     (t / 'Counts.txt').write_text('Coords\tName\tMIRNA\tS1\tS2\n'
         'Chr1:1-100\tCluster_1\tY\t50\t40\nChr1:500-700\tCluster_2\tN\t10\t0\nChr2:1-90\tCluster_3\tN\t0\t7\n')
     cols = ['Locus', 'Name', 'Chrom', 'Start', 'End', 'Length', 'Reads', 'DistinctSequences', 'FracTop',
-            'Strand', 'MajorRNA', 'MajorRNAReads', 'Short', 'Long', '21', '22', '23', '24', 'DicerCall', 'MIRNA', 'Known_miRNAs']
-    rows = [['Chr1:1-100', 'Cluster_1', 'Chr1', '1', '100', '100', '90', '3', '1.0', '+', 'A', '80', '0', '0', '90', '0', '0', '0', '21', 'Y', 'ath-miR166a'],
-            ['Chr1:500-700', 'Cluster_2', 'Chr1', '500', '700', '201', '10', '9', '0.5', '.', 'A', '2', '0', '0', '0', '0', '0', '10', '24', 'N', 'NA'],
-            ['Chr2:1-90', 'Cluster_3', 'Chr2', '1', '90', '90', '7', '7', '0.4', '.', 'A', '1', '3', '4', '0', '0', '0', '0', 'N', 'N', 'NA']]
+            'Strand', 'MajorRNA', 'MajorRNAReads', 'Short', 'Long', '21', '22', '23', '24', 'DicerCall', 'MIRNA']  # ShortStack 4.1 Results.txt
+    rows = [['Chr1:1-100', 'Cluster_1', 'Chr1', '1', '100', '100', '90', '3', '1.0', '+', 'A', '80', '0', '0', '90', '0', '0', '0', '21', 'Y'],
+            ['Chr1:500-700', 'Cluster_2', 'Chr1', '500', '700', '201', '10', '9', '0.5', '.', 'A', '2', '0', '0', '0', '0', '0', '10', '24', 'N'],
+            ['Chr2:1-90', 'Cluster_3', 'Chr2', '1', '90', '90', '7', '7', '0.4', '.', 'A', '1', '3', '4', '0', '0', '0', '0', 'N', 'N']]
     (t / 'Results.txt').write_text('\t'.join(cols) + '\n' + ''.join('\t'.join(r) + '\n' for r in rows))
     assert shortstack_matrix(t / 'Counts.txt', t / 'Results.txt', t / 'm.tsv', t / 'l.tsv') == 3
     assert (t / 'm.tsv').read_text().splitlines()[0] == 'gene_id\tS1\tS2'
     assert (t / 'm.tsv').read_text().splitlines()[1] == 'Cluster_1\t50\t40'
     loci = (t / 'l.tsv').read_text().splitlines()
-    assert loci[0] == 'Name\tChrom\tStart\tEnd\tStrand\tDicerCall\tMIRNA\tKnown_miRNAs'
+    assert loci[0] == 'Name\tChrom\tStart\tEnd\tStrand\tDicerCall\tMIRNA'
     assert [l.split('\t')[5] for l in loci[1:]] == ['21', '24', 'N']
-    # Without --known_miRNAs the column may be absent: loci still written, counts not aborted.
-    (t / 'R2.txt').write_text('\t'.join(cols[:-1]) + '\n' + ''.join('\t'.join(r[:-1]) + '\n' for r in rows))
-    assert shortstack_matrix(t / 'Counts.txt', t / 'R2.txt', t / 'm2.tsv', t / 'l2.tsv') == 3
-    assert [l.split('\t')[7] for l in (t / 'l2.tsv').read_text().splitlines()[1:]] == ['NA'] * 3
     # Plant QC: reads in loci over reads after preprocessing, in count_metrics' shape.
     (t / 'pre.json').write_text(json.dumps({'reads_after': 200}))
     m = matrix_metrics(t / 'm.tsv', t / 'pre.json', 'S2', t / 'metrics.json')
@@ -163,3 +159,12 @@ with tempfile.TemporaryDirectory() as _t:
     finally:
         _os.environ['PATH'] = _old
 print('ShortStack environment ordering passed')
+
+# Real ShortStack 4.1 headers carry a '_condensed' suffix (FARM job 39025631).
+with tempfile.TemporaryDirectory() as _t:
+    _t = Path(_t)
+    (_t / 'Counts.txt').write_text('Coords\tName\tMIRNA\tS1_condensed\tS2_condensed\nChr1:1-9\tCluster_1\tN\t5\t6\n')
+    (_t / 'Results.txt').write_text('Name\tChrom\tStart\tEnd\tStrand\tDicerCall\tMIRNA\nCluster_1\tChr1\t1\t9\t+\t21\tN\n')
+    shortstack_matrix(_t / 'Counts.txt', _t / 'Results.txt', _t / 'm.tsv', _t / 'l.tsv')
+    assert (_t / 'm.tsv').read_text().splitlines()[0] == 'gene_id\tS1\tS2'
+print('ShortStack condensed column naming passed')
