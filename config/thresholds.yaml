@@ -12,6 +12,11 @@ sample_qc:
   # are assumptions pending the public-data check of the small-RNA route.
   min_reads_on_genes_srnaseq: 1000000
   mapping_rate_min_srnaseq: 0.10
+  # Named-kit TAG-seq (STAR, unique-only): short 3' reads (~38 nt after the 12 nt kit
+  # trim) map uniquely less often than bulk reads. QuantSeq FWD public data mapped
+  # 48.5-55% (FARM job 39025252). Assumption pending more kit data; kit-less
+  # tagseq keeps mapping_rate_min.
+  mapping_rate_min_tagseq_kit: 0.40
   duplication_rate_warn: 0.30    # handbook A: > 30% duplication = over-amplified
 
 # Differential-expression "biologically meaningful" filter (handbook 10.2.3)

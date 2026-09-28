@@ -251,6 +251,8 @@ if (length(no_metrics) > 0) {
 policy_on <- isTRUE(cfg$sample_policy$exclude_failing_qc)
 disposition <- sample_disposition(qc,
                                   if (identical(seq_type, "srnaseq")) cfg$thresholds$sample_qc$mapping_rate_min_srnaseq
+                                  else if (identical(seq_type, "tagseq") && !is.null(cfg$analysis$kit))
+                                    cfg$thresholds$sample_qc$mapping_rate_min_tagseq_kit
                                   else cfg$thresholds$sample_qc$mapping_rate_min,
                                   min_reads,
                                   policy_on)
