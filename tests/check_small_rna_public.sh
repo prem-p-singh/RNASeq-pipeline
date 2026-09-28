@@ -106,9 +106,10 @@ if mode == "--animal":
         pub = {}
         with gzip.open(data / f"{run['accession']}.published_counts.txt.gz", "rt") as f:
             for line in f:
-                fields = line.rstrip("\n").split("\t")
-                if len(fields) >= 2 and fields[-1].lstrip("-").isdigit():
-                    pub[fields[0]] = int(fields[-1])
+                # uniq -c style: leading-space count, then the feature ID (no spaces in IDs).
+                fields = line.split()
+                if len(fields) == 2 and fields[0].isdigit():
+                    pub[fields[1]] = int(fields[0])
         published[sample] = pub
 
     pools = [run["pool"] for run in manifest["runs"]]

@@ -210,6 +210,11 @@ if _stale:
     print(_artifacts.format_report(_stale))
 
 # --- Rule modules --------------------------------------------------------
+# Sample IDs never contain "/". Without this, {sample}/metrics.json also matches
+# route subfolders such as <id>/small_rna/metrics.json and rules become ambiguous.
+wildcard_constraints:
+    sample=r"[^/]+"
+
 include: "workflow/rules/common.smk"
 include: "workflow/rules/retrieve.smk"
 include: "workflow/rules/build_orgdb.smk"
