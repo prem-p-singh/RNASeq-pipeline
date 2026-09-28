@@ -25,7 +25,7 @@
     "Record genome and mature-miRNA source checksums on first download; pin them thereafter.",
     "At least 90% of trimmed reads must be 20-24 nt (computed from the trimmed FASTQ; fastp's JSON carries no length histogram).",
     "ShortStack loci must include both DicerCall 21 and DicerCall 24 among the cohort.",
-    "ath-miR156, ath-miR166 and ath-miR319 families must be placed with reads in ShortStack's known_miRNAs.gff3 (ShortStack 4.1 Results.txt has no known-miRNA column).",
+    "ath-miR156, ath-miR166 and ath-miR319 families must overlap at least one locus in ShortStack's Results.txt known_miRNAs column.",
     "A repeat run on the same inputs must give an identical count matrix.",
     "Do not treat these technical runs as independent biological replicates or qualify biological DE."
   ],

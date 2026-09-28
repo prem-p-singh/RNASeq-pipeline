@@ -69,7 +69,6 @@ if PLANT_SRNA_ROUTE:
         output:
             counts = OUT / "small_rna_counts.tsv",
             loci = OUT / "small_rna_loci.tsv",
-            known = OUT / "small_rna_known_miRNAs.gff3",
         params:
             known = str(REF / "mature_mirna/mature_species.fa") if config["reference"].get("mature_mirna_url") else "",
             runtime_identity = RUNTIME_ID,
@@ -91,8 +90,6 @@ if PLANT_SRNA_ROUTE:
             python3 -c 'import subprocess, sys; sys.path.insert(0, sys.argv[1]); from small_rna import shortstack_command, shortstack_env; subprocess.run(shortstack_command(sys.argv[2], sys.argv[6:], sys.argv[3], sys.argv[4], sys.argv[5]), check=True, env=shortstack_env())' \
                 {REPO_DIR:q}/scripts "$tmp/genome.fa" {params.known:q} "$tmp/run" {threads} "$tmp"/reads/*.fastq.gz > {log:q} 2>&1
             python3 {input.helper:q} shortstack_matrix "$tmp/run/Counts.txt" "$tmp/run/Results.txt" {output.counts:q} {output.loci:q} >> {log:q} 2>&1
-            # Written by ShortStack only when --known_miRNAs is given; empty otherwise.
-            if [ -f "$tmp/run/known_miRNAs.gff3" ]; then cp "$tmp/run/known_miRNAs.gff3" {output.known:q}; else : > {output.known:q}; fi
             """
 
     rule small_rna_plant_metrics:

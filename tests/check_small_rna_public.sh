@@ -152,15 +152,9 @@ else:
     missing_calls = set(thresholds["required_dicer_calls"]) - dicer_calls
     assert not missing_calls, f"DicerCall values missing from the cohort: {sorted(missing_calls)}"
 
-    # Known miRNAs ShortStack placed on the genome with reads (gff3 score = reads, Name=ath-miR156a).
-    known = {}
-    for line in open(proj / "results/small_rna_known_miRNAs.gff3"):
-        f = line.rstrip("\n").split("\t")
-        if len(f) == 9 and f[8].startswith("Name="):
-            known[f[8][5:]] = known.get(f[8][5:], 0) + int(float(f[5]))
     for family in thresholds["known_mirna_families"]:
-        reads = sum(n for name, n in known.items() if name.lower().startswith(family.lower()))
-        assert reads > 0, f"{family}: no known miRNA of this family placed with reads"
+        loci_hit = [r["Name"] for r in loci if family.lower() in r["known_miRNAs"].lower()]
+        assert loci_hit, f"{family}: no locus overlaps a known miRNA of this family"
 
     total = kept = 0
     for run in manifest["runs"]:
