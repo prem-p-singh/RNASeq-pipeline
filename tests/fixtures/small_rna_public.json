@@ -25,7 +25,8 @@
     "min_reads_per_pool_for_ratio_check": 100,
     "max_median_abs_log2_ratio_diff": 0.5,
     "min_spearman_vs_published_counts": 0.9,
-    "count_conservation": "per run, reads in equals kept plus lost categories"
+    "count_conservation": "per run, reads in equals kept plus lost categories",
+    "ratio_normalization": "Observed pool A/B ratio uses each pool's counts divided by its total assigned reads. Corrected 2026-09-27 after the first run: the original raw-count ratio failed at median |log2 diff| 0.777 because pool A had 2.0x the assigned reads of pool B (constant +0.72 to +0.86 offset across all 15 expected-ratio classes, FARM jobs 39024496 and 39025251). Threshold 0.5 unchanged."
   },
   "runs": [
     {

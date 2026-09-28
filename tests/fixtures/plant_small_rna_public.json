@@ -12,8 +12,8 @@
   ],
   "ena_filereport_url_template": "https://www.ebi.ac.uk/ena/portal/api/filereport?accession={0}&result=read_run&fields=fastq_ftp,fastq_md5,fastq_bytes",
   "genome_source": {
-    "url": "https://plantsmallrnagenes.science.psu.edu/ath-b10/Arabidopsis_thalianaTAIR10.fa",
-    "note": "TAIR10 genome FASTA; SHA256 unknown at authoring time, recorded into download_manifest.json on first download."
+    "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/fasta/arabidopsis_thaliana/dna/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz",
+    "note": "TAIR10 genome from Ensembl Plants release 63 (gzip, 36462703 bytes). Replaces plantsmallrnagenes.science.psu.edu, whose TLS certificate failed verification on FARM (curl 60, job 39025251); verification is not disabled. SHA256 recorded into download_manifest.json on first download."
   },
   "mature_mirna_source": {
     "url": "https://mirbase.org/download/mature.fa",

@@ -114,11 +114,14 @@ if mode == "--animal":
     pools = [run["pool"] for run in manifest["runs"]]
     assert len(pools) == 2, f"animal fixture expects exactly two pools, got {pools}"
     a, b = pools
+    # Pools are sequenced to different depths, so compare depth-normalized ratios:
+    # each pool's counts over its total assigned reads (see acceptance_thresholds note).
+    tot_a, tot_b = sum(observed[a].values()), sum(observed[b].values())
     ratio_diffs = []
     for feature, exp_ratio in expected.items():
         ca, cb = observed[a].get(feature, 0), observed[b].get(feature, 0)
         if ca >= min_reads and cb >= min_reads:
-            ratio_diffs.append(abs(math.log2(ca / cb) - math.log2(exp_ratio)))
+            ratio_diffs.append(abs(math.log2((ca / tot_a) / (cb / tot_b)) - math.log2(exp_ratio)))
     assert ratio_diffs, "no Table S2 sequence reached the read-depth floor in both pools"
     median_diff = statistics.median(ratio_diffs)
     assert median_diff <= thresholds["max_median_abs_log2_ratio_diff"], \

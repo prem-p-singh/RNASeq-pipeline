@@ -54,7 +54,7 @@ def prepare(destination):
     evidence = dict(status='preparing', biological_inference_eligible=False, sources={}, runs={})
     ledger = out / 'download_manifest.json'
     try:
-        evidence['sources']['genome.fa'] = fetch_record(manifest['genome_source']['url'], out / 'genome.fa')
+        evidence['sources']['genome.fa.gz'] = fetch_record(manifest['genome_source']['url'], out / 'genome.fa.gz')
         prefix = manifest['mature_mirna_source']['prefix']
         raw = out / 'mature.fa.all'
         evidence['sources']['mature.fa.all'] = fetch_record(manifest['mature_mirna_source']['url'], raw)

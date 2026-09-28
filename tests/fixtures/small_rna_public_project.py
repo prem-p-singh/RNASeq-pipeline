@@ -59,7 +59,7 @@ def build_plant(dest, data, repo):
     cfg["project"] = dict(cfg["project"], name="small_rna_plant_public")
     cfg["organism"] = {"mirbase_prefix": manifest["mirbase_prefix"]}
     cfg["reference"] = {"cache_dir": None,
-                         "genome_fasta_url": (data / "genome.fa").as_uri(),
+                         "genome_fasta_url": (data / "genome.fa.gz").as_uri(),
                          "mature_mirna_url": (data / "mature.fa.all").as_uri()}
     cfg["analysis"] = dict(cfg["analysis"], small_rna_profile="plant")
     rows = [[run["accession"], (data / f"{run['accession']}.fastq.gz").as_uri(), ""] for run in manifest["runs"]]
