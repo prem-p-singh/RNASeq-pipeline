@@ -87,7 +87,7 @@ if PLANT_SRNA_ROUTE:
             ln -s "$(readlink -f {input.genome:q})" "$tmp/genome.fa"
             # <sample>.fastq.gz symlinks so ShortStack's per-file count columns are the sample IDs.
             for f in {input.trims:q}; do ln -s "$(readlink -f "$f")" "$tmp/reads/$(basename "$f" .trim.fastq.gz).fastq.gz"; done
-            python3 -c 'import subprocess, sys; sys.path.insert(0, sys.argv[1]); from small_rna import shortstack_command; subprocess.run(shortstack_command(sys.argv[2], sys.argv[6:], sys.argv[3], sys.argv[4], sys.argv[5]), check=True)' \
+            python3 -c 'import subprocess, sys; sys.path.insert(0, sys.argv[1]); from small_rna import shortstack_command, shortstack_env; subprocess.run(shortstack_command(sys.argv[2], sys.argv[6:], sys.argv[3], sys.argv[4], sys.argv[5]), check=True, env=shortstack_env())' \
                 {REPO_DIR:q}/scripts "$tmp/genome.fa" {params.known:q} "$tmp/run" {threads} "$tmp"/reads/*.fastq.gz > {log:q} 2>&1
             python3 {input.helper:q} shortstack_matrix "$tmp/run/Counts.txt" "$tmp/run/Results.txt" {output.counts:q} {output.loci:q} >> {log:q} 2>&1
             """

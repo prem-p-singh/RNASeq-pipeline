@@ -151,3 +151,15 @@ with tempfile.TemporaryDirectory() as t:
     else:
         raise AssertionError('sample absent from ShortStack matrix accepted')
 print('plant ShortStack command, matrix and metrics passed')
+
+# ShortStack runs with its own environment first on PATH (its scripts use '#!/usr/bin/env python').
+import os as _os, stat as _stat
+from small_rna import shortstack_env
+with tempfile.TemporaryDirectory() as _t:
+    _exe = Path(_t) / 'ShortStack'; _exe.write_text('#!/bin/sh\n'); _exe.chmod(_exe.stat().st_mode | _stat.S_IEXEC)
+    _old = _os.environ['PATH']; _os.environ['PATH'] = _old + _os.pathsep + _t
+    try:
+        assert shortstack_env()['PATH'].split(_os.pathsep)[0] == _t
+    finally:
+        _os.environ['PATH'] = _old
+print('ShortStack environment ordering passed')

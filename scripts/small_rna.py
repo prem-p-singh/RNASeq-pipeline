@@ -3,6 +3,8 @@
 import csv
 import hashlib
 import json
+import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -130,6 +132,19 @@ def shortstack_command(genome, reads, known, outdir, threads):
     cmd = ['ShortStack', '--genomefile', str(genome), '--readfile', *map(str, reads),
            '--outdir', str(outdir), '--threads', str(threads)]
     return cmd + (['--known_miRNAs', str(known)] if known else [])
+
+
+def shortstack_env():
+    """PATH with ShortStack's own environment first, for ShortStack and the tools it spawns.
+
+    ShortStack, strucVis and ShortTracks start with '#!/usr/bin/env python'; with the
+    core runtime first on PATH they would run without Biopython (FARM job 39025544).
+    """
+    env = dict(os.environ)
+    exe = shutil.which('ShortStack')
+    if exe:
+        env['PATH'] = str(Path(exe).parent) + os.pathsep + env.get('PATH', '')
+    return env
 
 
 def shortstack_matrix(counts_txt, results_txt, out_counts, out_loci):
