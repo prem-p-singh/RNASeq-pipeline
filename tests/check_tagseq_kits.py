@@ -13,7 +13,7 @@ fwd, rev, umi = (load_kit(k) for k in ('QuantSeq FWD', 'QuantSeq REV', 'QuantSeq
 assert fwd['strandedness'] == 'forward' and fwd['umi_len'] == 0
 assert rev['strandedness'] == 'reverse' and rev['umi_len'] == 0
 assert umi['strandedness'] == 'forward' and umi['umi_len'] == 6 and umi['umi_skip'] == 4
-assert all(k['status'] == 'experimental' and k['sources'] for k in KITS.values())
+assert all(k['status'] in ('experimental', 'validated') and k['sources'] for k in KITS.values())
 try:
     load_kit('QuantSeq generic')
 except ValueError as exc:

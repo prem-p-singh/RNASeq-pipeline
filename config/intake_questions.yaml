@@ -27,7 +27,7 @@ schema_version: 7
 readme:
   - "Fill the Bulk RNA-seq, sRNA-seq or TAGseq tab for your assay. Yellow cells are required; gray cells are optional. Enter literal values, not formulas."
   - "Current execution: annotated, non-UMI bulk QC, gene expression and differential expression; Salmon or STAR; independent groups, batch, subject-blocked or repeated-measures (dream) designs, interactions and continuous covariates."
-  - "sRNA-seq launches animal (Bowtie to species mature miRNAs) or plant (ShortStack loci on the genome) small-RNA routes with a named non-UMI kit. TAGseq launches the three named QuantSeq kits (FWD, REV, FWD-UMI) through STAR (experimental). Other planned RNA families have no executable intake yet."
+  - "sRNA-seq launches animal (Bowtie to species mature miRNAs) or plant (ShortStack loci on the genome) small-RNA routes with a named non-UMI kit. TAGseq launches the three named QuantSeq kits (FWD, REV, FWD-UMI) through STAR. Other planned RNA families have no executable intake yet."
   - "Choose external files or workbook tables (workbook tables: Bulk RNA-seq only). For workbook tables, fill Samples, Libraries and Reads; clear the FASTQ folder and external metadata path."
   - "Keep identifiers as Text before entry. One library per sample is executable; multiple run/lane read pairs within that library are checked and merged."
   - "Confirm input stage and whether the library uses UMIs. Unknown UMI status must be resolved; UMI libraries are unsupported by the current bulk route."

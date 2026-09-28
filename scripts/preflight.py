@@ -164,10 +164,12 @@ def check_scope(cfg: dict, spec: dict, iss: Issues) -> dict:
                 f"{assay!r}; supported: {', '.join(sorted(scope['assays']))}")
     elif not a.get("supported"):
         iss.add("SCP001", "scope", f"{assay!r}: {a.get('reason', 'not supported')}")
-    elif assay == "tagseq" and not a.get("validated_kits"):
-        iss.add("SCP004", "scope",
-                "tagseq: scope.assays.tagseq.validated_kits is empty, so the "
-                "count treatment is unverified for your kit")
+    elif assay in ("tagseq", "srnaseq"):
+        kit = (cfg.get("analysis") or {}).get("kit" if assay == "tagseq" else "small_rna_kit")
+        if kit not in (a.get("validated_kits") or []):
+            iss.add("SCP004", "scope",
+                    f"{assay}: kit {kit!r} is not in scope.assays.{assay}.validated_kits, so the "
+                    "count treatment is unverified for your kit")
 
     if not requires_inference(cfg):
         return {"assay": assay, "design": "not_requested", "backend": None,

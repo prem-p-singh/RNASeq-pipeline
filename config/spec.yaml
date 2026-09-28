@@ -34,11 +34,12 @@ scope:
       count_treatment: "no"
       notes: >
         3'-tag counts do not scale with transcript length, so abundance is not
-        length-corrected. Verified against no kit yet: treat as provisional.
-      validated_kits: []
+        length-corrected. Named kits below passed their public-data checks;
+        a project without analysis.kit remains provisional.
+      validated_kits: [QuantSeq FWD, QuantSeq REV, QuantSeq FWD-UMI]
     srnaseq:
       supported: true
-      validated_kits: []
+      validated_kits: [TruSeq Small RNA]
 
   # Which DE backend a design requires. Never rescue an unsupported design by
   # silently simplifying it: that answers a different question.

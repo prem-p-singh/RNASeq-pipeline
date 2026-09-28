@@ -404,10 +404,6 @@ def setup_inputs(record):
         "Contact email is recorded but does not configure scheduler notifications.",
         "Multiple libraries per sample remain unsupported.",
     ]
-    if is_srna:
-        record["limitations"].append("The small-RNA route is experimental until its public-data check passes.")
-    if is_tagseq:
-        record["limitations"].append("The named-kit TAG-seq route is experimental until its public-data check passes.")
     if srna_limitation:
         record["limitations"].append(srna_limitation)
     if record["schema_version"] == 1:

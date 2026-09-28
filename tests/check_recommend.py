@@ -55,7 +55,7 @@ for key in ('small_rna_profile', 'small_rna_kit'):
 assert recommend({**srna_cfg, 'organism': {}})['status'] == 'blocked'
 assert recommend({**srna_cfg, 'reference': {}})['status'] == 'blocked'
 print('animal small-RNA route selection passed')
-assert r['qualification'] == 'experimental; no public-data check passed', r['qualification']
+assert r['qualification'] == 'validated; public-data check passed', r['qualification']
 for kit, word in (('QIAseq miRNA', 'UMI'), ('No Such Kit', 'Unknown small-RNA kit')):
     b = recommend({**srna_cfg, 'analysis': {**srna_cfg['analysis'], 'small_rna_kit': kit}})
     assert b['status'] == 'blocked' and any(word in i for i in b['issues']), b['issues']

@@ -86,7 +86,7 @@ Explicit R1/R2 adapters, poly-G policy and minimum retained length configure the
 
 ## Development workbook: sRNA-seq tab
 
-- **small_rna_profile:** `animal` (Bowtie 1 to the species' mature miRNAs from miRBase) or `plant` (ShortStack loci on the genome). Both are experimental until a named public-data check passes.
+- **small_rna_profile:** `animal` (Bowtie 1 to the species' mature miRNAs from miRBase) or `plant` (ShortStack loci on the genome). Both passed their public-data checks with the TruSeq Small RNA kit (FARM job 39055140) and are validated for that kit.
 - **adapter_kit:** a named non-UMI small-RNA kit from [config/small_rna_kits.yaml](config/small_rna_kits.yaml); UMI small-RNA kits are rejected, since UMI-aware counting is not implemented.
 - **mirbase_prefix:** required for `animal`; optional for `plant`, where it only annotates ShortStack loci with known miRNAs and does not change which loci are called.
 - **reference_genome:** required for `plant`; not used by `animal`.
@@ -101,5 +101,5 @@ Explicit R1/R2 adapters, poly-G policy and minimum retained length configure the
 - **Sample and read records:** external files only. Workbook tables are refused on this tab.
 - **Trimming comes from the kit:** a preprocessing setting that contradicts the kit (for example another `trim_front`) is an error. Reads are single-end Read 1 only.
 - **UMI (FWD-UMI only):** fastp (`--umi --umi_len 6 --umi_skip 4`) moves the 6 nt UMI into the read name and drops the TATA spacer, then applies the 12 nt front trim. `star/gene_counts.tsv` counts reads; `umi/gene_counts.tsv` and the cohort `counts.tsv` count molecules.
-- All three kits are experimental until their public-data checks pass; `tagseq.validated_kits` in `config/spec.yaml` is empty.
+- All three kits passed their public-data checks (FARM jobs 39025685, 39023623, 39023624) and are listed in `tagseq.validated_kits` in `config/spec.yaml`. A `tagseq` project without a kit stays provisional.
 - A `tagseq` project without a kit keeps the earlier provisional route unchanged.

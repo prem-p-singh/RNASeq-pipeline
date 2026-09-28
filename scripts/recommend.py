@@ -14,6 +14,20 @@ def requires_inference(cfg):
     return isinstance(objectives, list) and bool(set(x for x in objectives if isinstance(x, str)) & {"differential_expression", "enrichment"})
 
 
+def qualification(seq, analysis):
+    """Kit status from its table: validated only after the kit's own public-data check passed."""
+    if seq not in ("tagseq", "srnaseq"):
+        return "see release validation evidence"
+    kit = analysis.get("kit" if seq == "tagseq" else "small_rna_kit")
+    if not kit:
+        return "provisional; no named kit qualified"
+    try:
+        status = (tagseq.load_kit(kit) if seq == "tagseq" else load_kit(kit))["status"]
+    except ValueError:
+        return "blocked: unknown or unsupported kit"
+    return "validated; public-data check passed" if status == "validated" else "experimental; no public-data check passed"
+
+
 def handbook_backend(min_units):
     """Handbook default for a new independent fixed-effect design (ST01/ST02).
 
@@ -126,7 +140,6 @@ def recommend(cfg, n_samples=None):
                     "The declared dependence structure selects the statistical backend." if inference else
                     "No differential-inference objective was requested; no DE model will be fitted.",
                     "Sample count informs replication/QC checks; it does not silently change the model."],
-        "qualification": "provisional; no named kit qualified" if seq == "tagseq" else
-                         "experimental; no public-data check passed" if seq == "srnaseq" else "see release validation evidence",
+        "qualification": qualification(seq, analysis),
         "alternatives": policy["alternatives"], "issues": issues,
     }
