@@ -154,7 +154,7 @@ import os as _os, stat as _stat
 from small_rna import shortstack_env
 with tempfile.TemporaryDirectory() as _t:
     _exe = Path(_t) / 'ShortStack'; _exe.write_text('#!/bin/sh\n'); _exe.chmod(_exe.stat().st_mode | _stat.S_IEXEC)
-    _old = _os.environ['PATH']; _os.environ['PATH'] = _old + _os.pathsep + _t
+    _old = _os.environ['PATH']; _os.environ['PATH'] = _t + _os.pathsep + _old  # fake first: a real ShortStack may be on PATH
     try:
         assert shortstack_env()['PATH'].split(_os.pathsep)[0] == _t
     finally:
