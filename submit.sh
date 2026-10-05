@@ -327,11 +327,33 @@ if [ "$EXECUTOR" = local ]; then
 else
     EXECUTION_ARGS=(--profile "$PROFILE")
 fi
-exec snakemake \
-    --snakefile "$REPO/Snakefile" \
-    "${EXECUTION_ARGS[@]}" \
-    --configfile "$CONFIG" \
-    --config repo_dir="$REPO" \
-    --jobs "$MAX_CONC" \
-    $DRY_RUN \
-    ${PASSTHRU[@]+"${PASSTHRU[@]}"}
+launch() {  # $1 = config file, relative to the current directory; $2 = exec, to replace this shell
+    ${2:-} snakemake \
+        --snakefile "$REPO/Snakefile" \
+        "${EXECUTION_ARGS[@]}" \
+        --configfile "$1" \
+        --config repo_dir="$REPO" \
+        --jobs "$MAX_CONC" \
+        $DRY_RUN \
+        ${PASSTHRU[@]+"${PASSTHRU[@]}"}
+}
+ROUTE=$(python3 -c 'import json;print(json.load(open("gates/recommendation.json"))["route"])')
+if [ "$ROUTE" != dual_assignment ] || [ -n "$DRY_RUN" ]; then
+    launch "$CONFIG" exec
+fi
+
+# --- Host and pathogen in one library ---------------------------------
+# The first run assigns and splits the reads. Each organism is then an ordinary
+# single-organism project under dual/<role>, writing to results/<role>. set -e
+# stops at the first failure, so no child starts after a failed parent and a
+# failed host project ends the launch with its exit status. A dry run shows the
+# parent only: the children are generated from results the parent has not made yet.
+launch "$CONFIG"
+python3 "$REPO/scripts/dual_organism.py" children --project "$PROJDIR" --configfile "$CONFIG"
+for role in host pathogen; do
+    child="$PROJDIR/dual/$role"
+    [ -f "$child/config/config.yaml" ] || continue
+    echo "--- $role project: $child ---"
+    python3 "$REPO/scripts/preflight.py" -d "$child"
+    ( cd "$child" && launch config/config.yaml )
+done

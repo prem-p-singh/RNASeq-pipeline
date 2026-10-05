@@ -1,17 +1,26 @@
 #!/usr/bin/env python3
 """Host and pathogen in one library: combined reference, read labels and splitting."""
 import argparse
+import copy
+import csv
 import gzip
 import itertools
 import json
 import os
 import re
+import shutil
 import subprocess
 import tempfile
+from collections import Counter
 from pathlib import Path
 
+import yaml
+
+import config_resolve
+from metadata import read_tsv
 from prepare_reads import records
 
+REPO = Path(__file__).resolve().parent.parent
 ROLES = ('host', 'pathogen')
 LABELS = ('host', 'pathogen', 'ambiguous', 'unassigned')
 STAR_EXIT_GRACE = 5  # seconds for a STAR whose output ended to exit
@@ -207,6 +216,96 @@ def table(records, warn):
     return '\n'.join(lines) + '\n'
 
 
+def children(project, cfg, assignment_tsv=None):
+    """Write one single-organism project per organism under <project>/dual/ from a finished assignment.
+
+    cfg is the parent project config as authored. The pathogen child takes the samples with at least
+    min_assigned_reads pathogen reads; with none, no pathogen project is written.
+    """
+    project = Path(project).resolve()
+    full = config_resolve.resolve(REPO, [('project', cfg)])[0]
+    dual = validate(full)
+    out = project / Path(full['project']['output_dir']).expanduser()
+    sheet = read_tsv(project / full['samples']['sheet'])
+    if not sheet:
+        raise ValueError(f"No samples in {project / full['samples']['sheet']}")
+    with open(assignment_tsv or out / 'assignment.tsv', newline='') as f:
+        assigned = {r['sample']: int(r['pathogen']) for r in csv.DictReader(f, delimiter='\t')}
+    missing = [r['sample_id'] for r in sheet if r['sample_id'] not in assigned]
+    if missing:
+        raise ValueError(f"The assignment table has no row for sample(s): {', '.join(missing)}")
+    floor = dual['pathogen']['min_assigned_reads']
+    low = [r['sample_id'] for r in sheet if assigned[r['sample_id']] < floor]
+    objectives = {role: dual[role]['objectives'] for role in ROLES}
+    de, reason = 'not_requested', ''
+    if set(objectives['pathogen']) & {'differential_expression', 'enrichment'}:
+        factor = full['model']['primary_factor']
+        kept = Counter(r.get(factor, '') for r in sheet if r['sample_id'] not in low)
+        short = sorted(level for level in {r.get(factor, '') for r in sheet} if kept[level] < 2)
+        de = 'not_estimable' if short else 'requested'
+        if short:
+            reason = f"fewer than 2 quantified samples in {factor} level(s): {', '.join(short)}"
+            objectives['pathogen'] = ['gene_expression']
+    status = {'host': {'samples': [r['sample_id'] for r in sheet]},
+              'pathogen': {'status': 'quantified', 'samples': [r['sample_id'] for r in sheet if r['sample_id'] not in low],
+                           'not_quantified': low, 'min_assigned_reads': floor, 'de': de, 'reason': reason}}
+    if not status['pathogen']['samples']:
+        status['pathogen'].update(status='skipped', reason=f'no sample has at least {floor} pathogen reads')
+    mates = ('_R1', '_R2') if full['samples']['seq_type'] == 'rnaseq_paired' else ('',)
+    for role in ROLES:
+        child = project / 'dual' / role
+        if not status[role]['samples']:
+            (child / 'config/config.yaml').unlink(missing_ok=True)
+            continue
+        rows = []
+        for r in sheet:
+            if r['sample_id'] not in status[role]['samples']:
+                continue
+            reads = [out / 'quant' / r['sample_id'] / 'dual' / f'{role}{mate}.fastq.gz' for mate in mates]
+            for path in reads:
+                if not path.is_file():
+                    raise ValueError(f'Split reads not found: {path}')
+            rows.append({'sample_id': r['sample_id'], **dict(zip(('fastq_url', 'fastq_url_r2'), map(str, reads))),
+                         **{k: v for k, v in r.items() if k not in ('sample_id', 'fastq_url', 'fastq_url_r2')}})
+        c = {k: copy.deepcopy(v) for k, v in cfg.items() if k != 'dual_organism'}
+        for block in ('project', 'analysis', 'reference', 'samples', 'thresholds'):
+            c[block] = dict(c.get(block) or {})
+        c['project']['output_dir'] = os.path.relpath(out / role, child) + '/'
+        c['analysis']['objectives'] = objectives[role]
+        c['preprocessing'] = {'passthrough': True}
+        c['screening'] = {'enabled': False}
+        c['reference'].update({k: dual[role].get(k) for k in ('genome_fasta_url', 'gtf_url', 'transcriptome_fasta_url')},
+                              accession=dual[role]['label'])
+        c['samples'].update(sheet='config/samples.tsv', metadata_dir=None)
+        if role == 'host':
+            # The gene-information table is the host's and is named relative to the parent project.
+            c['reference']['annotation_tsv'] = dict(
+                c['reference'].get('annotation_tsv') or {},
+                path=str(project / Path(full['reference']['annotation_tsv']['path']).expanduser()))
+        else:
+            # Reads are pre-assigned: inclusion is min_assigned_reads, not the mapping-rate or depth floor.
+            c['downstream'] = dict(run_go=False, run_kegg=False, run_wgcna=False)
+            c['thresholds']['sample_qc'] = dict(c['thresholds'].get('sample_qc') or {},
+                                                mapping_rate_min=0, min_reads_on_genes_rnaseq=0)
+        if not c['thresholds']:
+            del c['thresholds']
+        (child / 'config').mkdir(parents=True, exist_ok=True)
+        (child / 'config/config.yaml').write_text(yaml.safe_dump(c, sort_keys=False))
+        with open(child / 'config/samples.tsv', 'w', newline='') as f:
+            writer = csv.DictWriter(f, fieldnames=list(rows[0]), delimiter='\t', lineterminator='\n')
+            writer.writeheader()
+            writer.writerows(rows)
+        # The launcher reads tier sizes from the project's own copy.
+        shutil.copyfile(project / 'config/thresholds.yaml', child / 'config/thresholds.yaml')
+    (out / 'pathogen').mkdir(parents=True, exist_ok=True)
+    with open(out / 'pathogen/samples_not_quantified.tsv', 'w', newline='') as f:
+        writer = csv.writer(f, delimiter='\t', lineterminator='\n')
+        writer.writerow(['sample', 'pathogen_reads', 'reason'])
+        writer.writerows([s, assigned[s], f'below min_assigned_reads {floor}'] for s in low)
+    (out / 'pathogen/status.json').write_text(json.dumps(status['pathogen'], indent=2) + '\n')
+    return status
+
+
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest='command', required=True)
@@ -223,6 +322,8 @@ if __name__ == '__main__':
     t = sub.add_parser('table')
     t.add_argument('--warn', type=float, required=True); t.add_argument('--out', required=True)
     t.add_argument('records', nargs='+')
+    k = sub.add_parser('children')
+    k.add_argument('--project', required=True); k.add_argument('--configfile', default='config/config.yaml')
     args = ap.parse_args()
     if args.command == 'combine':
         with tempfile.TemporaryDirectory(prefix='.combine-', dir=Path(args.out_fa).parent) as tmp:
@@ -234,5 +335,11 @@ if __name__ == '__main__':
     elif args.command == 'assign':
         align(args.index, args.reads, args.outdir, args.sample, args.host_label, args.pathogen_label,
               args.multimap_limit, args.threads)
+    elif args.command == 'children':
+        made = children(args.project, yaml.safe_load((Path(args.project) / args.configfile).read_text()))
+        p = made['pathogen']
+        print(f"dual-organism children: host {len(made['host']['samples'])} sample(s); pathogen {p['status']}, "
+              f"{len(p['samples'])} sample(s), {len(p['not_quantified'])} not quantified, "
+              f"differential expression {p['de']}" + (f" ({p['reason']})" if p['reason'] else ''))
     else:
         Path(args.out).write_text(table([json.loads(Path(r).read_text()) for r in args.records], args.warn))
