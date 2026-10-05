@@ -27,7 +27,9 @@ def digest(path, algorithm='sha256'):
 
 
 def fetch(url, target, expected_md5, expected_bytes):
-    subprocess.run(['curl', '--fail', '--retry', '3', '-sSL', url, '-o', str(target)], check=True)
+    # Large ENA files drop mid-transfer: retry every error and resume the partial file. The MD5 and
+    # size check below still decides whether the result is accepted.
+    subprocess.run(['curl', '--fail', '--retry', '10', '--retry-all-errors', '-C', '-', '-sSL', url, '-o', str(target)], check=True)
     if digest(target, 'md5') != expected_md5 or target.stat().st_size != expected_bytes:
         raise ValueError(f'Public source identity mismatch: {target.name}')
     return dict(url=url, bytes=target.stat().st_size, sha256=digest(target))
