@@ -178,6 +178,9 @@ def check_scope(cfg: dict, spec: dict, iss: Issues) -> dict:
                     f"{assay}: kit {kit!r} is not in scope.assays.{assay}.validated_kits, so the "
                     "count treatment is unverified for your kit")
 
+    if recommend(cfg)["route"] == "dual_assignment":
+        # Backend and count treatment belong to the per-organism routes, not to read assignment.
+        return {"assay": assay, "design": design, "backend": None, "count_treatment": None}
     if not requires_inference(cfg):
         return {"assay": assay, "design": "not_requested", "backend": None,
                 "count_treatment": recommend(cfg)["count_treatment"]}

@@ -106,4 +106,13 @@ b = recommend({**dual, 'samples': {'seq_type': 'tagseq'}})
 assert b['status'] == 'blocked' and any('tagseq' in i for i in b['issues']), b['issues']
 off = recommend({**dual, 'dual_organism': {**dual['dual_organism'], 'enabled': False}})
 assert (off['route'], off['backend']) == ('salmon_bulk', 'limma_voom'), off
+for bad, word in (({**dual, 'samples': {'seq_type': 'rnaseq_pared'}}, 'No implemented route'),
+                  ({**dual, 'analysis': {'umi': True}}, 'UMI'),
+                  ({**dual, 'analysis': {'kit': 'QuantSeq FWD'}}, 'analysis.kit'),
+                  ({**dual, 'analysis': {'objectives': ['splicing']}}, 'splicing'),
+                  ({**dual, 'analysis': {'objectives': 'qc'}}, 'nonempty list')):
+    b = recommend(bad)
+    assert b['status'] == 'blocked' and b['route'] == 'dual_assignment' and any(word in i for i in b['issues']), (word, b['issues'])
+r = recommend(dual)
+assert r['status'] == 'selected' and not r['issues'], r
 print('dual-organism route selection passed')

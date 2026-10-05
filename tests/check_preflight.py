@@ -123,6 +123,10 @@ expect("wrong type",
        rc=1, has=["CFG003"])
 
 # --- 3. scope: an assay the pipeline does not implement ---------------
+_, _, out = expect("dual-organism bad label", project("dual-label", BALANCED, seq_type="rnaseq_single", extra=(
+    "dual_organism: {enabled: true, host: {label: grape, genome_fasta_url: 'file:///h.fa', gtf_url: 'file:///h.gtf'},"
+    " pathogen: {label: 'a|b', genome_fasta_url: 'file:///p.fa'}}\n")), rc=1, has=["CFG003"])
+assert "dual_organism.pathogen.label" in out, out
 expect("srnaseq without a profile", project("srna", BALANCED, seq_type="srnaseq"),
        rc=1, has=["SCP003"])
 expect("nonsense assay", project("nonsense", BALANCED, seq_type="nanopore_direct"),

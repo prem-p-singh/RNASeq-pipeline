@@ -131,11 +131,14 @@ print('dual-organism assignment table passed')
 
 # STAR wiring, with a stand-in STAR: record written last, STAR failure reported, nothing partial left.
 import json, os, stat
+import dual_organism
 from dual_organism import align
+dual_organism.STAR_EXIT_GRACE = 1
 with tempfile.TemporaryDirectory() as t:
     t = Path(t)
     (t / 'bin').mkdir(); (t / 'idx').mkdir()
-    (t / 'bin/STAR').write_text('#!/bin/sh\n[ "$1" = --version ] && { echo 2.7.11b; exit 0; }\ncat "$FAKE_SAM"; exit "$FAKE_RC"\n')
+    (t / 'bin/STAR').write_text('#!/bin/sh\n[ "$1" = --version ] && { echo 2.7.11b; exit 0; }\ncat "$FAKE_SAM"\n'
+                                '[ "$FAKE_RC" = hang ] && exec sleep 60\n[ "$FAKE_RC" = kill ] && kill -9 $$\nexit "$FAKE_RC"\n')
     (t / 'bin/STAR').chmod(stat.S_IRWXU)
     os.environ['PATH'] = f"{t / 'bin'}{os.pathsep}{os.environ['PATH']}"
     (t / 'idx/reference.lock.json').write_text(json.dumps({'request': {'STAR': '2.7.11b'}}))
@@ -149,12 +152,19 @@ with tempfile.TemporaryDirectory() as t:
     assert r['command'][r['command'].index('--outFilterMultimapNmax') + 1] == '7'
     assert json.loads((t / 'out/assignment.json').read_text()) == r
     assert sorted(p.name for p in (t / 'out').iterdir()) == ['assignment.json', 'host.fastq.gz', 'pathogen.fastq.gz']
-    for sam_file, rc in (('ok.sam', '3'), ('short.sam', '3')):
+    for sam_file, rc, status in (('ok.sam', '3', 3), ('short.sam', '3', 3), ('ok.sam', 'kill', -9), ('short.sam', 'kill', -9)):
         os.environ.update(FAKE_SAM=str(t / sam_file), FAKE_RC=rc)
         try: align(t / 'idx', [t / 'in.fq.gz'], t / 'out', 's1', 'grape', 'GRBV')
-        except RuntimeError as exc: assert 'STAR exited with status 3' in str(exc), exc
+        except RuntimeError as exc: assert f'STAR exited with status {status}' in str(exc), exc
         else: raise AssertionError('STAR failure accepted')
         assert not list((t / 'out').iterdir()), list((t / 'out').iterdir())
+    # A STAR that is still running when the stream is wrong is stopped, and the stream error is reported.
+    (t / 'swap.sam').write_text(sam('r2', 0, 'GRBV|chr1') + sam('r1', 0, 'grape|chr1'))
+    os.environ.update(FAKE_SAM=str(t / 'swap.sam'), FAKE_RC='hang')
+    try: align(t / 'idx', [t / 'in.fq.gz'], t / 'out', 's1', 'grape', 'GRBV')
+    except ValueError as exc: assert 'order' in str(exc), exc
+    else: raise AssertionError('out-of-order STAR output accepted')
+    assert not list((t / 'out').iterdir()), list((t / 'out').iterdir())
     (t / 'idx/reference.lock.json').write_text(json.dumps({'request': {'STAR': '2.7.10a'}}))
     try: align(t / 'idx', [t / 'in.fq.gz'], t / 'out', 's1', 'grape', 'GRBV')
     except ValueError as exc: assert 'version' in str(exc)

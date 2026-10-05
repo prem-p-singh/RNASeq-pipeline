@@ -14,6 +14,7 @@ from prepare_reads import records
 
 ROLES = ('host', 'pathogen')
 LABELS = ('host', 'pathogen', 'ambiguous', 'unassigned')
+STAR_EXIT_GRACE = 5  # seconds for a STAR whose output ended to exit
 DEFAULTS = dict(multimap_limit=20, ambiguous_warn_fraction=0.05)
 
 
@@ -169,10 +170,16 @@ def align(index, reads, outdir, sample, host_label, pathogen_label, limit=20, th
         try:
             counts = assign(proc.stdout, reads, outs, host_label, pathogen_label)
         except BaseException as exc:
-            # A STAR failure ends the stream early; report it rather than the symptom.
+            # A STAR that failed has ended the stream and exits at once: report it, not the symptom.
+            # One still running after the grace period did not fail; stop it and keep the stream error.
+            try:
+                failed = proc.wait(timeout=STAR_EXIT_GRACE) != 0
+            except subprocess.TimeoutExpired:
+                proc.terminate()
+                proc.wait()
+                failed = False
             proc.stdout.close()
-            proc.terminate()
-            if proc.wait() > 0:
+            if failed:
                 raise RuntimeError(f'STAR exited with status {proc.returncode}') from exc
             raise
         proc.stdout.close()

@@ -53,6 +53,18 @@ def recommend(cfg, n_samples=None):
             dual_organism.validate(cfg)
         except (ValueError, TypeError) as exc:
             issues.append(str(exc))
+        # The shared checks that still apply before any per-organism route is chosen.
+        if seq not in ("rnaseq_single", "rnaseq_paired", "tagseq", "srnaseq"):
+            issues.append(f"No implemented route for assay/layout {seq!r}")
+        if analysis.get("umi"):
+            issues.append("UMI extraction/deduplication has no qualified implementation")
+        if analysis.get("kit"):
+            issues.append("analysis.kit applies to seq_type tagseq only")
+        if not isinstance(objectives, list) or not objectives or not all(isinstance(x, str) for x in objectives):
+            issues.append("analysis.objectives must be a nonempty list of objective names")
+        elif set(objectives) - set(policy["objectives"]):
+            issues.append("Requested objectives have no implemented route: "
+                          + ", ".join(sorted(set(objectives) - set(policy["objectives"]))))
         dual = policy["dual_route"]
         return {
             "policy_version": policy["policy_version"],
