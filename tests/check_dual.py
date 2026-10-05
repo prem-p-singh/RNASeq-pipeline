@@ -23,9 +23,8 @@ try: validate({**ok, 'samples': {'seq_type': 'tagseq'}})
 except ValueError as exc: assert 'tagseq' in str(exc)
 else: raise AssertionError('tagseq accepted')
 
-assert label({'host'}, False) == 'host' and label({'pathogen'}, False) == 'pathogen'
-assert label({'host', 'pathogen'}, False) == 'ambiguous' and label(set(), False) == 'unassigned'
-assert label(set(), True) == 'unassigned'
+assert label({'host'}) == 'host' and label({'pathogen'}) == 'pathogen'
+assert label({'host', 'pathogen'}) == 'ambiguous' and label(set()) == 'unassigned'
 
 with tempfile.TemporaryDirectory() as t:
     t = Path(t)
@@ -63,4 +62,41 @@ with tempfile.TemporaryDirectory() as t:
     try: assign(['@HD\n', sam('r1', 0, 'grape|chr1')], [t / 'in.fq.gz'], outs, 'grape', 'GRBV')
     except ValueError as exc: assert 'conservation' in str(exc) or 'order' in str(exc)
     else: raise AssertionError('missing reads accepted')
+    # Hardening: paired input, mate mismatch, malformed references, no partial output.
+    fq(t / 'a1.fq.gz', ['r1/1', 'r2/1']); fq(t / 'a2.fq.gz', ['r1/2', 'r2/2']); fq(t / 'z2.fq.gz', ['zz/2', 'r2/2'])
+    po = {'host': [t / 'h1.fq.gz', t / 'h2.fq.gz'], 'pathogen': [t / 'p1.fq.gz', t / 'p2.fq.gz']}
+    pair = [t / 'a1.fq.gz', t / 'a2.fq.gz']
+    c = assign(['@HD\n', sam('r1', 0, 'grape|chr1'), sam('r1', 0, 'grape|chr2'), sam('r2', 0, 'grape|chr1'), sam('r2', 4, '*')],
+               pair, po, 'grape', 'GRBV')
+    assert c['host'] == 2, c
+    assert all(gzip.open(p, 'rt').read().count('@') == 2 for p in po['host'])
+    for p in po['host'] + po['pathogen']: p.unlink(missing_ok=True)
+    c = assign(['@HD\n', sam('r1', 0, 'grape|chr1'), sam('r1', 0, 'GRBV|chr1'), sam('r2', 0, 'GRBV|chr1'), sam('r2', 4, '*')],
+               pair, po, 'grape', 'GRBV')
+    assert c['ambiguous'] == 1 and c['pathogen'] == 1 and c['host'] == 0, c
+    assert gzip.open(po['pathogen'][0], 'rt').read().count('@') == 1
+    assert gzip.open(po['host'][0], 'rt').read() == ''
+    def none_left(ps):
+        return not any(p.exists() or Path(f'{p}.tmp').exists() for ps_ in ps.values() for p in ps_)
+    for p in po['host'] + po['pathogen']: p.unlink()
+    for bad, word in (([sam('r1', 0, 'grape|chr1'), sam('r2', 0, 'GRBV|chr1')], 'order'),
+                      ([sam('r1', 0, 'grape|chr1'), sam('r2', 0, 'other|chr1')], 'neither')):
+        fqs = [t / 'a1.fq.gz', t / 'z2.fq.gz'] if word == 'order' else pair
+        try: assign(['@HD\n'] + bad, fqs, po, 'grape', 'GRBV')
+        except ValueError as exc: assert word in str(exc), exc
+        else: raise AssertionError(word)
+        assert none_left(po)
+    (t / 'pd.fa').write_text('>a\nA\n>a\nC\n')
+    try: combine(t / 'h.fa', t / 'pd.fa', t / 'h.gtf', None, t / 'e.fa', t / 'e.gtf', 'grape', 'GRBV')
+    except ValueError as exc: assert 'Duplicate' in str(exc) and 'pathogen' in str(exc)
+    else: raise AssertionError('pathogen duplicate accepted')
+    (t / 'nn.fa').write_text('>a\nACGT'); (t / 'nn.gtf').write_text('a\tx\texon\t1\t4\t.\t+\t.\tgene_id "g";')
+    (t / 'pn.fa').write_text('>b\nGG\n'); (t / 'pn.gtf').write_text('b\tx\texon\t1\t2\t.\t+\t.\tgene_id "p";\n')
+    combine(t / 'nn.fa', t / 'pn.fa', t / 'nn.gtf', t / 'pn.gtf', t / 'n.fa', t / 'n.gtf', 'grape', 'GRBV')
+    assert (t / 'n.fa').read_text() == '>grape|a\nACGT\n>GRBV|b\nGG\n'
+    assert [l[:7] for l in (t / 'n.gtf').read_text().splitlines()] == ['grape|a', 'GRBV|b\t']
+    (t / 'eh.fa').write_text('>\nA\n')
+    try: combine(t / 'eh.fa', t / 'p.fa', t / 'h.gtf', None, t / 'f.fa', t / 'f.gtf', 'grape', 'GRBV')
+    except ValueError as exc: assert 'eh.fa' in str(exc)
+    else: raise AssertionError('empty header accepted')
 print('dual-organism labels, reference and splitting passed')

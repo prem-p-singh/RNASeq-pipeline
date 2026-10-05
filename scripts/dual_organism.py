@@ -41,13 +41,15 @@ def combine(host_fa, pathogen_fa, host_gtf, pathogen_gtf, out_fa, out_gtf, host_
             with open(fa) as f:
                 for line in f:
                     if line.startswith('>'):
-                        name = line[1:].split()[0]
-                        if name in seen:
-                            raise ValueError(f'Duplicate contig {name} in the {role} genome')
-                        seen.add(name)
-                        out.write(f'>{lab}|{name}\n')
+                        tokens = line[1:].split()
+                        if not tokens:
+                            raise ValueError(f'Empty FASTA header in {fa}')
+                        if tokens[0] in seen:
+                            raise ValueError(f'Duplicate contig {tokens[0]} in the {role} genome')
+                        seen.add(tokens[0])
+                        out.write(f'>{lab}|{tokens[0]}\n')
                     else:
-                        out.write(line)
+                        out.write(line if line.endswith('\n') else line + '\n')
             counts[f'{role}_contigs'] = len(seen)
     with open(out_gtf, 'w') as out:
         for gtf, lab in ((host_gtf, host_label), (pathogen_gtf, pathogen_label)):
@@ -55,11 +57,12 @@ def combine(host_fa, pathogen_fa, host_gtf, pathogen_gtf, out_fa, out_gtf, host_
                 continue
             with open(gtf) as f:
                 for line in f:
+                    line = line if line.endswith('\n') else line + '\n'
                     out.write(line if line.startswith('#') or not line.strip() else f'{lab}|{line}')
     return counts
 
 
-def label(organisms, too_many):
+def label(organisms):
     if organisms == {'host'}:
         return 'host'
     if organisms == {'pathogen'}:
@@ -68,29 +71,40 @@ def label(organisms, too_many):
 
 
 def assign(sam_lines, fastqs, outs, host_label, pathogen_label):
-    """One pass over STAR SAM (alignments of a read adjacent, input order) and the FASTQ(s)."""
+    """One pass over STAR SAM (alignments of a read adjacent, input order) and the FASTQ(s).
+
+    Outputs are written to <name>.tmp and renamed into place only after every check passes.
+    """
     roles = {host_label: 'host', pathogen_label: 'pathogen'}
     counts = dict(reads=0, host=0, pathogen=0, ambiguous=0, unassigned=0, too_many_loci=0)
     groups = itertools.groupby((l for l in sam_lines if not l.startswith('@')), key=lambda l: l.split('\t', 1)[0])
     readers = [records(p) for p in fastqs]
-    handles = {role: [gzip.open(p, 'wb') for p in paths] for role, paths in outs.items()}
+    temps = {role: [Path(f'{p}.tmp') for p in paths] for role, paths in outs.items()}
+    handles = {role: [] for role in outs}
     try:
+        for role, paths in temps.items():
+            handles[role] = []
+            for p in paths:
+                handles[role].append(gzip.open(p, 'wb'))
         for unit in zip(*readers):
             counts['reads'] += 1
             try:
                 name, lines = next(groups)
             except StopIteration:
                 raise ValueError(f'conservation failure: no alignment record for read {counts["reads"]}') from None
-            if name != unit[0][0].decode():
+            if any(name != u[0].decode() for u in unit):
                 raise ValueError(f'STAR output order mismatch at read {counts["reads"]}: {name}')
             organisms, too_many = set(), False
             for line in lines:
-                f = line.split('\t')
+                f = line.rstrip('\n').split('\t')
                 if int(f[1]) & 4:
-                    too_many = too_many or 'uT:A:3' in line
+                    too_many = too_many or 'uT:A:3' in f[11:]
                 else:
-                    organisms.add(roles[f[2].split('|', 1)[0]])
-            lab = label(organisms, too_many)
+                    prefix = f[2].split('|', 1)[0]
+                    if prefix not in roles:
+                        raise ValueError(f'Unexpected contig {f[2]} for read {name}: prefix is neither organism label')
+                    organisms.add(roles[prefix])
+            lab = label(organisms)
             counts[lab] += 1
             counts['too_many_loci'] += lab == 'unassigned' and too_many
             if lab in handles:
@@ -98,12 +112,23 @@ def assign(sam_lines, fastqs, outs, host_label, pathogen_label):
                     h.write(rec[1])
         if next(groups, None) is not None:
             raise ValueError('conservation failure: alignment records beyond the last read')
-    finally:
+        if counts['host'] + counts['pathogen'] + counts['ambiguous'] + counts['unassigned'] != counts['reads']:
+            raise ValueError('conservation failure in dual-organism assignment')
         for hs in handles.values():
             for h in hs:
                 h.close()
+        for role, paths in outs.items():
+            for p, t in zip(paths, temps[role]):
+                t.replace(p)
+    except BaseException:
+        for hs in handles.values():
+            for h in hs:
+                h.close()
+        for ts in temps.values():
+            for t in ts:
+                t.unlink(missing_ok=True)
+        raise
+    finally:
         for r in readers:
             r.close()
-    if counts['host'] + counts['pathogen'] + counts['ambiguous'] + counts['unassigned'] != counts['reads']:
-        raise ValueError('conservation failure in dual-organism assignment')
     return counts
