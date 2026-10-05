@@ -33,6 +33,21 @@ for path, value, word in ((('host', 'label'), 'a|b', 'label'), (('pathogen', 'la
 try: validate({**ok, 'samples': {'seq_type': 'tagseq'}})
 except ValueError as exc: assert 'tagseq' in str(exc)
 else: raise AssertionError('tagseq accepted')
+# Host objectives default to the project objectives; an explicit host list wins. Pathogen stays counts only.
+assert v['host']['objectives'] == ['gene_expression', 'differential_expression'], 'no project objectives: the fixed default'
+counts_only = {**ok, 'analysis': {'quantifier': 'star', 'objectives': ['gene_expression']}}
+assert validate(counts_only)['host']['objectives'] == ['gene_expression'] == validate(counts_only)['pathogen']['objectives']
+explicit = {**counts_only, 'dual_organism': {**ok['dual_organism'], 'host': {**ok['dual_organism']['host'], 'objectives': ['gene_expression', 'differential_expression']}}}
+assert validate(explicit)['host']['objectives'] == ['gene_expression', 'differential_expression']
+# Both organisms are quantified: a QC-only project is refused.
+try: validate({**ok, 'analysis': {'quantifier': 'star', 'objectives': ['qc']}})
+except ValueError as exc: assert 'quantification of both organisms' in str(exc), exc
+else: raise AssertionError('QC-only dual project accepted')
+for floor in (0, -1, 2.5, '100', True):
+    try: validate({**ok, 'dual_organism': {**ok['dual_organism'], 'pathogen': {**ok['dual_organism']['pathogen'], 'min_assigned_reads': floor}}})
+    except ValueError as exc: assert 'min_assigned_reads' in str(exc), exc
+    else: raise AssertionError(f'min_assigned_reads {floor!r} accepted')
+assert validate({**ok, 'dual_organism': {**ok['dual_organism'], 'pathogen': {**ok['dual_organism']['pathogen'], 'min_assigned_reads': 1}}})['pathogen']['min_assigned_reads'] == 1
 
 assert label({'host'}) == 'host' and label({'pathogen'}) == 'pathogen'
 assert label({'host', 'pathogen'}) == 'ambiguous' and label(set()) == 'unassigned'
@@ -258,6 +273,8 @@ with tempfile.TemporaryDirectory() as t:
     assert (t / 'dual/host' / cfg['reference']['decoys']).is_file() and (t / 'dual/host' / cfg['reference']['annotation_tsv']['path']).is_file()
     # The parent check and the written project come from one function.
     assert cfg == child_config(PARENT, 'host')
+    # A host block without objectives runs the project objectives.
+    assert child_config({**PARENT, 'analysis': {'quantifier': 'star', 'objectives': ['gene_expression']}}, 'host')['analysis']['objectives'] == ['gene_expression']
     absolute = {**PARENT, 'project': {'output_dir': '/data/out'}, 'reference': {'decoys': 'genome', 'annotation_tsv': {'path': '/data/info.tsv'}}}
     made = child_config(absolute, 'host')
     assert (made['project']['output_dir'], made['reference']['decoys'], made['reference']['annotation_tsv']['path']) == ('/data/out/host/', 'genome', '/data/info.tsv')

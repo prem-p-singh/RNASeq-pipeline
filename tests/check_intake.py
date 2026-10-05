@@ -600,6 +600,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     dual_rejected("pathogen_transcriptome", None, "pathogen_transcriptome is required")
     dual_rejected("pathogen_label", "a|b", "dual_organism.pathogen.label")
     dual_rejected("pathogen_label", "human", "labels must differ")
+    dual_rejected("analysis_goal", "QC only", "needs quantification of both organisms")
     dual_rejected("reference_gtf", None, "Incomplete custom reference")
     for key in ("reference_genome", "reference_gtf", "reference_transcriptome"):
         s[cells[key]] = None

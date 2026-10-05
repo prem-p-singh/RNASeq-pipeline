@@ -130,6 +130,8 @@ for bad, word in (({**dual, 'samples': {'seq_type': 'rnaseq_pared'}}, 'No implem
                   ({**dual, 'analysis': {'objectives': 'qc'}}, 'nonempty list')):
     b = recommend(bad)
     assert b['status'] == 'blocked' and b['route'] == 'dual_assignment' and any(word in i for i in b['issues']), (word, b['issues'])
+b = recommend({**star, 'analysis': {'quantifier': 'star', 'objectives': ['qc']}})
+assert b['status'] == 'blocked' and any('quantification of both organisms' in i for i in b['issues']), b['issues']
 r = recommend(star)
 assert r['status'] == 'selected' and not r['issues'], r
 print('dual-organism route selection passed')

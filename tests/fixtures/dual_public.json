@@ -22,11 +22,11 @@
       "protocol_excerpt": "Illumina TruSeq RNA Sample Prep Kit v2 protocol",
       "strand_note": "TruSeq RNA Sample Prep Kit v2 is listed as unstranded in config/kit_profiles.yaml (\"TruSeq RNA v2 (unstranded)\").",
       "biological_inference_eligible": false,
-      "inference_note": "Six of 52 field libraries, downsampled. The check qualifies the route; it is not a biological result.",
+      "inference_note": "Six of 52 field libraries. The check qualifies the route; it is not a biological result.",
       "downsample": {
-        "max_reads_per_run": 2000000,
+        "max_reads_per_run": null,
         "seed": 1,
-        "method": "reservoir sampling, pure Python stdlib (no seqtk)"
+        "method": "none: each verified download is used as it is (0.3 to 0.6 GB per run); a cap could leave too few virus reads to quantify"
       },
       "host": {
         "label": "grapevine",

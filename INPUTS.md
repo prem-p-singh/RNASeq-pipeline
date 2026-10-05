@@ -129,16 +129,17 @@ dual_organism:
     genome_fasta_url: ...
     gtf_url: ...                  # required
     transcriptome_fasta_url: ...  # required on the Salmon route
-    objectives: [gene_expression, differential_expression]
+    objectives: [gene_expression, differential_expression]  # default: analysis.objectives
   pathogen:
     label: GRBV
     genome_fasta_url: ...
     gtf_url: ...                  # required
     transcriptome_fasta_url: ...  # required on the Salmon route
-    objectives: [gene_expression] # or add differential_expression
+    objectives: [gene_expression] # default; or add differential_expression
     min_assigned_reads: 10000     # assumption
 ```
 
+- `host.objectives` defaults to the project objectives (`analysis.objectives`); `pathogen.objectives` defaults to counts only (`[gene_expression]`). A project with only the `qc` objective is refused.
 - The quantifier, read layout, preprocessing, model and contrasts at the top level apply to both organisms. A STAR project must declare `samples.expected_libtype`.
 - `analysis.salmon_position_bias` (default `true`) keeps Salmon position-bias correction on; set it to `false` for a very small transcript set, because Salmon 1.10.3 can crash in that correction when a transcript length class has no reads. The pathogen project always runs with it off and the host project follows this setting.
 - Each read gets one label: `host`, `pathogen`, `ambiguous` (best alignments in both organisms) or `unassigned` (no alignment; this includes a pair with one mate in each organism, which STAR does not align). Ambiguous and unassigned reads are counted in `results/assignment.tsv` and enter neither count table.

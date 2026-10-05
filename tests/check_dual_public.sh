@@ -2,8 +2,8 @@
 # Public-data check for the dual-organism route: grapevine with GRBV (--virus) or
 # Arabidopsis with Botrytis cinerea (--cellular).
 #
-# Runs on data already prepared by tests/fixtures/prepare_dual_public.py (downsampled
-# runs, one infected group and one healthy or mock group). The three phases are run
+# Runs on data already prepared by tests/fixtures/prepare_dual_public.py (runs
+# downsampled where the study sets a cap, one infected group and one healthy or mock group). The three phases are run
 # the way the launcher runs them: the parent workflow (assign and split),
 # `dual_organism.py children`, then each child project. Between the first two the
 # assignment is run a second time and its counts compared. The workflow fetches the
@@ -84,7 +84,7 @@ cfg = {
     'downstream': {'run_go': False, 'run_kegg': False, 'run_wgcna': False},
     'orgdb': {'strategy': 'skip'},
     'hpc': {'delete_fastq_after_quant': True},
-    # Runs are downsampled; the 20M production floor would exclude every host sample. Same value as
+    # Runs are downsampled or hold fewer than 20M reads; the 20M production floor would exclude host samples. Same value as
     # tests/check_tagseq_public.sh uses for its downsampled runs. The pathogen floor is min_assigned_reads.
     'thresholds': {'sample_qc': {'min_reads_on_genes_rnaseq': 100000}},
     # min_assigned_reads is left at the route default. Pathogen differential expression is requested so
@@ -114,8 +114,18 @@ run_case() {  # $1 = project dir (parent or child)
 run_case "$proj"
 cp "$proj/results/assignment.tsv" "$proj/assignment_first.tsv"
 echo "--- repeat of the assignment ---"
+touch "$proj/before_repeat"
 SMK_EXTRA="${SMK_EXTRA:-} --forcerun dual_assign" run_workflow "$proj" "$REPO" "$proj/repeat.log" results/assignment.tsv \
     || fail_log "repeat of the assignment in $proj" "$proj" "$proj/repeat.log"
+# The repeat proves nothing unless dual_assign ran again for every sample.
+expected=$(($(wc -l < "$proj/config/samples.tsv") - 1))
+rewritten=$(find "$proj/results/quant" -path '*/dual/assignment.json' -newer "$proj/before_repeat" | wc -l)
+if [ "$rewritten" -ne "$expected" ]; then
+    echo "FAIL: the repeat did not re-run dual_assign for every sample"
+    echo "  expected: $expected results/quant/<sample>/dual/assignment.json written after the repeat started"
+    echo "  found:    $((rewritten))"
+    exit 1
+fi
 
 python3 "$REPO/scripts/dual_organism.py" children --project "$proj"
 for role in host pathogen; do
@@ -167,10 +177,12 @@ for s in samples:
           f"{c['reads']} (reads)", c['host'] + c['pathogen'] + c['ambiguous'] + c['unassigned'] == c['reads'] and c['reads'] > 0)
 
 # 2. Every control has a lower pathogen-assigned fraction than every infected sample.
-fraction = {s: int(table[s]['pathogen']) / int(table[s]['reads']) for s in samples}
+empty = [s for s in samples if int(table[s]['reads']) == 0]
+check('2 samples with no reads (a pathogen fraction needs reads)', empty, [])
+fraction = {s: None if s in empty else int(table[s]['pathogen']) / int(table[s]['reads']) for s in samples}
 check('2 pathogen fraction, highest control below lowest infected',
       {'controls': {s: fraction[s] for s in controls}, 'infected': {s: fraction[s] for s in infected}},
-      'max(controls) < min(infected)', max(fraction[s] for s in controls) < min(fraction[s] for s in infected))
+      'max(controls) < min(infected)', not empty and max(fraction[s] for s in controls) < min(fraction[s] for s in infected))
 
 # 3. Count tables.
 check('3 host counts.tsv columns', columns(p / 'results/host/counts.tsv'), samples)
@@ -206,8 +218,9 @@ for s, row in record['samples'].items():
     print(s, *(f'{k}={v}' for k, v in row.items()))
 print(f"pathogen: {status['status']}, {len(status['samples'])} sample(s) quantified, differential expression {status['de']}"
       + (f" ({status['reason']})" if status['reason'] else ''))
-if not [s for s in infected if s in enough]:
-    print(f'WARNING: no infected sample has {floor} pathogen reads, so this run shows nothing about pathogen quantification')
+# Without one, the run shows nothing about pathogen quantification.
+check(f'infected samples with at least {floor} pathogen reads', [s for s in infected if s in enough], 'at least one',
+      any(s in enough for s in infected))
 if failures:
     sys.exit(f'{len(failures)} criterion check(s) failed for {study} in {p}')
 print(f'{study} dual-organism public check ({quantifier}): all five acceptance criteria held')

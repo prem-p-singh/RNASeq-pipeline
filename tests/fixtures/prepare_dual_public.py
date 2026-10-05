@@ -33,6 +33,16 @@ def ena_md5(run):
     return rows[0]['fastq_md5'].split(';')
 
 
+def as_is(src, dst):
+    """No read cap: move the verified download into place unchanged and count its records."""
+    with gzip.open(src, 'rb') as f:
+        lines = sum(1 for _ in f)
+    if lines % 4:
+        raise ValueError(f'{src.name}: FASTQ line count not a multiple of 4')
+    src.replace(dst)
+    return dict(reads_in=lines // 4, reads_kept=lines // 4)
+
+
 def exon_annotation(source_gtf, genome, out_gtf, out_fasta):
     """One exon row and one transcript sequence per gene row of a GTF that has no exon rows.
 
@@ -101,11 +111,14 @@ def prepare(study, destination):
             acc = run['accession']
             md5s = run['fastq_md5'] or ena_md5(run)
             kept, entry = [], dict(group=run['group'], title=run['title'], files=[])
+            if not len(run['fastq_url']) == len(md5s) == len(run['fastq_bytes']):
+                raise ValueError(f"{acc}: {len(run['fastq_url'])} URL(s), {len(md5s)} MD5 value(s) and {len(run['fastq_bytes'])} size(s)")
+            cap = spec['downsample']['max_reads_per_run']
             for url, md5, size in zip(run['fastq_url'], md5s, run['fastq_bytes']):
                 name = url.rsplit('/', 1)[1]
                 source = fetch(url, raw_dir / name, md5, size)
                 # The same seed keeps the same record numbers in both mates of a pair.
-                counts = downsample(raw_dir / name, out / name, spec['downsample']['max_reads_per_run'], spec['downsample']['seed'])
+                counts = as_is(raw_dir / name, out / name) if cap is None else downsample(raw_dir / name, out / name, cap, spec['downsample']['seed'])
                 entry['files'].append(dict(source=dict(source, md5=md5), derived=dict(sha256=digest(out / name), **counts)))
                 kept.append(str(out / name))
             if len({f['derived']['reads_in'] for f in entry['files']}) != 1:

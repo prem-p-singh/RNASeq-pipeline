@@ -382,7 +382,7 @@ def setup_inputs(record):
                                   objectives=pathogen_objectives,
                                   min_assigned_reads=int(a.get("pathogen_min_reads") or 10000)))
         try:
-            dual_organism.validate(dict(samples=dict(seq_type=layout), analysis=dict(quantifier=quantifier), dual_organism=dual))
+            dual_organism.validate(dict(samples=dict(seq_type=layout), analysis=dict(quantifier=quantifier, objectives=objectives), dual_organism=dual))
         except ValueError as exc:
             fail("dual_organism", str(exc))
     contrasts = []

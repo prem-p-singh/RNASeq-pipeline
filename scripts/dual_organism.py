@@ -31,6 +31,11 @@ def validate(cfg):
     d = dict(DEFAULTS, **(cfg.get('dual_organism') or {}))
     if cfg.get('samples', {}).get('seq_type') in ('tagseq', 'srnaseq'):
         raise ValueError(f"dual_organism does not support seq_type {cfg['samples']['seq_type']}")
+    project = (cfg.get('analysis') or {}).get('objectives')
+    if isinstance(project, list) and set(project) == {'qc'}:
+        raise ValueError('dual_organism needs quantification of both organisms; analysis.objectives of only qc is not supported')
+    if not (isinstance(project, list) and project):
+        project = ['gene_expression', 'differential_expression']
     for role in ROLES:
         o = dict(d.get(role) or {})
         if not isinstance(o.get('label'), str) or not re.fullmatch(r'[A-Za-z0-9_.-]+', o['label']):
@@ -38,7 +43,7 @@ def validate(cfg):
         if not o.get('genome_fasta_url'):
             raise ValueError(f'dual_organism.{role}.genome_fasta_url is required')
         if o.get('objectives') is None:
-            o['objectives'] = ['gene_expression', 'differential_expression'] if role == 'host' else ['gene_expression']
+            o['objectives'] = list(project) if role == 'host' else ['gene_expression']
         d[role] = o
     if d['host']['label'] == d['pathogen']['label']:
         raise ValueError('dual_organism host and pathogen labels must differ')
@@ -53,6 +58,8 @@ def validate(cfg):
             raise ValueError(f'dual_organism.{role}.transcriptome_fasta_url is required on the Salmon route')
     if d['pathogen'].get('min_assigned_reads') is None:
         d['pathogen']['min_assigned_reads'] = 10000
+    if type(d['pathogen']['min_assigned_reads']) is not int or d['pathogen']['min_assigned_reads'] < 1:
+        raise ValueError('dual_organism.pathogen.min_assigned_reads must be an integer of at least 1')
     if type(d['multimap_limit']) is not int or d['multimap_limit'] < 1:
         raise ValueError('dual_organism.multimap_limit must be a positive integer')
     return d
@@ -110,7 +117,8 @@ def assign(sam_lines, fastqs, outs, host_label, pathogen_label):
         for role, paths in temps.items():
             handles[role] = []
             for p in paths:
-                handles[role].append(gzip.open(p, 'wb'))
+                # Level 1: the default level 9 is too slow for a real library, and the child project's fastp recompresses.
+                handles[role].append(gzip.open(p, 'wb', compresslevel=1))
         for unit in zip(*readers):
             counts['reads'] += 1
             try:

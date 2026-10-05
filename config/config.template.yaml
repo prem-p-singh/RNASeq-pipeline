@@ -123,7 +123,7 @@ dual_organism:
     genome_fasta_url: null
     gtf_url: null
     transcriptome_fasta_url: null               # Salmon route
-    objectives: null                            # null: gene_expression and differential_expression
+    objectives: null                            # null: the project's analysis.objectives
   pathogen:
     label: null
     genome_fasta_url: null

@@ -15,7 +15,7 @@
 #   200 reads inside P1, infected only -> pathogen
 # min_assigned_reads is 100, so the pathogen project holds S4-S6 only.
 # A further paired-end project has one library: 30 pairs with both mates in H1 (host)
-# and 20 pairs with mate 1 in H1 and mate 2 in P1 (ambiguous, design section 4).
+# and 20 pairs with mate 1 in H1 and mate 2 in P1 (unassigned, design section 4).
 #
 # Build the fixture alone (python3 and PyYAML only) and print read counts per class:
 #   bash tests/check_dual_workflow.sh --fixture DIR
