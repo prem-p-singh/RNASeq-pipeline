@@ -19,6 +19,7 @@ analysis:
   kit: null                                      # TAG-seq: a name from config/tagseq_kits.yaml
 
 preprocessing:
+  passthrough: false                              # skip trimming/filtering for already-processed reads
   # fastp instrument-header detection; explicitly set on/off for known chemistry.
   poly_g: auto
   adapter_r1: ""

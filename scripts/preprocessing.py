@@ -10,7 +10,7 @@ import subprocess
 
 from prepare_reads import records
 
-DEFAULTS = dict(poly_g="auto", adapter_r1="", adapter_r2="", minimum_length=15,
+DEFAULTS = dict(passthrough=False, poly_g="auto", adapter_r1="", adapter_r2="", minimum_length=15,
                 qualified_quality_phred=15, unqualified_percent_limit=40, length_limit=0,
                 trim_front=0, umi_len=0, umi_skip=0, poly_x=False)
 
@@ -20,6 +20,13 @@ def policy_args(policy, paired):
     if unknown:
         raise ValueError(f"Unknown preprocessing settings: {sorted(unknown)}")
     p = DEFAULTS | policy
+    if p["passthrough"] is not False:
+        if p["passthrough"] is not True:
+            raise ValueError("preprocessing.passthrough must be true or false")
+        changed = sorted(k for k in p if k != "passthrough" and p[k] != DEFAULTS[k])
+        if changed:
+            raise ValueError(f"preprocessing.passthrough cannot be combined with {changed}")
+        return p, ["-A", "-Q", "-L", "-G"]
     if p["poly_g"] not in ("auto", "on", "off"):
         raise ValueError("preprocessing.poly_g must be auto, on or off")
     for name, low, high in (("minimum_length", 1, 10000),

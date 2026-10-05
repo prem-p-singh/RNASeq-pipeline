@@ -100,3 +100,16 @@ with tempfile.TemporaryDirectory() as t:
     except ValueError as exc: assert 'eh.fa' in str(exc)
     else: raise AssertionError('empty header accepted')
 print('dual-organism labels, reference and splitting passed')
+
+# Pass-through preprocessing for already-processed reads (Task 2)
+sys.path.insert(0, str(ROOT / 'scripts'))
+from preprocessing import policy_args
+p, args = policy_args({'passthrough': True}, paired=False)
+assert args == ['-A', '-Q', '-L', '-G'], args
+p, args = policy_args({'passthrough': True}, paired=True)
+assert args == ['-A', '-Q', '-L', '-G'], args
+assert '-A' not in policy_args({}, paired=False)[1]
+try: policy_args({'passthrough': True, 'adapter_r1': 'ACGT'}, paired=False)
+except ValueError as exc: assert 'passthrough' in str(exc)
+else: raise AssertionError('passthrough with trimming settings accepted')
+print('pass-through preprocessing passed')
