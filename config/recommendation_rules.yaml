@@ -27,6 +27,10 @@ small_rna_routes:  # srnaseq, keyed by analysis.small_rna_profile
     rule_ids: []
     handbook_ids: []
     count_treatment: raw_small_rna_counts
+dual_route:  # dual_organism.enabled: reads are assigned to host or pathogen before any per-organism route
+  route: dual_assignment
+  rule_ids: []
+  handbook_ids: []
 objectives: [alignment, qc, gene_expression, differential_expression, enrichment, coexpression]
 backends:
   fixed: {name: limma_voom, rule_ids: [ST01, ST02]}

@@ -3,6 +3,7 @@
 import hashlib
 from pathlib import Path
 import yaml
+import dual_organism
 from small_rna import load_kit
 import tagseq
 
@@ -46,6 +47,26 @@ def recommend(cfg, n_samples=None):
     analysis = cfg.get("analysis") or {}
     objectives = analysis.get("objectives", ["gene_expression", "differential_expression"])
     issues = []
+    if (cfg.get("dual_organism") or {}).get("enabled"):
+        # Reads are assigned to an organism first; each organism then gets its own route.
+        try:
+            dual_organism.validate(cfg)
+        except (ValueError, TypeError) as exc:
+            issues.append(str(exc))
+        dual = policy["dual_route"]
+        return {
+            "policy_version": policy["policy_version"],
+            "policy_sha256": hashlib.sha256(POLICY.read_bytes()).hexdigest(),
+            "status": "blocked" if issues else "selected",
+            "route": dual["route"], "backend": None, "count_treatment": None,
+            "rule_ids": dual["rule_ids"], "handbook_ids": dual["handbook_ids"],
+            "inputs": {"seq_type": seq, "n_samples": n_samples, "objectives": objectives,
+                       "fixed_effects": cfg.get("model", {}).get("fixed_effects"),
+                       "random_effects": cfg.get("model", {}).get("random_effects")},
+            "reasons": ["dual_organism.enabled: STAR assigns each read to host or pathogen on the combined genome."],
+            "qualification": "experimental; no public-data check passed",
+            "alternatives": policy["alternatives"], "issues": issues,
+        }
     route = policy["routes"].get(seq)
     if seq == "srnaseq":
         route = policy["small_rna_routes"].get(analysis.get("small_rna_profile"))

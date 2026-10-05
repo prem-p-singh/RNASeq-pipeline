@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 """Host and pathogen in one library: combined reference, read labels and splitting."""
+import argparse
 import gzip
 import itertools
+import json
+import os
 import re
+import subprocess
+import tempfile
 from pathlib import Path
 
 from prepare_reads import records
 
 ROLES = ('host', 'pathogen')
+LABELS = ('host', 'pathogen', 'ambiguous', 'unassigned')
 DEFAULTS = dict(multimap_limit=20, ambiguous_warn_fraction=0.05)
 
 
@@ -21,13 +27,15 @@ def validate(cfg):
             raise ValueError(f'dual_organism.{role}.label must be letters, digits, _ . - (no | or spaces)')
         if not o.get('genome_fasta_url'):
             raise ValueError(f'dual_organism.{role}.genome_fasta_url is required')
-        o.setdefault('objectives', ['gene_expression', 'differential_expression'] if role == 'host' else ['gene_expression'])
+        if o.get('objectives') is None:
+            o['objectives'] = ['gene_expression', 'differential_expression'] if role == 'host' else ['gene_expression']
         d[role] = o
     if d['host']['label'] == d['pathogen']['label']:
         raise ValueError('dual_organism host and pathogen labels must differ')
     if not d['host'].get('gtf_url'):
         raise ValueError('dual_organism.host.gtf_url is required')
-    d['pathogen'].setdefault('min_assigned_reads', 10000)
+    if d['pathogen'].get('min_assigned_reads') is None:
+        d['pathogen']['min_assigned_reads'] = 10000
     if type(d['multimap_limit']) is not int or d['multimap_limit'] < 1:
         raise ValueError('dual_organism.multimap_limit must be a positive integer')
     return d
@@ -132,3 +140,92 @@ def assign(sam_lines, fastqs, outs, host_label, pathogen_label):
         for r in readers:
             r.close()
     return counts
+
+
+def align(index, reads, outdir, sample, host_label, pathogen_label, limit=20, threads=4):
+    """Align once to the combined genome, split the reads and write assignment.json last."""
+    import star_counts
+    index, outdir = Path(index).resolve(), Path(outdir).resolve()
+    lock = json.loads((index / 'reference.lock.json').read_text())
+    star = star_counts.version('STAR')
+    if star != lock['request']['STAR']:
+        raise ValueError('STAR version differs from index builder')
+    reads = [str(Path(r).resolve()) for r in reads]
+    inputs = [star_counts.identity(r) for r in reads]
+    outdir.mkdir(parents=True, exist_ok=True)
+    outs = {role: [outdir / f'{role}{mate}.fastq.gz' for mate in (('_R1', '_R2') if len(reads) == 2 else ('',))]
+            for role in ROLES}
+    record = outdir / 'assignment.json'
+    for path in [record] + [p for paths in outs.values() for p in paths]:
+        path.unlink(missing_ok=True)
+    with tempfile.TemporaryDirectory(prefix='.star-', dir=outdir) as tmp:
+        cmd = ['STAR', '--runThreadN', str(threads), '--genomeDir', str(index),
+               '--readFilesIn', *reads, '--readFilesCommand', 'zcat',
+               '--outFilterMultimapNmax', str(limit), '--outSAMmultNmax', '-1',
+               '--outSAMtype', 'SAM', '--outStd', 'SAM', '--outSAMorder', 'PairedKeepInputOrder',
+               '--outSAMunmapped', 'Within', '--outSAMattributes', 'NH', 'HI', 'AS',
+               '--outFileNamePrefix', tmp + '/']
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
+        try:
+            counts = assign(proc.stdout, reads, outs, host_label, pathogen_label)
+        except BaseException as exc:
+            # A STAR failure ends the stream early; report it rather than the symptom.
+            proc.stdout.close()
+            proc.terminate()
+            if proc.wait() > 0:
+                raise RuntimeError(f'STAR exited with status {proc.returncode}') from exc
+            raise
+        proc.stdout.close()
+        if proc.wait() != 0:
+            for path in (p for paths in outs.values() for p in paths):
+                path.unlink(missing_ok=True)
+            raise RuntimeError(f'STAR exited with status {proc.returncode}')
+    result = dict(schema_version=1, sample=sample, counts=counts, labels=dict(host=host_label, pathogen=pathogen_label),
+                  multimap_limit=limit, versions={'STAR': star}, command=cmd, input_files=inputs,
+                  reference_lock_sha256=star_counts.identity(index / 'reference.lock.json')['sha256'])
+    staged = Path(f'{record}.tmp')
+    staged.write_text(json.dumps(result, indent=2) + '\n')
+    staged.replace(record)
+    return result
+
+
+def table(records, warn):
+    lines = ['\t'.join(['sample', 'reads', *LABELS, 'too_many_loci', *(f'{k}_fraction' for k in LABELS), 'warnings'])]
+    for r in records:
+        c = r['counts']
+        fractions = [c[k] / c['reads'] if c['reads'] else 0.0 for k in LABELS]
+        warnings = f'ambiguous fraction {fractions[2]:.4f} above {warn}' if fractions[2] > warn else ''
+        lines.append('\t'.join([r['sample'], *(str(c[k]) for k in ('reads', *LABELS, 'too_many_loci')),
+                                *(f'{x:.6f}' for x in fractions), warnings]))
+    return '\n'.join(lines) + '\n'
+
+
+if __name__ == '__main__':
+    ap = argparse.ArgumentParser(description=__doc__)
+    sub = ap.add_subparsers(dest='command', required=True)
+    c = sub.add_parser('combine')
+    for name in ('host', 'pathogen', 'host-gtf', 'out-fa', 'out-gtf'):
+        c.add_argument(f'--{name}', required=True)
+    c.add_argument('--pathogen-gtf', default='')
+    a = sub.add_parser('assign')
+    a.add_argument('--index', required=True); a.add_argument('--reads', nargs='+', required=True)
+    a.add_argument('--outdir', required=True); a.add_argument('--sample', required=True)
+    a.add_argument('--multimap-limit', type=int, default=20); a.add_argument('--threads', type=int, default=4)
+    for p in (c, a):
+        p.add_argument('--host-label', required=True); p.add_argument('--pathogen-label', required=True)
+    t = sub.add_parser('table')
+    t.add_argument('--warn', type=float, required=True); t.add_argument('--out', required=True)
+    t.add_argument('records', nargs='+')
+    args = ap.parse_args()
+    if args.command == 'combine':
+        with tempfile.TemporaryDirectory(prefix='.combine-', dir=Path(args.out_fa).parent) as tmp:
+            fa, gtf = Path(tmp) / 'combined.fa', Path(tmp) / 'combined.gtf'
+            combine(args.host, args.pathogen, args.host_gtf, args.pathogen_gtf or None, fa, gtf,
+                    args.host_label, args.pathogen_label)
+            os.replace(fa, args.out_fa)
+            os.replace(gtf, args.out_gtf)
+    elif args.command == 'assign':
+        align(args.index, args.reads, args.outdir, args.sample, args.host_label, args.pathogen_label,
+              args.multimap_limit, args.threads)
+    else:
+        Path(args.out).write_text(table([json.loads(Path(r).read_text()) for r in args.records], args.warn))

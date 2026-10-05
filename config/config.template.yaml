@@ -106,6 +106,30 @@ reference:
   # A species-correct map can be reintroduced when something actually needs it.
 
 # -----------------------------------------------------------------------------
+# Host and pathogen in one library (experimental)
+# -----------------------------------------------------------------------------
+# One STAR alignment to the combined genome labels each read host, pathogen,
+# ambiguous or unassigned; ambiguous and unassigned reads enter neither organism.
+# Not available for TAG-seq or small RNA.
+dual_organism:
+  enabled: false
+  multimap_limit: 20                            # best alignments allowed per read; more counts as unassigned
+  ambiguous_warn_fraction: 0.05                 # warn in results/assignment.tsv above this ambiguous fraction
+  host:
+    label: null                                 # letters, digits, _ . - ; prefixed to contig names
+    genome_fasta_url: null
+    gtf_url: null
+    transcriptome_fasta_url: null               # Salmon route
+    objectives: null                            # null: gene_expression and differential_expression
+  pathogen:
+    label: null
+    genome_fasta_url: null
+    gtf_url: null                               # optional
+    transcriptome_fasta_url: null
+    objectives: null                            # null: gene_expression
+    min_assigned_reads: 10000
+
+# -----------------------------------------------------------------------------
 # Samples
 # -----------------------------------------------------------------------------
 samples:

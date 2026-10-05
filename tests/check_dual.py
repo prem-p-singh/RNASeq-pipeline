@@ -13,6 +13,9 @@ ok = {'dual_organism': {'enabled': True,
 v = validate(ok)
 assert v['multimap_limit'] == 20 and v['ambiguous_warn_fraction'] == 0.05
 assert v['pathogen']['min_assigned_reads'] == 10000 and v['pathogen']['objectives'] == ['gene_expression']
+# Null fields from the config template mean unset.
+nulls = {**ok, 'dual_organism': {**ok['dual_organism'], 'pathogen': {**ok['dual_organism']['pathogen'], 'objectives': None, 'min_assigned_reads': None, 'gtf_url': None}}}
+assert validate(nulls)['pathogen'] == v['pathogen'] | {'gtf_url': None}
 for path, value, word in ((('host', 'label'), 'a|b', 'label'), (('pathogen', 'label'), 'grape', 'differ'),
                           (('pathogen', 'genome_fasta_url'), None, 'genome_fasta_url')):
     bad = {**ok, 'dual_organism': {**ok['dual_organism'], path[0]: {**ok['dual_organism'][path[0]], path[1]: value}}}
@@ -113,3 +116,47 @@ try: policy_args({'passthrough': True, 'adapter_r1': 'ACGT'}, paired=False)
 except ValueError as exc: assert 'passthrough' in str(exc)
 else: raise AssertionError('passthrough with trimming settings accepted')
 print('pass-through preprocessing passed')
+
+# Cohort assignment table (Task 3)
+from dual_organism import table
+HEADER = ('sample\treads\thost\tpathogen\tambiguous\tunassigned\ttoo_many_loci\thost_fraction\tpathogen_fraction\t'
+          'ambiguous_fraction\tunassigned_fraction\twarnings')
+rows = table([{'sample': 's1', 'counts': dict(reads=100, host=80, pathogen=10, ambiguous=6, unassigned=4, too_many_loci=1)},
+              {'sample': 's2', 'counts': dict(reads=0, host=0, pathogen=0, ambiguous=0, unassigned=0, too_many_loci=0)}], 0.05).splitlines()
+assert rows[0] == HEADER and len(rows) == 3, rows
+s1, s2 = (dict(zip(HEADER.split('\t'), r.split('\t'))) for r in rows[1:])
+assert s1['host_fraction'] == '0.800000' and 'ambiguous fraction' in s1['warnings'], s1
+assert s2['warnings'] == '' and s2['host_fraction'] == '0.000000', s2
+print('dual-organism assignment table passed')
+
+# STAR wiring, with a stand-in STAR: record written last, STAR failure reported, nothing partial left.
+import json, os, stat
+from dual_organism import align
+with tempfile.TemporaryDirectory() as t:
+    t = Path(t)
+    (t / 'bin').mkdir(); (t / 'idx').mkdir()
+    (t / 'bin/STAR').write_text('#!/bin/sh\n[ "$1" = --version ] && { echo 2.7.11b; exit 0; }\ncat "$FAKE_SAM"; exit "$FAKE_RC"\n')
+    (t / 'bin/STAR').chmod(stat.S_IRWXU)
+    os.environ['PATH'] = f"{t / 'bin'}{os.pathsep}{os.environ['PATH']}"
+    (t / 'idx/reference.lock.json').write_text(json.dumps({'request': {'STAR': '2.7.11b'}}))
+    with gzip.open(t / 'in.fq.gz', 'wt') as f:
+        for n in ('r1', 'r2'): f.write(f'@{n}\nACGT\n+\nIIII\n')
+    (t / 'ok.sam').write_text('@HD\tVN:1.4\n' + sam('r1', 0, 'grape|chr1') + sam('r2', 0, 'GRBV|chr1'))
+    (t / 'short.sam').write_text(sam('r1', 0, 'grape|chr1'))
+    os.environ.update(FAKE_SAM=str(t / 'ok.sam'), FAKE_RC='0')
+    r = align(t / 'idx', [t / 'in.fq.gz'], t / 'out', 's1', 'grape', 'GRBV', limit=7, threads=2)
+    assert r['counts']['host'] == r['counts']['pathogen'] == 1 and r['sample'] == 's1', r
+    assert r['command'][r['command'].index('--outFilterMultimapNmax') + 1] == '7'
+    assert json.loads((t / 'out/assignment.json').read_text()) == r
+    assert sorted(p.name for p in (t / 'out').iterdir()) == ['assignment.json', 'host.fastq.gz', 'pathogen.fastq.gz']
+    for sam_file, rc in (('ok.sam', '3'), ('short.sam', '3')):
+        os.environ.update(FAKE_SAM=str(t / sam_file), FAKE_RC=rc)
+        try: align(t / 'idx', [t / 'in.fq.gz'], t / 'out', 's1', 'grape', 'GRBV')
+        except RuntimeError as exc: assert 'STAR exited with status 3' in str(exc), exc
+        else: raise AssertionError('STAR failure accepted')
+        assert not list((t / 'out').iterdir()), list((t / 'out').iterdir())
+    (t / 'idx/reference.lock.json').write_text(json.dumps({'request': {'STAR': '2.7.10a'}}))
+    try: align(t / 'idx', [t / 'in.fq.gz'], t / 'out', 's1', 'grape', 'GRBV')
+    except ValueError as exc: assert 'version' in str(exc)
+    else: raise AssertionError('STAR version mismatch accepted')
+print('dual-organism STAR wiring passed')

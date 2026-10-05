@@ -37,6 +37,7 @@ import metadata as metadata_tables
 from recommend import recommend, requires_inference
 from preprocessing import policy_args
 from screen_reads import validate as validate_screen, index_files
+from dual_organism import validate as validate_dual
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "config" / "spec.yaml"
@@ -105,6 +106,12 @@ def check_config(cfg: dict, repo_root, iss: Issues) -> dict:
         validate_screen(resolved["screening"])
     except (ValueError, TypeError) as exc:
         iss.add("CFG003", "screening", str(exc))
+
+    if (resolved.get("dual_organism") or {}).get("enabled"):
+        try:
+            validate_dual(resolved)
+        except (ValueError, TypeError) as exc:
+            iss.add("CFG003", "dual_organism", str(exc))
 
     ref = resolved.get("reference") or {}
     if type(ref.get("star_overhang")) is not int or ref["star_overhang"] < 1:

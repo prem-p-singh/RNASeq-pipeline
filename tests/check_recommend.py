@@ -95,3 +95,15 @@ for bad, word in (({**tag, 'reference': {'genome_fasta_url': 'file:///g.fa'}}, '
                   ({**tag, 'analysis': {**tag['analysis'], 'quantifier': 'salmon'}}, 'STAR route')):
     assert any(word in i for i in recommend(bad)['issues']), recommend(bad)['issues']
 print('TAG-seq kit route blocks passed')
+dual = {'samples': {'seq_type': 'rnaseq_paired'},
+        'dual_organism': {'enabled': True,
+                          'host': {'label': 'grape', 'genome_fasta_url': 'file:///h.fa', 'gtf_url': 'file:///h.gtf'},
+                          'pathogen': {'label': 'GRBV', 'genome_fasta_url': 'file:///p.fa'}}}
+r = recommend(dual)
+assert (r['status'], r['route'], r['backend'], r['count_treatment']) == ('selected', 'dual_assignment', None, None), r
+assert not r['issues'] and r['qualification'] == 'experimental; no public-data check passed', r
+b = recommend({**dual, 'samples': {'seq_type': 'tagseq'}})
+assert b['status'] == 'blocked' and any('tagseq' in i for i in b['issues']), b['issues']
+off = recommend({**dual, 'dual_organism': {**dual['dual_organism'], 'enabled': False}})
+assert (off['route'], off['backend']) == ('salmon_bulk', 'limma_voom'), off
+print('dual-organism route selection passed')

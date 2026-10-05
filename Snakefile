@@ -57,6 +57,9 @@ import tagseq as _tagseq
 RECOMMENDATION = _recommend(config)
 if RECOMMENDATION["issues"]:
     raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
+# Host and pathogen in one library: None unless dual_organism.enabled.
+import dual_organism as _dual
+DUAL = _dual.validate(config) if (config.get("dual_organism") or {}).get("enabled") else None
 # Small-RNA and named TAG-seq kits fix adapter, trimming and UMI settings; the kit table wins
 # over the generic policy, and a config that sets a kit key to another value is refused.
 TAGSEQ_KIT = _tagseq.load_kit(config["analysis"]["kit"]) if RECOMMENDATION["route"] == "star_tagseq" else None
@@ -144,7 +147,11 @@ SALMON_DECOYS = _ref_cfg.get("decoys") or None
 # in annotation release, k-mer or decoy status shared one directory and
 # consumed each other's index. The digest below covers all of them.
 import star_counts as _star
-if QC_ONLY:
+if DUAL:
+    CACHE_KEY = "dual-" + hashlib.sha256(json.dumps({
+        "organisms": {role: {k: DUAL[role].get(k) for k in ("label", "genome_fasta_url", "gtf_url")} for role in _dual.ROLES},
+        "star_overhang": _ref_cfg.get("star_overhang")}, sort_keys=True).encode()).hexdigest()[:16]
+elif QC_ONLY:
     CACHE_KEY = "unused-qc"
 elif STAR_ROUTE:
     CACHE_KEY = _star.cache_key(_ref_cfg)
@@ -162,7 +169,7 @@ else:
 
 # Refuse an entry that is incomplete or was built from other parameters,
 # rather than reading whatever happens to sit at that path.
-if not QC_ONLY and not STAR_ROUTE and not SMALL_RNA_ROUTE and _ref_cache and REF.exists():
+if not DUAL and not QC_ONLY and not STAR_ROUTE and not SMALL_RNA_ROUTE and _ref_cache and REF.exists():
     _entry_issues = _refcache.verify_entry(REF, _ref_cfg, SALMON_KMER, SALMON_DECOYS)
     _fatal = [i for i in _entry_issues if not i.startswith(("missing ", "empty "))]
     if _fatal:
@@ -186,7 +193,7 @@ if not _snapshot_path.exists() or _snapshot_path.read_text() != _snapshot:
     _snapshot_path.write_text(_snapshot)
 _lock_path = REPO_DIR / "environments/linux-64.explicit.txt"
 RUNTIME_ID = hashlib.sha256(_lock_path.read_bytes()).hexdigest() if _lock_path.exists() else "unlocked"
-if STAR_ROUTE:
+if STAR_ROUTE or DUAL:
     RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/star-linux-64.explicit.txt").read_bytes()).hexdigest()
 if SMALL_RNA_ROUTE:
     RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/srna-linux-64.explicit.txt").read_bytes()).hexdigest()
@@ -223,6 +230,8 @@ include: "workflow/rules/star.smk"
 include: "workflow/rules/small_rna.smk"
 include: "workflow/rules/qc_report.smk"
 include: "workflow/rules/aggregate.smk"
+if DUAL:
+    include: "workflow/rules/dual.smk"
 
 # --- Conditional target helpers -----------------------------------------
 def all_targets():
@@ -230,6 +239,8 @@ def all_targets():
     early = [OUT / "preprocessing_report/multiqc_report.html",
              *expand(str(QUANT / "{sample}/fastp.html"), sample=SAMPLES)]
     early += expand(str(QUANT / "{sample}/screening/screening.{ext}"), sample=SAMPLES, ext=["json", "tsv", "html"])
+    if DUAL:
+        return early + [OUT / "assignment.tsv", *expand(DUAL_SPLIT, sample=SAMPLES)]
     if QC_ONLY:
         return early
     targets = early + [

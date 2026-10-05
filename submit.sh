@@ -214,7 +214,7 @@ if ! python3 "$REPO/scripts/preflight.py" -d "$PROJDIR" -c "$CONFIG"; then
     exit 1
 fi
 echo "-----------------"
-if [ "$PLAN_ONLY" -eq 0 ] && python3 -c 'import json,sys;sys.exit(json.load(open("gates/recommendation.json"))["route"] not in ("star_counts", "star_tagseq"))'; then
+if [ "$PLAN_ONLY" -eq 0 ] && python3 -c 'import json,sys;sys.exit(json.load(open("gates/recommendation.json"))["route"] not in ("star_counts", "star_tagseq", "dual_assignment"))'; then
     STAR_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module star)
     export PATH="$STAR_PREFIX/bin:$PATH"
     cp "$STAR_PREFIX/environment_report.json" gates/star_environment_report.json
