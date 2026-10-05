@@ -51,8 +51,8 @@ inputs.mkdir(parents=True)
 (inputs / 'host.fa').write_text(f'>chr1\n{host}\n')
 (inputs / 'pathogen.fa').write_text(f'>chr1\n{pathogen}\n')
 gtf = 'chr1\tfixture\texon\t{}\t{}\t.\t+\t.\tgene_id "{}"; transcript_id "{}_tx";\n'
-# H2 has no reads. It is here because Salmon 1.10.3 with --posBias crashes (segmentation fault) on an
-# index of exactly two transcripts when one of them has no reads (FARM job 39410501).
+# H2 has no reads, so the host has one expressed gene and two unexpressed genes of another length. That is
+# the shape on which Salmon 1.10.3 with --posBias crashes (FARM jobs 39410501 and 39411257).
 (inputs / 'host.gtf').write_text(gtf.format(5001, 10000, 'H1', 'H1') + gtf.format(15001, 17000, 'H2', 'H2')
                                  + gtf.format(30001, 32000, 'HS', 'HS'))
 (inputs / 'pathogen.gtf').write_text(gtf.format(4001, 8000, 'P1', 'P1'))
@@ -100,7 +100,9 @@ for name, quantifier, layout, sheet in (('star', 'star', 'single', single), ('sa
         'reference': {'accession': 'FIXTURE_DUAL_1', 'cache_dir': None, 'annotation_tsv': {'path': None}},
         'samples': {'seq_type': f'rnaseq_{layout}', 'sheet': 'config/samples.tsv',
                     'expected_libtype': 'SF' if layout == 'single' else 'ISF'},
-        'analysis': {'objectives': ['gene_expression'], 'quantifier': quantifier},
+        # Salmon 1.10.3 can crash in position-bias correction when a length class has no reads: H2 and HS have none.
+        'analysis': dict({'objectives': ['gene_expression'], 'quantifier': quantifier},
+                         **({'salmon_position_bias': False} if quantifier == 'salmon' else {})),
         'model': {'fixed_effects': '~ treatment', 'random_effects': None, 'primary_factor': 'treatment'},
         'contrasts': [{'id': 'treatment', 'type': 'pairwise', 'factor': 'treatment', 'reverse': True}],
         'downstream': {'run_go': False, 'run_kegg': False, 'run_wgcna': False},
@@ -283,6 +285,7 @@ elif mode == 'children':  # arg = star or salmon
             else:
                 m = json.loads((q / 'metrics.json').read_text())
                 check(f'{role} {s} Salmon metrics.json num_reads_processed', m['num_reads_processed'], n)
+                check(f'{role} {s} Salmon bias flags, no --posBias', m['salmon_bias_flags'], '--gcBias --seqBias')
                 check(f'{role} {s} quantified by Salmon, not STAR', ((q / 'quant.sf').is_file(), (q / 'star').exists()), (True, False))
         table = rows(out / 'counts.tsv')
         check(f'{role} counts.tsv columns', list(table[0]), ['gene_id'] + samples)

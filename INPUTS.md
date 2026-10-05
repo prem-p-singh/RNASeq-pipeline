@@ -140,6 +140,7 @@ dual_organism:
 ```
 
 - The quantifier, read layout, preprocessing, model and contrasts at the top level apply to both organisms. A STAR project must declare `samples.expected_libtype`.
+- `analysis.salmon_position_bias` (default `true`) keeps Salmon position-bias correction on; set it to `false` for a very small transcript set, because Salmon 1.10.3 can crash in that correction when a transcript length class has no reads. The pathogen project always runs with it off and the host project follows this setting.
 - Each read gets one label: `host`, `pathogen`, `ambiguous` (best alignments in both organisms, or mates in different organisms) or `unassigned`. Ambiguous and unassigned reads are counted in `results/assignment.tsv` and enter neither count table.
 - Outputs: `results/assignment.tsv`, `results/host/` and `results/pathogen/` (each laid out like a single-organism project), `results/pathogen/samples_not_quantified.tsv` and `results/pathogen/status.json`.
 - Samples below `min_assigned_reads` are not quantified for the pathogen and are listed in `samples_not_quantified.tsv`. Pathogen differential expression is reported as not estimable when a level of the primary factor keeps fewer than 2 quantified samples.

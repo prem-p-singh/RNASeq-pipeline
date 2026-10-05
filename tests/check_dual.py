@@ -265,12 +265,19 @@ with tempfile.TemporaryDirectory() as t:
     unchanged = [(p, p.stat().st_mtime_ns) for p in (t / 'dual/host/config').iterdir()]
     assert cfg['analysis'] == {'quantifier': 'star', 'objectives': ['gene_expression', 'differential_expression']}
     assert resolved['thresholds']['sample_qc']['mapping_rate_min'] == 0.60 and resolved['downstream']['run_go'] is True
+    # Salmon position-bias correction: the host follows the parent, the pathogen always runs without it.
+    assert resolved['analysis']['salmon_position_bias'] is True
+    for value in (True, False):
+        switched = {**PARENT, 'analysis': {**PARENT['analysis'], 'salmon_position_bias': value}}
+        assert child_config(switched, 'host')['analysis']['salmon_position_bias'] is value
+        assert child_config(switched, 'pathogen')['analysis']['salmon_position_bias'] is False
     assert (t / 'dual/host/config/thresholds.yaml').read_text() == (t / 'config/thresholds.yaml').read_text()
 
     cfg, resolved, sheet = child(t, 'pathogen')
     assert [r['sample_id'] for r in sheet] == INFECTED
     assert sheet[0]['fastq_url'] == str(t / 'results/quant/i1/dual/pathogen_R1.fastq.gz'), sheet[0]
     assert cfg['analysis']['objectives'] == ['gene_expression'] and cfg['project']['output_dir'] == '../../results/pathogen/'
+    assert cfg['analysis']['salmon_position_bias'] is False and resolved['analysis']['salmon_position_bias'] is False
     assert cfg['downstream'] == {'run_go': False, 'run_kegg': False, 'run_wgcna': False}
     assert cfg['reference']['accession'] == 'GRBV' and cfg['reference']['transcriptome_fasta_url'] is None
     # The decoy list and the gene-information table describe the host.

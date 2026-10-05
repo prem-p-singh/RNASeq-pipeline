@@ -68,6 +68,8 @@ rule qc_quant_sample:
         min_map_rate = config["thresholds"]["sample_qc"]["mapping_rate_min"],
         expected_libtype = lambda wc: shlex.quote(CANONICAL_INPUTS[wc.sample]["expected_libtype"]
             if CANONICAL_INPUTS is not None else config["samples"].get("expected_libtype", "") or ""),
+        # Empty by default, so the command is the released one unless the correction is switched off.
+        position_bias = "" if config["analysis"]["salmon_position_bias"] else " --position-bias false",
     threads: 4
     resources:
         mem_mb = 16000,
@@ -82,7 +84,7 @@ rule qc_quant_sample:
             --index {input.idx:q} --outdir {params.sample_dir:q} \
             --threads {threads} --min-map-rate {params.min_map_rate} \
             --expected-libtype {params.expected_libtype} \
-            --delete-intermediates false > {log:q} 2>&1
+            --delete-intermediates false{params.position_bias} > {log:q} 2>&1
         """
 
 rule fetch_screen_fasta:

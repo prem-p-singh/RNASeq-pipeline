@@ -255,6 +255,8 @@ def child_config(cfg, role, objectives=None):
                           annotation_tsv=dict(c['reference'].get('annotation_tsv') or {},
                                               path=_from_child(table_path) if host and table_path else None))
     if not host:
+        # Salmon 1.10.3 can crash in position-bias correction on a very small transcript set.
+        c['analysis']['salmon_position_bias'] = False
         # Reads are pre-assigned: inclusion is min_assigned_reads, not the mapping-rate or depth floor.
         c['downstream'] = dict(run_go=False, run_kegg=False, run_wgcna=False)
         c['thresholds']['sample_qc'] = dict(c['thresholds'].get('sample_qc') or {},

@@ -32,6 +32,7 @@ threads=4
 min_map_rate=0.60
 expected_libtype=""              # optional; if set, warn on mismatch with Salmon auto-detect
 delete_intermediates="false"     # default off: an unpassed flag must never delete data
+position_bias="true"             # false drops --posBias (analysis.salmon_position_bias)
 
 while [[ $# -gt 0 ]]; do
     case $1 in
@@ -48,6 +49,7 @@ while [[ $# -gt 0 ]]; do
         --min-map-rate)          min_map_rate=$2;         shift 2 ;;
         --expected-libtype)      expected_libtype=$2;     shift 2 ;;
         --delete-intermediates)  delete_intermediates=$2; shift 2 ;;
+        --position-bias)         position_bias=$2;        shift 2 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
@@ -138,8 +140,14 @@ salmon_version=$(salmon --version 2>&1 | head -1 | tr -d '"')
 # For TAGseq, the library IS intentionally 3'-end-biased; applying positional
 # bias correction would fight the assay's biology. Use only --gcBias (mild,
 # safe across protocols).
+#
+# Salmon 1.10.3 can crash (segmentation fault) in position-bias correction when
+# a transcript length class has no reads, which a very small transcript set
+# makes likely. --position-bias false leaves --posBias out.
 if [[ "$seq_type" == "tagseq" ]]; then
     salmon_bias_flags="--gcBias"
+elif [[ "$position_bias" == "false" ]]; then
+    salmon_bias_flags="--gcBias --seqBias"
 else
     salmon_bias_flags="--gcBias --seqBias --posBias"
 fi

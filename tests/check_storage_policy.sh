@@ -45,7 +45,7 @@ STUB
 # which is how the script learns the result is unusable.
 cat > "$TMP/bin/salmon" <<'STUB'
 #!/usr/bin/env bash
-o=""
+o=""; args="$*"
 while [ $# -gt 0 ]; do
   case $1 in
     -o) o=$2; shift 2 ;;
@@ -54,6 +54,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 mkdir -p "$o/aux_info"
+echo "$args" > "$o/salmon_args.txt"
 printf '{"percent_mapped": 91.0, "num_processed": 1000, "library_types": ["SR"]}\n' \
     > "$o/aux_info/meta_info.json"
 if [ "${STUB_NO_QUANT:-0}" != "1" ]; then
@@ -143,5 +144,26 @@ for retain in false true; do
         exists "$d/S5.fastq.gz" "requested owned raw retention"
     fi
 done
+
+# --- Salmon bias flags: what Salmon is given and what metrics.json records ---
+# Position-bias correction is on unless --position-bias false; TAG-seq uses --gcBias only.
+bias() {  # $1 = case name, $2 = seq_type, $3 = expected flags, rest = extra script options
+    local name=$1 seq=$2 want=$3 d="$TMP/bias_$1"; shift 3
+    bash "$SCRIPT" --sample S2 --url "$src1" --url2 "$src2" \
+        --seq-type "$seq" --index "$TMP/idx" --outdir "$d" --threads 1 \
+        --min-map-rate 0.6 --expected-libtype "" --delete-intermediates false "$@" \
+        > "$TMP/bias_$name.log" 2>&1 || fail "bias $name: script exited nonzero (see $TMP/bias_$name.log)"
+    local recorded
+    recorded=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["salmon_bias_flags"])' "$d/metrics.json")
+    [ "$recorded" = "$want" ] || fail "bias $name: metrics.json records '$recorded', expected '$want'"
+    grep -q -- "--validateMappings $want -o " "$d/salmon_args.txt" \
+        || fail "bias $name: salmon was given '$(cat "$d/salmon_args.txt")', expected flags '$want'"
+}
+bias default     rnaseq_paired "--gcBias --seqBias --posBias"
+bias on          rnaseq_paired "--gcBias --seqBias --posBias" --position-bias true
+bias off         rnaseq_paired "--gcBias --seqBias"           --position-bias false
+bias off_single  rnaseq_single "--gcBias --seqBias"           --position-bias false
+bias tagseq      tagseq        "--gcBias"
+bias tagseq_off  tagseq        "--gcBias"                     --position-bias false
 
 echo "check_storage_policy.sh: all assertions passed"

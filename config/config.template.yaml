@@ -13,6 +13,9 @@ analysis:
   objectives: [gene_expression, differential_expression]
   backend: auto
   quantifier: auto  # auto: Salmon for gene expression, STAR for alignment objectives
+  # Salmon position-bias correction (--posBias), on by default. Set to false for a very small
+  # transcript set: Salmon 1.10.3 can crash in this correction when a length class has no reads.
+  salmon_position_bias: true
   umi: false
   small_rna_profile: null                       # with samples.seq_type srnaseq: "animal" (Bowtie to species mature miRNAs) or "plant" (ShortStack loci on the genome)
   small_rna_kit: null                            # kit name in config/small_rna_kits.yaml, e.g. "TruSeq Small RNA"
