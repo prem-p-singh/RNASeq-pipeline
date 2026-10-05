@@ -432,7 +432,7 @@ The launcher then runs the existing route once per organism, on that organism's 
 
 A sample with fewer than `min_assigned_reads` pathogen reads is not quantified for the pathogen. It is listed in `results/pathogen/samples_not_quantified.tsv` with its pathogen read count and the reason, and it stays in `results/assignment.tsv` and in the host analysis. `results/pathogen/status.json` records which samples were quantified and the state of pathogen differential expression: `not_requested`, `requested`, `not_estimable` (a level of the primary factor has fewer than 2 quantified samples, which is the usual case when the controls carry no pathogen reads) or `skipped` (no sample reached the floor, so no pathogen project is run). The pathogen analysis is counts only by default; differential expression can be requested. Pathogen enrichment and co-expression are not available. When an older `results/pathogen` folder remains from an earlier run, `status.json` is the authority on what the current run produced.
 
-Three defaults are assumptions, not calibrated values: `multimap_limit: 20`, `ambiguous_warn_fraction: 0.05` and `pathogen.min_assigned_reads: 10000`.
+Three defaults are assumptions, not calibrated values: `multimap_limit: 20`, `ambiguous_warn_fraction: 0.05` and `pathogen.min_assigned_reads: 500`. The last was lowered from 10000 after a public grapevine red blotch virus run, where infected berry libraries of 11 to 20 million reads held 906 to 2415 virus reads and healthy ones held 1 to 4.
 
 Known limits of the dual-organism route:
 

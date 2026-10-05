@@ -115,7 +115,7 @@ In the workbook (schema 8), the Bulk RNA-seq tab has these answers:
 - **pathogen_genome** and **pathogen_gtf:** both required. The GTF needs `exon` rows with `gene_id` and `transcript_id`.
 - **pathogen_transcriptome:** required unless the quantification method is `star`.
 - **pathogen_objective:** `counts only` (default) or `differential expression`. Pathogen enrichment and co-expression are not available.
-- **pathogen_min_reads:** fewest pathogen reads for a sample to be analysed for the pathogen (default 10000).
+- **pathogen_min_reads:** fewest pathogen reads for a sample to be analysed for the pathogen (default 500).
 
 In a project configuration:
 
@@ -136,7 +136,7 @@ dual_organism:
     gtf_url: ...                  # required
     transcriptome_fasta_url: ...  # required on the Salmon route
     objectives: [gene_expression] # default; or add differential_expression
-    min_assigned_reads: 10000     # assumption
+    min_assigned_reads: 500       # assumption
 ```
 
 - `host.objectives` defaults to the project objectives (`analysis.objectives`); `pathogen.objectives` defaults to counts only (`[gene_expression]`). A project with only the `qc` objective is refused.

@@ -451,7 +451,7 @@ tabs:
         help: Samples with fewer reads assigned to the pathogen are left out of the pathogen analysis.
         type: number
         maximum: 1000000000
-        default: 10000
+        default: 500
         required: false
         introduced_in: 8
 

@@ -9,7 +9,7 @@
     "Host differential expression completes; pathogen differential expression completes or is reported as not estimable with a reason.",
     "A repeat of the assignment gives identical assignment counts for every sample."
   ],
-  "acceptance_note": "Written before any run. The criteria follow from the study designs and the route design; none is a numeric threshold. min_assigned_reads is the route default (10000), not a value chosen for these studies.",
+  "acceptance_note": "Written before any run. The criteria follow from the study designs and the route design; none is a numeric threshold. min_assigned_reads is the route default (500). The default was 10000 when these criteria were written and was lowered on 2026-10-05 after the first virus run showed 906 to 2415 virus reads in the infected libraries and 1 to 4 in the healthy ones.",
   "studies": {
     "virus": {
       "study": "PRJNA339456",

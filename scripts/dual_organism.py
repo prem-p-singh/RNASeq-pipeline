@@ -57,7 +57,7 @@ def validate(cfg):
         if salmon and set(d[role]['objectives']) != {'qc'} and not d[role].get('transcriptome_fasta_url'):
             raise ValueError(f'dual_organism.{role}.transcriptome_fasta_url is required on the Salmon route')
     if d['pathogen'].get('min_assigned_reads') is None:
-        d['pathogen']['min_assigned_reads'] = 10000
+        d['pathogen']['min_assigned_reads'] = 500
     if type(d['pathogen']['min_assigned_reads']) is not int or d['pathogen']['min_assigned_reads'] < 1:
         raise ValueError('dual_organism.pathogen.min_assigned_reads must be an integer of at least 1')
     if type(d['multimap_limit']) is not int or d['multimap_limit'] < 1:

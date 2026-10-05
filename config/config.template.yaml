@@ -130,7 +130,7 @@ dual_organism:
     gtf_url: null                               # required: the pathogen is counted against its own annotation
     transcriptome_fasta_url: null
     objectives: null                            # null: gene_expression
-    min_assigned_reads: 10000
+    min_assigned_reads: 500
 
 # -----------------------------------------------------------------------------
 # Samples

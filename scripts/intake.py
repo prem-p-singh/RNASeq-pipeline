@@ -380,7 +380,7 @@ def setup_inputs(record):
                                   gtf_url=uri(a["pathogen_gtf"]),
                                   transcriptome_fasta_url=uri(a["pathogen_transcriptome"]) if a.get("pathogen_transcriptome") else None,
                                   objectives=pathogen_objectives,
-                                  min_assigned_reads=int(a.get("pathogen_min_reads") or 10000)))
+                                  min_assigned_reads=int(a.get("pathogen_min_reads") or 500)))
         try:
             dual_organism.validate(dict(samples=dict(seq_type=layout), analysis=dict(quantifier=quantifier, objectives=objectives), dual_organism=dual))
         except ValueError as exc:

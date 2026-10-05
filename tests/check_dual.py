@@ -17,7 +17,7 @@ for quantifier in ('salmon', 'auto'):
     except ValueError as exc: assert 'dual_organism.host.transcriptome_fasta_url' in str(exc), exc
     else: raise AssertionError('Salmon route without transcripts accepted')
 assert v['multimap_limit'] == 20 and v['ambiguous_warn_fraction'] == 0.05
-assert v['pathogen']['min_assigned_reads'] == 10000 and v['pathogen']['objectives'] == ['gene_expression']
+assert v['pathogen']['min_assigned_reads'] == 500 and v['pathogen']['objectives'] == ['gene_expression']
 # Null fields from the config template mean unset.
 nulls = {**ok, 'dual_organism': {**ok['dual_organism'], 'pathogen': {**ok['dual_organism']['pathogen'], 'objectives': None, 'min_assigned_reads': None}}}
 assert validate(nulls)['pathogen'] == v['pathogen']
@@ -330,7 +330,7 @@ with tempfile.TemporaryDirectory() as t:
     tsv = parent(t, {s: 12 for s in MOCK + INFECTED})
     status = children(t, PARENT, tsv)
     assert status['pathogen']['status'] == 'skipped' and status['pathogen']['samples'] == [], status
-    assert status['pathogen']['de'] == 'skipped' and '10000' in status['pathogen']['reason'], status
+    assert status['pathogen']['de'] == 'skipped' and '500' in status['pathogen']['reason'], status
     assert status['pathogen']['not_quantified'] == MOCK + INFECTED and not (t / 'dual/pathogen').exists()
     assert json.loads((t / 'results/pathogen/status.json').read_text())['status'] == 'skipped'
     assert len(child(t, 'host')[2]) == 6
