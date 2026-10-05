@@ -103,3 +103,45 @@ Explicit R1/R2 adapters, poly-G policy and minimum retained length configure the
 - **UMI (FWD-UMI only):** fastp (`--umi --umi_len 6 --umi_skip 4`) moves the 6 nt UMI into the read name and drops the TATA spacer, then applies the 12 nt front trim. `star/gene_counts.tsv` counts reads; `umi/gene_counts.tsv` and the cohort `counts.tsv` count molecules.
 - All three kits passed their public-data checks (FARM jobs 39025685, 39023623, 39023624) and are listed in `tagseq.validated_kits` in `config/spec.yaml`. A `tagseq` project without a kit stays provisional.
 - A `tagseq` project without a kit keeps the earlier provisional route unchanged.
+
+## Development: host and pathogen in the same libraries
+
+Status: `experimental`. Bulk RNA-seq only (single-end or paired-end); not for TAG-seq or small RNA.
+
+In the workbook (schema 8), the Bulk RNA-seq tab has these answers:
+
+- **dual_organism:** `yes` assigns each read to the host or the pathogen and analyses each organism on its own. The host is the organism of the project; give its genome and GTF as the custom reference, plus its transcripts for Salmon.
+- **pathogen_label:** a short name of letters, digits, `_`, `.` and `-`, different from the host label.
+- **pathogen_genome** and **pathogen_gtf:** both required. The GTF needs `exon` rows with `gene_id` and `transcript_id`.
+- **pathogen_transcriptome:** required unless the quantification method is `star`.
+- **pathogen_objective:** `counts only` (default) or `differential expression`. Pathogen enrichment and co-expression are not available.
+- **pathogen_min_reads:** fewest pathogen reads for a sample to be analysed for the pathogen (default 10000).
+
+In a project configuration:
+
+```yaml
+dual_organism:
+  enabled: true
+  multimap_limit: 20              # assumption
+  ambiguous_warn_fraction: 0.05   # assumption
+  host:
+    label: grapevine
+    genome_fasta_url: ...
+    gtf_url: ...                  # required
+    transcriptome_fasta_url: ...  # required on the Salmon route
+    objectives: [gene_expression, differential_expression]
+  pathogen:
+    label: GRBV
+    genome_fasta_url: ...
+    gtf_url: ...                  # required
+    transcriptome_fasta_url: ...  # required on the Salmon route
+    objectives: [gene_expression] # or add differential_expression
+    min_assigned_reads: 10000     # assumption
+```
+
+- The quantifier, read layout, preprocessing, model and contrasts at the top level apply to both organisms. A STAR project must declare `samples.expected_libtype`.
+- Each read gets one label: `host`, `pathogen`, `ambiguous` (best alignments in both organisms, or mates in different organisms) or `unassigned`. Ambiguous and unassigned reads are counted in `results/assignment.tsv` and enter neither count table.
+- Outputs: `results/assignment.tsv`, `results/host/` and `results/pathogen/` (each laid out like a single-organism project), `results/pathogen/samples_not_quantified.tsv` and `results/pathogen/status.json`.
+- Samples below `min_assigned_reads` are not quantified for the pathogen and are listed in `samples_not_quantified.tsv`. Pathogen differential expression is reported as not estimable when a level of the primary factor keeps fewer than 2 quantified samples.
+- `dual_organism.enabled: false` (the default) leaves every other route unchanged.
+- Out of scope: more than two organisms; dual-organism TAG-seq or small RNA; virus-derived small RNA; cross-organism network analysis; pathogen strain or variant analysis. See the README for the known limits.

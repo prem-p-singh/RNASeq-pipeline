@@ -415,6 +415,35 @@ Two development small-RNA routes read `samples.seq_type: srnaseq` with `analysis
 
 A development TAG-seq route covers three Lexogen QuantSeq kits named in [config/tagseq_kits.yaml](config/tagseq_kits.yaml): `QuantSeq FWD`, `QuantSeq REV` and `QuantSeq FWD-UMI`. Choose the kit in the workbook's `TAGseq` tab or set `analysis.kit` with `samples.seq_type: tagseq`, a genome (`reference.genome_fasta_url`) and a GTF. The kit sets trimming (12 nt front trim for FWD and FWD-UMI, poly(A) and the Read 1 adapter) and the strand: STAR/featureCounts count sense reads only (`-s 1` for FWD and FWD-UMI, `-s 2` for REV), and a declared `expected_libtype` that disagrees with the kit is an error. For FWD-UMI, fastp moves the 6 nt UMI into the read name and skips the TATA spacer; preprocessing first checks that at least 80% of reads carry TATA after the UMI. `results/quant/<sample>/star/gene_counts.tsv` then holds **reads** and `results/quant/<sample>/umi/gene_counts.tsv` holds **molecules** (umi_tools per-gene deduplication); the cohort `counts.tsv` uses molecules and `counts_provenance.json` records `count_unit: molecules`. No count is length-corrected. All three kits are validated by their public-data checks (`tagseq.validated_kits` in `config/spec.yaml`).sh --fwd|--rev|--umi`, run on data from `tests/fixtures/prepare_tagseq_public.py`) passes on the cluster. `tests/check_tagseq_workflow.sh` covers strand and UMI counting on synthetic reads. A `tagseq` project without `analysis.kit` keeps the earlier provisional Salmon behaviour unchanged.
 
+A development dual-organism route handles libraries that hold RNA from a host and a pathogen, for example grapevine with a virus or a plant with a fungus. Set `dual_organism.enabled: true` with a `host` and a `pathogen` block, or answer yes to "Host and pathogen in the same libraries" in the workbook's Bulk RNA-seq tab; [INPUTS.md](INPUTS.md#development-host-and-pathogen-in-the-same-libraries) lists the settings. It works with single-end and paired-end bulk RNA-seq on the Salmon or the STAR route, not with TAG-seq or small RNA. The status of the route is `experimental`.
+
+Reads are preprocessed once. STAR then aligns each read or pair to one combined genome in which every sequence name starts with its organism label, and the best alignments decide one of four labels:
+
+| Label | Best alignments are in | What happens to the read |
+|---|---|---|
+| `host` | the host only | goes to the host analysis |
+| `pathogen` | the pathogen only | goes to the pathogen analysis |
+| `ambiguous` | both organisms, or the two mates are in different organisms | counted, in neither count table |
+| `unassigned` | no alignment, or more best hits than `multimap_limit` | counted, in neither count table |
+
+`results/assignment.tsv` has one row per sample: `reads`, the four label counts, `too_many_loci` (the unassigned reads that had more best hits than the limit), the four fractions, and a `warnings` column that is filled when the ambiguous fraction is above `ambiguous_warn_fraction`. The four label counts must add up to `reads`; a sample where they do not fails.
+
+The launcher then runs the existing route once per organism, on that organism's reads against that organism's own reference, as ordinary projects under `dual/host` and `dual/pathogen`. `results/host/` and `results/pathogen/` are each laid out like the results of a single-organism project, with their own counts, normalization, QC and report. The sample sheet, model and contrasts are declared once and used for both. `submit.sh` stops at the first project that fails, and arguments after `--` go to the assignment run and to both organism runs.
+
+A sample with fewer than `min_assigned_reads` pathogen reads is not quantified for the pathogen. It is listed in `results/pathogen/samples_not_quantified.tsv` with its pathogen read count and the reason, and it stays in `results/assignment.tsv` and in the host analysis. `results/pathogen/status.json` records which samples were quantified and the state of pathogen differential expression: `not_requested`, `requested`, `not_estimable` (a level of the primary factor has fewer than 2 quantified samples, which is the usual case when the controls carry no pathogen reads) or `skipped` (no sample reached the floor, so no pathogen project is run). The pathogen analysis is counts only by default; differential expression can be requested. Pathogen enrichment and co-expression are not available.
+
+Three defaults are assumptions, not calibrated values: `multimap_limit: 20`, `ambiguous_warn_fraction: 0.05` and `pathogen.min_assigned_reads: 10000`.
+
+Known limits of the dual-organism route:
+
+- Out of scope: more than two organisms; dual-organism TAG-seq or small RNA; virus-derived small RNA; cross-organism network analysis; pathogen strain or variant analysis.
+- Salmon 1.10.3 with position-bias correction crashed on a synthetic index of two transcripts in which one transcript had no reads. Indexes of one and of three transcripts ran. A pathogen with a very small transcript set may hit this on the Salmon route; the STAR route is not affected.
+- STAR 2.7.11b stopped while indexing a synthetic genome under about 30 kb together with an annotation. On the STAR route the pathogen is indexed alone, and a virus genome of a few kb has not yet been run this way.
+- Both organisms need a GTF with `exon` rows that carry `gene_id` and `transcript_id`. The NCBI RefSeq GTF of Grapevine red blotch virus (NC_022002.1) has gene and CDS rows only, so it needs exon rows added before use; `tests/fixtures/prepare_dual_public.py` shows one way.
+- On the STAR route a read that overlaps two annotated genes is counted for neither (featureCounts is run without `-O`). Compact virus genomes have overlapping genes.
+
+`tests/check_dual_workflow.sh` checks exact labels and per-organism counts on synthetic reads with both routes. `tests/check_dual_public.sh --virus|--cellular` runs pinned public runs (`tests/fixtures/dual_public.json`, prepared by `prepare_dual_public.py`): grapevine berries with and without Grapevine red blotch virus (PRJNA339456) and Arabidopsis leaves with and without *Botrytis cinerea* (PRJNA1270936). The five acceptance criteria are written in the fixture. These public checks have not been run yet; results will be recorded in [docs/RELEASE.md](docs/RELEASE.md).
+
 These are development changes, not a new release or completion of the multi-assay roadmap. The capability table above describes the published v2 tag; further assay producers, broader intake controls, protocol-specific QC and full release qualification remain open.
 
 <img src="assets/section-validation.svg" alt="Validation and development" width="100%" />

@@ -1,0 +1,395 @@
+{
+  "schema_version": 1,
+  "status": "selected_not_qualified",
+  "note": "Metadata only (2026-10-04 and 2026-10-05); no FASTQ bytes fetched. Run titles, infection status and read counts are from the NCBI SRA records of each run; FASTQ URLs and byte sizes are from HTTP HEAD requests to the ENA FTP server; the ENA Portal API returned HTTP 500 for every request while this file was written, so fastq_md5 is null and prepare_dual_public.py reads the MD5 values from the ENA file report at download time and records them. Reference sizes are from HTTP HEAD requests. Nothing here has been run.",
+  "acceptance_criteria": [
+    "Conservation: for every sample, host + pathogen + ambiguous + unassigned equals the reads that entered assignment.",
+    "Every mock or healthy sample has a lower pathogen-assigned fraction than every infected sample in the study.",
+    "Every sample reaches the host count table, and every infected sample with at least min_assigned_reads pathogen reads reaches the pathogen count table.",
+    "Host differential expression completes; pathogen differential expression completes or is reported as not estimable with a reason.",
+    "A repeat of the assignment gives identical assignment counts for every sample."
+  ],
+  "acceptance_note": "Written before any run. The criteria follow from the study designs and the route design; none is a numeric threshold. min_assigned_reads is the route default (10000), not a value chosen for these studies.",
+  "studies": {
+    "virus": {
+      "study": "PRJNA339456",
+      "study_title": "Field systems biology of grapevine red blotch reveals the impact of viral infections on the transcriptional and hormonal regulation of berry ripening",
+      "design": "Zinfandel berries, Oakville vineyard, harvest stage: 3 healthy and 3 GRBaV-positive libraries (6 of the 52 in the study).",
+      "infection_status_source": "BioSample attribute \"status\" (Healthy or GRBaV_positive)",
+      "library_layout": "SINGLE",
+      "seq_type": "rnaseq_single",
+      "expected_libtype": "U",
+      "protocol_excerpt": "Illumina TruSeq RNA Sample Prep Kit v2 protocol",
+      "strand_note": "TruSeq RNA Sample Prep Kit v2 is listed as unstranded in config/kit_profiles.yaml (\"TruSeq RNA v2 (unstranded)\").",
+      "biological_inference_eligible": false,
+      "inference_note": "Six of 52 field libraries, downsampled. The check qualifies the route; it is not a biological result.",
+      "downsample": {
+        "max_reads_per_run": 2000000,
+        "seed": 1,
+        "method": "reservoir sampling, pure Python stdlib (no seqtk)"
+      },
+      "host": {
+        "label": "grapevine",
+        "scientific_name": "Vitis vinifera",
+        "tax_id": 29760,
+        "assembly": "ASM3070453v1 (GCA_030704535.1), Ensembl Plants release 63",
+        "assembly_total_length": 495807417,
+        "genome_fasta": {
+          "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/fasta/vitis_vinifera/dna/Vitis_vinifera.ASM3070453v1.dna.toplevel.fa.gz",
+          "bytes": 143961900
+        },
+        "gtf": {
+          "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/gtf/vitis_vinifera/Vitis_vinifera.ASM3070453v1.63.gtf.gz",
+          "bytes": 7468293
+        },
+        "transcriptome_fasta": {
+          "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/fasta/vitis_vinifera/cdna/Vitis_vinifera.ASM3070453v1.cdna.all.fa.gz",
+          "bytes": 34779571
+        }
+      },
+      "pathogen": {
+        "label": "GRBV",
+        "scientific_name": "Grapevine red blotch virus",
+        "tax_id": 1381007,
+        "assembly": "GCF_000909815.1 (ViralProj214508), NCBI RefSeq, sequence NC_022002.1, 3206 bp",
+        "genome_fasta": {
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/909/815/GCF_000909815.1_ViralProj214508/GCF_000909815.1_ViralProj214508_genomic.fna.gz",
+          "bytes": 1223,
+          "md5": "c7fe965ae5e75cc05982c657ef93468c"
+        },
+        "source_gtf": {
+          "url": "https://ftp.ncbi.nlm.nih.gov/genomes/all/GCF/000/909/815/GCF_000909815.1_ViralProj214508/GCF_000909815.1_ViralProj214508_genomic.gtf.gz",
+          "bytes": 664,
+          "md5": "baec69eadcb89d54535dea5518d6a6ce"
+        },
+        "gtf_conversion": "The RefSeq GTF has gene, CDS, start_codon and stop_codon rows and no exon rows; its gene rows carry an empty transcript_id. The route counts exon rows, so prepare_dual_public.py writes pathogen.exons.gtf with one exon row per gene row (same interval and strand, transcript_id \"<gene_id>_tx\") and pathogen.transcripts.fa with the matching sequences cut from the genome. These six intervals are the annotated coding regions, not mapped viral transcripts.",
+        "annotation_note": "Six genes on 3206 bp. Several overlap on the same strand (N761_gp6 lies inside N761_gp5), so a read in an overlap may not be counted for either gene on the STAR route."
+      },
+      "runs": [
+        {
+          "accession": "SRR4043735",
+          "group": "healthy",
+          "biosample": "SAMN05591453",
+          "title": "Oak-H-H1",
+          "infection_status": "status=Healthy",
+          "read_count": 17243411,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR404/005/SRR4043735/SRR4043735.fastq.gz"
+          ],
+          "fastq_bytes": [
+            481883760
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR4043736",
+          "group": "healthy",
+          "biosample": "SAMN05591452",
+          "title": "Oak-H-H2",
+          "infection_status": "status=Healthy",
+          "read_count": 15944968,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR404/006/SRR4043736/SRR4043736.fastq.gz"
+          ],
+          "fastq_bytes": [
+            449171640
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR4043737",
+          "group": "healthy",
+          "biosample": "SAMN05591451",
+          "title": "Oak-H-H3",
+          "infection_status": "status=Healthy",
+          "read_count": 22578505,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR404/007/SRR4043737/SRR4043737.fastq.gz"
+          ],
+          "fastq_bytes": [
+            626488632
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR4043732",
+          "group": "infected",
+          "biosample": "SAMN05591456",
+          "title": "Oak-H-RB1",
+          "infection_status": "status=GRBaV_positive",
+          "read_count": 20224012,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR404/002/SRR4043732/SRR4043732.fastq.gz"
+          ],
+          "fastq_bytes": [
+            563950776
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR4043733",
+          "group": "infected",
+          "biosample": "SAMN05591455",
+          "title": "Oak-H-RB2",
+          "infection_status": "status=GRBaV_positive",
+          "read_count": 11406373,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR404/003/SRR4043733/SRR4043733.fastq.gz"
+          ],
+          "fastq_bytes": [
+            314817007
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR4043734",
+          "group": "infected",
+          "biosample": "SAMN05591454",
+          "title": "Oak-H-RB3",
+          "infection_status": "status=GRBaV_positive",
+          "read_count": 14241961,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR404/004/SRR4043734/SRR4043734.fastq.gz"
+          ],
+          "fastq_bytes": [
+            399536402
+          ],
+          "fastq_md5": null
+        }
+      ],
+      "rejected_candidates": [
+        {
+          "study": "PRJNA1407057",
+          "reason": "Microvine plantlets, single-end poly(A) RNA-seq with the BioSample attribute treatment set to CONTROL or INFECTED and at least 3 of each. The records carry no library construction protocol or kit name, so strandedness, which a STAR dual-organism project must declare, cannot be established from metadata."
+        },
+        {
+          "study": "PRJNA1230344",
+          "reason": "Oxford Nanopore sequencing of the virus (BioProject description); not Illumina host RNA-seq with healthy controls."
+        },
+        {
+          "study": "PRJNA1158501",
+          "reason": "Small RNA sequencing; dual-organism small RNA is out of scope."
+        },
+        {
+          "study": "PRJNA1129059",
+          "reason": "Small RNA sequencing; dual-organism small RNA is out of scope."
+        },
+        {
+          "study": "PRJNA1462769",
+          "reason": "Partial C3 gene sequence reads of the virus only."
+        }
+      ]
+    },
+    "cellular": {
+      "study": "PRJNA1270936",
+      "study_title": "Transcriptional response of wild-type versus toc1-2 mutant Arabidopsis plants to infection with Botrytis cinerea",
+      "design": "Wild-type C24 leaves: 4 mock and 4 Botrytis cinerea infected libraries (8 of the 16 in the study). Each group has two libraries harvested at ZT18 and two at ZT22; the check pools the two harvest times.",
+      "infection_status_source": "BioSample attribute \"treatment\" and the experiment title",
+      "library_layout": "PAIRED",
+      "seq_type": "rnaseq_paired",
+      "expected_libtype": "ISR",
+      "protocol_excerpt": "RNA-Seq library was prepared using a TruSeq Stranded mRNA Library Prep kit (Illumina)",
+      "strand_note": "TruSeq Stranded mRNA is listed as reverse-stranded in config/kit_profiles.yaml.",
+      "biological_inference_eligible": false,
+      "inference_note": "Two harvest times are pooled in each group and reads are downsampled. The check qualifies the route; it is not a biological result.",
+      "downsample": {
+        "max_reads_per_run": 2000000,
+        "seed": 1,
+        "method": "reservoir sampling, pure Python stdlib (no seqtk); the same records are kept for both mates"
+      },
+      "host": {
+        "label": "arabidopsis",
+        "scientific_name": "Arabidopsis thaliana",
+        "tax_id": 3702,
+        "assembly": "TAIR10 (GCA_000001735.1), Ensembl Plants release 63",
+        "assembly_total_length": 119667750,
+        "genome_fasta": {
+          "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/fasta/arabidopsis_thaliana/dna/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz",
+          "bytes": 36462703
+        },
+        "gtf": {
+          "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/gtf/arabidopsis_thaliana/Arabidopsis_thaliana.TAIR10.63.gtf.gz",
+          "bytes": 11240897
+        },
+        "transcriptome_fasta": {
+          "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/fasta/arabidopsis_thaliana/cdna/Arabidopsis_thaliana.TAIR10.cdna.all.fa.gz",
+          "bytes": 21086684
+        }
+      },
+      "pathogen": {
+        "label": "botrytis",
+        "scientific_name": "Botrytis cinerea B05.10",
+        "tax_id": 332648,
+        "assembly": "ASM83294v1 (GCA_000143535.4), Ensembl Fungi release 63",
+        "genome_fasta": {
+          "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/fungi/release-63/fasta/botrytis_cinerea/dna/Botrytis_cinerea.ASM83294v1.dna.toplevel.fa.gz",
+          "bytes": 13281814
+        },
+        "gtf": {
+          "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/fungi/release-63/gtf/botrytis_cinerea/Botrytis_cinerea.ASM83294v1.63.gtf.gz",
+          "bytes": 2175962
+        },
+        "transcriptome_fasta": {
+          "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/fungi/release-63/fasta/botrytis_cinerea/cdna/Botrytis_cinerea.ASM83294v1.cdna.all.fa.gz",
+          "bytes": 8593860
+        }
+      },
+      "runs": [
+        {
+          "accession": "SRR35391036",
+          "group": "mock",
+          "biosample": "SAMN51331744",
+          "title": "RNA-Seq of Arabidopsis thaliana: C24 mock ZT18 sample A",
+          "infection_status": "treatment=ZT18 mock CT24 sample 1",
+          "read_count": 15359605,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/036/SRR35391036/SRR35391036_1.fastq.gz",
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/036/SRR35391036/SRR35391036_2.fastq.gz"
+          ],
+          "fastq_bytes": [
+            1057596832,
+            1079293761
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR35391035",
+          "group": "mock",
+          "biosample": "SAMN51331745",
+          "title": "RNA-Seq of Arabidopsis thaliana: C24 mock ZT18 sample B",
+          "infection_status": "treatment=ZT18 mock CT24 sample 2",
+          "read_count": 15552053,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/035/SRR35391035/SRR35391035_1.fastq.gz",
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/035/SRR35391035/SRR35391035_2.fastq.gz"
+          ],
+          "fastq_bytes": [
+            1066983117,
+            1093468097
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR35391026",
+          "group": "mock",
+          "biosample": "SAMN51331748",
+          "title": "RNA-Seq of Arabidopsis thaliana: C24 mock ZT22 sample A",
+          "infection_status": "treatment=ZT22 mock CT24 sample 1",
+          "read_count": 15784938,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/026/SRR35391026/SRR35391026_1.fastq.gz",
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/026/SRR35391026/SRR35391026_2.fastq.gz"
+          ],
+          "fastq_bytes": [
+            1096892040,
+            1116746672
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR35391025",
+          "group": "mock",
+          "biosample": "SAMN51331749",
+          "title": "RNA-Seq of Arabidopsis thaliana: C24 mock ZT22 sample B",
+          "infection_status": "treatment=ZT22 mock CT24 sample 2",
+          "read_count": 15873098,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/025/SRR35391025/SRR35391025_1.fastq.gz",
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/025/SRR35391025/SRR35391025_2.fastq.gz"
+          ],
+          "fastq_bytes": [
+            1105588506,
+            1116331471
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR35391028",
+          "group": "infected",
+          "biosample": "SAMN51331746",
+          "title": "RNA-Seq of Arabidopsis thaliana: C24 Botrytis cinerea infected ZT18 sample A",
+          "infection_status": "treatment=ZT18 Botrytis cinerea infected C24 sample 1",
+          "read_count": 15594730,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/028/SRR35391028/SRR35391028_1.fastq.gz",
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/028/SRR35391028/SRR35391028_2.fastq.gz"
+          ],
+          "fastq_bytes": [
+            1077787286,
+            1094190058
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR35391027",
+          "group": "infected",
+          "biosample": "SAMN51331747",
+          "title": "RNA-Seq of Arabidopsis thaliana: C24 Botrytis cinerea infected ZT18 sample B",
+          "infection_status": "treatment=ZT18 Botrytis cinerea infected C24 sample 2",
+          "read_count": 15854518,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/027/SRR35391027/SRR35391027_1.fastq.gz",
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/027/SRR35391027/SRR35391027_2.fastq.gz"
+          ],
+          "fastq_bytes": [
+            1096452354,
+            1125450577
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR35391024",
+          "group": "infected",
+          "biosample": "SAMN51331750",
+          "title": "RNA-Seq of Arabidopsis thaliana: C24 Botrytis cinerea infected ZT22 sample A",
+          "infection_status": "treatment=ZT22 Botrytis cinerea infected C24 sample 1",
+          "read_count": 16406346,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/024/SRR35391024/SRR35391024_1.fastq.gz",
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/024/SRR35391024/SRR35391024_2.fastq.gz"
+          ],
+          "fastq_bytes": [
+            1143667217,
+            1175320600
+          ],
+          "fastq_md5": null
+        },
+        {
+          "accession": "SRR35391023",
+          "group": "infected",
+          "biosample": "SAMN51331751",
+          "title": "RNA-Seq of Arabidopsis thaliana: C24 Botrytis cinerea infected ZT22 sample B",
+          "infection_status": "treatment=ZT22 Botrytis cinerea infected C24 sample 2",
+          "read_count": 16365140,
+          "fastq_url": [
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/023/SRR35391023/SRR35391023_1.fastq.gz",
+            "https://ftp.sra.ebi.ac.uk/vol1/fastq/SRR353/023/SRR35391023/SRR35391023_2.fastq.gz"
+          ],
+          "fastq_bytes": [
+            1137769832,
+            1145467954
+          ],
+          "fastq_md5": null
+        }
+      ],
+      "backup_candidate": {
+        "study": "PRJNA1414443",
+        "reason_not_primary": "Col-0 mock and Botrytis cinerea 48 hpi, 3 libraries each, TruSeq Stranded mRNA, paired-end. Each run is two FASTQ files of about 3.8 GB on the ENA FTP server (listing for SRR36986765), about 46 GB for six runs against 17.7 GB for the eight runs chosen."
+      },
+      "rejected_candidates": [
+        {
+          "study": "PRJNA896583",
+          "reason": "Col-3 mock and Botrytis cinerea, 5 libraries each, but the library protocol text does not state strandedness, which a STAR dual-organism project must declare."
+        },
+        {
+          "study": "PRJNA1465640",
+          "reason": "Wild-type mock and Botrytis cinerea, 3 libraries per time point, but the record gives only \"Novogene NGS Library Prep\"; strandedness is not stated."
+        },
+        {
+          "study": "PRJNA593073",
+          "reason": "One mock and one infected wild-type library; fewer than 3 per group."
+        }
+      ]
+    }
+  }
+}
