@@ -4,11 +4,11 @@ import argparse
 import copy
 import csv
 import gzip
+import io
 import itertools
 import json
 import os
 import re
-import shutil
 import subprocess
 import tempfile
 from collections import Counter
@@ -44,6 +44,12 @@ def validate(cfg):
         raise ValueError('dual_organism host and pathogen labels must differ')
     if not d['host'].get('gtf_url'):
         raise ValueError('dual_organism.host.gtf_url is required')
+    # Each organism is quantified on its own afterwards; Salmon needs that organism's transcripts.
+    quantifier = (cfg.get('analysis') or {}).get('quantifier', 'auto')
+    for role in ROLES:
+        salmon = quantifier == 'salmon' or (quantifier == 'auto' and 'alignment' not in d[role]['objectives'])
+        if salmon and set(d[role]['objectives']) != {'qc'} and not d[role].get('transcriptome_fasta_url'):
+            raise ValueError(f'dual_organism.{role}.transcriptome_fasta_url is required on the Salmon route')
     if d['pathogen'].get('min_assigned_reads') is None:
         d['pathogen']['min_assigned_reads'] = 10000
     if type(d['multimap_limit']) is not int or d['multimap_limit'] < 1:
@@ -216,6 +222,53 @@ def table(records, warn):
     return '\n'.join(lines) + '\n'
 
 
+def _from_child(path):
+    """A parent-project path as seen from <project>/dual/<role>."""
+    path = Path(path).expanduser()
+    return str(path if path.is_absolute() else Path('../..') / path)
+
+
+def child_config(cfg, role, objectives=None):
+    """The single-organism project config for one organism of a dual project.
+
+    Reads nothing from the project, so the parent can check before any read is assigned exactly
+    what children() writes afterwards.
+    """
+    full = config_resolve.resolve(REPO, [('project', cfg)])[0]
+    organism = validate(full)[role]
+    c = {k: copy.deepcopy(v) for k, v in cfg.items() if k != 'dual_organism'}
+    for block in ('project', 'analysis', 'reference', 'samples', 'thresholds'):
+        c[block] = dict(c.get(block) or {})
+    c['project']['output_dir'] = _from_child(Path(full['project']['output_dir']) / role) + '/'
+    c['analysis']['objectives'] = objectives or organism['objectives']
+    c['preprocessing'] = {'passthrough': True}
+    c['screening'] = {'enabled': False}
+    c['samples'].update(sheet='config/samples.tsv', metadata_dir=None)
+    # A decoy-name file and the gene-information table describe the host and are named relative to the parent.
+    host = role == 'host'
+    decoys, table_path = full['reference']['decoys'], full['reference']['annotation_tsv']['path']
+    if decoys not in (None, '', 'genome'):
+        decoys = _from_child(decoys) if host else None
+    c['reference'].update({k: organism.get(k) for k in ('genome_fasta_url', 'gtf_url', 'transcriptome_fasta_url')},
+                          accession=organism['label'], decoys=decoys,
+                          annotation_tsv=dict(c['reference'].get('annotation_tsv') or {},
+                                              path=_from_child(table_path) if host and table_path else None))
+    if not host:
+        # Reads are pre-assigned: inclusion is min_assigned_reads, not the mapping-rate or depth floor.
+        c['downstream'] = dict(run_go=False, run_kegg=False, run_wgcna=False)
+        c['thresholds']['sample_qc'] = dict(c['thresholds'].get('sample_qc') or {},
+                                            mapping_rate_min=0, min_reads_on_genes_rnaseq=0)
+    if not c['thresholds']:
+        del c['thresholds']
+    return c
+
+
+def _write(path, text):
+    """Leave an unchanged file alone, so a relaunch does not look like a new configuration."""
+    if not path.is_file() or path.read_text() != text:
+        path.write_text(text)
+
+
 def children(project, cfg, assignment_tsv=None):
     """Write one single-organism project per organism under <project>/dual/ from a finished assignment.
 
@@ -240,17 +293,20 @@ def children(project, cfg, assignment_tsv=None):
     de, reason = 'not_requested', ''
     if set(objectives['pathogen']) & {'differential_expression', 'enrichment'}:
         factor = full['model']['primary_factor']
-        kept = Counter(r.get(factor, '') for r in sheet if r['sample_id'] not in low)
-        short = sorted(level for level in {r.get(factor, '') for r in sheet} if kept[level] < 2)
-        de = 'not_estimable' if short else 'requested'
-        if short:
+        kept = Counter(r.get(factor) for r in sheet if r['sample_id'] not in low)
+        short = sorted(level for level in {r.get(factor) for r in sheet} - {None} if kept[level] < 2)
+        if factor not in sheet[0]:
+            reason = f'primary factor {factor!r} is not a column of the sample sheet'
+        elif short:
             reason = f"fewer than 2 quantified samples in {factor} level(s): {', '.join(short)}"
+        de = 'not_estimable' if reason else 'requested'
+        if reason:
             objectives['pathogen'] = ['gene_expression']
     status = {'host': {'samples': [r['sample_id'] for r in sheet]},
               'pathogen': {'status': 'quantified', 'samples': [r['sample_id'] for r in sheet if r['sample_id'] not in low],
                            'not_quantified': low, 'min_assigned_reads': floor, 'de': de, 'reason': reason}}
     if not status['pathogen']['samples']:
-        status['pathogen'].update(status='skipped', reason=f'no sample has at least {floor} pathogen reads')
+        status['pathogen'].update(status='skipped', de='skipped', reason=f'no sample has at least {floor} pathogen reads')
     mates = ('_R1', '_R2') if full['samples']['seq_type'] == 'rnaseq_paired' else ('',)
     for role in ROLES:
         child = project / 'dual' / role
@@ -267,36 +323,15 @@ def children(project, cfg, assignment_tsv=None):
                     raise ValueError(f'Split reads not found: {path}')
             rows.append({'sample_id': r['sample_id'], **dict(zip(('fastq_url', 'fastq_url_r2'), map(str, reads))),
                          **{k: v for k, v in r.items() if k not in ('sample_id', 'fastq_url', 'fastq_url_r2')}})
-        c = {k: copy.deepcopy(v) for k, v in cfg.items() if k != 'dual_organism'}
-        for block in ('project', 'analysis', 'reference', 'samples', 'thresholds'):
-            c[block] = dict(c.get(block) or {})
-        c['project']['output_dir'] = os.path.relpath(out / role, child) + '/'
-        c['analysis']['objectives'] = objectives[role]
-        c['preprocessing'] = {'passthrough': True}
-        c['screening'] = {'enabled': False}
-        c['reference'].update({k: dual[role].get(k) for k in ('genome_fasta_url', 'gtf_url', 'transcriptome_fasta_url')},
-                              accession=dual[role]['label'])
-        c['samples'].update(sheet='config/samples.tsv', metadata_dir=None)
-        if role == 'host':
-            # The gene-information table is the host's and is named relative to the parent project.
-            c['reference']['annotation_tsv'] = dict(
-                c['reference'].get('annotation_tsv') or {},
-                path=str(project / Path(full['reference']['annotation_tsv']['path']).expanduser()))
-        else:
-            # Reads are pre-assigned: inclusion is min_assigned_reads, not the mapping-rate or depth floor.
-            c['downstream'] = dict(run_go=False, run_kegg=False, run_wgcna=False)
-            c['thresholds']['sample_qc'] = dict(c['thresholds'].get('sample_qc') or {},
-                                                mapping_rate_min=0, min_reads_on_genes_rnaseq=0)
-        if not c['thresholds']:
-            del c['thresholds']
+        table_text = io.StringIO()
+        writer = csv.DictWriter(table_text, fieldnames=list(rows[0]), delimiter='\t', lineterminator='\n')
+        writer.writeheader()
+        writer.writerows(rows)
         (child / 'config').mkdir(parents=True, exist_ok=True)
-        (child / 'config/config.yaml').write_text(yaml.safe_dump(c, sort_keys=False))
-        with open(child / 'config/samples.tsv', 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=list(rows[0]), delimiter='\t', lineterminator='\n')
-            writer.writeheader()
-            writer.writerows(rows)
+        _write(child / 'config/config.yaml', yaml.safe_dump(child_config(cfg, role, objectives[role]), sort_keys=False))
+        _write(child / 'config/samples.tsv', table_text.getvalue())
         # The launcher reads tier sizes from the project's own copy.
-        shutil.copyfile(project / 'config/thresholds.yaml', child / 'config/thresholds.yaml')
+        _write(child / 'config/thresholds.yaml', (project / 'config/thresholds.yaml').read_text())
     (out / 'pathogen').mkdir(parents=True, exist_ok=True)
     with open(out / 'pathogen/samples_not_quantified.tsv', 'w', newline='') as f:
         writer = csv.writer(f, delimiter='\t', lineterminator='\n')

@@ -9,8 +9,13 @@ from dual_organism import validate, combine, label, assign
 ok = {'dual_organism': {'enabled': True,
       'host': {'label': 'grape', 'genome_fasta_url': 'file:///h.fa', 'gtf_url': 'file:///h.gtf'},
       'pathogen': {'label': 'GRBV', 'genome_fasta_url': 'file:///p.fa'}},
-      'samples': {'seq_type': 'rnaseq_single'}}
+      'samples': {'seq_type': 'rnaseq_single'}, 'analysis': {'quantifier': 'star'}}
 v = validate(ok)
+# Salmon quantifies against transcripts: each organism needs its own.
+for quantifier in ('salmon', 'auto'):
+    try: validate({**ok, 'analysis': {'quantifier': quantifier}})
+    except ValueError as exc: assert 'dual_organism.host.transcriptome_fasta_url' in str(exc), exc
+    else: raise AssertionError('Salmon route without transcripts accepted')
 assert v['multimap_limit'] == 20 and v['ambiguous_warn_fraction'] == 0.05
 assert v['pathogen']['min_assigned_reads'] == 10000 and v['pathogen']['objectives'] == ['gene_expression']
 # Null fields from the config template mean unset.
@@ -175,11 +180,11 @@ print('dual-organism STAR wiring passed')
 import copy, csv, subprocess, yaml
 import config_resolve
 from recommend import recommend
-from dual_organism import children
+from dual_organism import children, child_config
 PARENT = {'project': {'name': 'dual', 'output_dir': 'results/'},
           'analysis': {'quantifier': 'star'},
           'screening': {'enabled': True, 'references': [{'name': 'Host', 'role': 'expected', 'fasta': 'genome'}]},
-          'reference': {'star_overhang': 49, 'annotation_tsv': {'path': 'reference/annotation_info.tsv'}},
+          'reference': {'star_overhang': 49, 'decoys': 'config/decoys.txt', 'annotation_tsv': {'path': 'reference/annotation_info.tsv'}},
           'samples': {'sheet': 'config/samples.tsv', 'seq_type': 'rnaseq_paired', 'expected_libtype': 'ISR'},
           'model': {'fixed_effects': '~ treatment', 'random_effects': None, 'primary_factor': 'treatment'},
           'contrasts': [{'id': 'treatment', 'type': 'pairwise', 'factor': 'treatment'}],
@@ -198,6 +203,7 @@ def parent(t, pathogen_reads):
     for d in ('config', 'results', 'reference'):
         (t / d).mkdir()
     (t / 'reference/annotation_info.tsv').write_text('Gene.stable.ID\n')
+    (t / 'config/decoys.txt').write_text('chr1\n')
     (t / 'config/thresholds.yaml').write_text((ROOT / 'config/thresholds.yaml').read_text())
     (t / 'config/samples.tsv').write_text('# cohort\nsample_id\tfastq_url\tfastq_url_r2\ttreatment\n' + ''.join(
         f'{s}\thttps://x/{s}_1.fq.gz\thttps://x/{s}_2.fq.gz\t{"mock" if s in MOCK else "infected"}\n' for s in MOCK + INFECTED))
@@ -243,9 +249,17 @@ with tempfile.TemporaryDirectory() as t:
     assert cfg['screening'] == {'enabled': False} and cfg['samples']['metadata_dir'] is None
     assert cfg['reference'] | {'annotation_tsv': 0} == {
         'star_overhang': 49, 'annotation_tsv': 0, 'genome_fasta_url': 'file:///h.fa', 'gtf_url': 'file:///h.gtf',
-        'transcriptome_fasta_url': 'file:///h.rna.fa', 'accession': 'grape'}, cfg['reference']
-    # The host annotation table is a project-relative path in the parent.
-    assert cfg['reference']['annotation_tsv']['path'] == str(t / 'reference/annotation_info.tsv')
+        'transcriptome_fasta_url': 'file:///h.rna.fa', 'accession': 'grape', 'decoys': '../../config/decoys.txt'}, cfg['reference']
+    # Host files named relative to the parent project are reached from dual/host.
+    assert cfg['reference']['annotation_tsv'] == {'path': '../../reference/annotation_info.tsv'}
+    assert (t / 'dual/host' / cfg['reference']['decoys']).is_file() and (t / 'dual/host' / cfg['reference']['annotation_tsv']['path']).is_file()
+    # The parent check and the written project come from one function.
+    assert cfg == child_config(PARENT, 'host')
+    absolute = {**PARENT, 'project': {'output_dir': '/data/out'}, 'reference': {'decoys': 'genome', 'annotation_tsv': {'path': '/data/info.tsv'}}}
+    made = child_config(absolute, 'host')
+    assert (made['project']['output_dir'], made['reference']['decoys'], made['reference']['annotation_tsv']['path']) == ('/data/out/host/', 'genome', '/data/info.tsv')
+    assert child_config(absolute, 'pathogen')['reference']['decoys'] == 'genome'
+    unchanged = [(p, p.stat().st_mtime_ns) for p in (t / 'dual/host/config').iterdir()]
     assert cfg['analysis'] == {'quantifier': 'star', 'objectives': ['gene_expression', 'differential_expression']}
     assert resolved['thresholds']['sample_qc']['mapping_rate_min'] == 0.60 and resolved['downstream']['run_go'] is True
     assert (t / 'dual/host/config/thresholds.yaml').read_text() == (t / 'config/thresholds.yaml').read_text()
@@ -256,6 +270,8 @@ with tempfile.TemporaryDirectory() as t:
     assert cfg['analysis']['objectives'] == ['gene_expression'] and cfg['project']['output_dir'] == '../../results/pathogen/'
     assert cfg['downstream'] == {'run_go': False, 'run_kegg': False, 'run_wgcna': False}
     assert cfg['reference']['accession'] == 'GRBV' and cfg['reference']['transcriptome_fasta_url'] is None
+    # The decoy list and the gene-information table describe the host.
+    assert cfg['reference']['decoys'] is None and cfg['reference']['annotation_tsv'] == {'path': None}
     # Pathogen reads are pre-assigned: inclusion is min_assigned_reads, not the mapping-rate or depth floor.
     assert cfg['thresholds']['sample_qc'] == {'duplication_rate_warn': 0.5, 'mapping_rate_min': 0, 'min_reads_on_genes_rnaseq': 0}
     assert PARENT == SNAPSHOT, 'children changed the parent config'
@@ -264,7 +280,11 @@ with tempfile.TemporaryDirectory() as t:
     (t / 'results/assignment.tsv').write_text((t / 'results/assignment.tsv').read_text().replace('\t12\t', '\t20000\t'))
     status = children(t, PARENT, tsv)
     assert status['pathogen']['de'] == 'requested' and status['pathogen']['not_quantified'] == [], status
+    # A relaunch leaves an unchanged child project untouched.
+    assert unchanged == [(p, p.stat().st_mtime_ns) for p, _ in unchanged]
     assert child(t, 'pathogen')[0]['analysis']['objectives'] == ['gene_expression', 'differential_expression']
+    nofactor = children(t, {**PARENT, 'model': {**PARENT['model'], 'primary_factor': 'dose'}}, tsv)['pathogen']
+    assert nofactor['de'] == 'not_estimable' and 'dose' in nofactor['reason'], nofactor
     counts_only = {**PARENT, 'dual_organism': {**PARENT['dual_organism'], 'pathogen': {**PARENT['dual_organism']['pathogen'], 'objectives': None}}}
     assert children(t, counts_only, tsv)['pathogen']['de'] == 'not_requested'
 
@@ -283,6 +303,7 @@ with tempfile.TemporaryDirectory() as t:
     tsv = parent(t, {s: 12 for s in MOCK + INFECTED})
     status = children(t, PARENT, tsv)
     assert status['pathogen']['status'] == 'skipped' and status['pathogen']['samples'] == [], status
+    assert status['pathogen']['de'] == 'skipped' and '10000' in status['pathogen']['reason'], status
     assert status['pathogen']['not_quantified'] == MOCK + INFECTED and not (t / 'dual/pathogen').exists()
     assert json.loads((t / 'results/pathogen/status.json').read_text())['status'] == 'skipped'
     assert len(child(t, 'host')[2]) == 6

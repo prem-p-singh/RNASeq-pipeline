@@ -99,9 +99,24 @@ dual = {'samples': {'seq_type': 'rnaseq_paired'},
         'dual_organism': {'enabled': True,
                           'host': {'label': 'grape', 'genome_fasta_url': 'file:///h.fa', 'gtf_url': 'file:///h.gtf'},
                           'pathogen': {'label': 'GRBV', 'genome_fasta_url': 'file:///p.fa'}}}
-r = recommend(dual)
-assert (r['status'], r['route'], r['backend'], r['count_treatment']) == ('selected', 'dual_assignment', None, None), r
-assert not r['issues'] and r['qualification'] == 'experimental; no public-data check passed', r
+# Each organism runs as its own project afterwards, so the parent refuses whatever a child would refuse.
+star = {**dual, 'analysis': {'quantifier': 'star'}, 'samples': {'seq_type': 'rnaseq_paired', 'expected_libtype': 'ISR'}}
+salmon = {**dual, 'dual_organism': {**dual['dual_organism'], **{
+    role: {**dual['dual_organism'][role], 'transcriptome_fasta_url': f'file:///{role}.rna.fa'} for role in ('host', 'pathogen')}}}
+for valid in (star, salmon):
+    r = recommend(valid)
+    assert (r['status'], r['route'], r['backend'], r['count_treatment']) == ('selected', 'dual_assignment', None, None), r
+    assert not r['issues'] and r['qualification'] == 'experimental; no public-data check passed', r
+enrich = {**star, 'dual_organism': {**dual['dual_organism'], 'pathogen': {**dual['dual_organism']['pathogen'], 'objectives': ['gene_expression', 'enrichment']}}}
+coexpr = {**star, 'dual_organism': {**dual['dual_organism'], 'pathogen': {**dual['dual_organism']['pathogen'], 'objectives': ['gene_expression', 'coexpression']}}}
+half = {**salmon, 'dual_organism': {**salmon['dual_organism'], 'pathogen': dual['dual_organism']['pathogen']}}
+for bad, words in (({**star, 'samples': {'seq_type': 'rnaseq_paired'}}, ('host: ', 'pathogen: ', 'expected_libtype')),
+                   (half, ('dual_organism.pathogen.transcriptome_fasta_url',)),
+                   (enrich, ('pathogen: Enrichment objective',)), (coexpr, ('pathogen: Coexpression objective',))):
+    b = recommend(bad)
+    assert b['status'] == 'blocked' and b['route'] == 'dual_assignment', b
+    assert all(any(w in i for i in b['issues']) for w in words), (words, b['issues'])
+assert not any(i.startswith('host: ') for i in recommend(enrich)['issues']), recommend(enrich)['issues']
 b = recommend({**dual, 'samples': {'seq_type': 'tagseq'}})
 assert b['status'] == 'blocked' and any('tagseq' in i for i in b['issues']), b['issues']
 off = recommend({**dual, 'dual_organism': {**dual['dual_organism'], 'enabled': False}})
@@ -113,6 +128,6 @@ for bad, word in (({**dual, 'samples': {'seq_type': 'rnaseq_pared'}}, 'No implem
                   ({**dual, 'analysis': {'objectives': 'qc'}}, 'nonempty list')):
     b = recommend(bad)
     assert b['status'] == 'blocked' and b['route'] == 'dual_assignment' and any(word in i for i in b['issues']), (word, b['issues'])
-r = recommend(dual)
+r = recommend(star)
 assert r['status'] == 'selected' and not r['issues'], r
 print('dual-organism route selection passed')

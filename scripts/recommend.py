@@ -3,6 +3,7 @@
 import hashlib
 from pathlib import Path
 import yaml
+import config_resolve
 import dual_organism
 from small_rna import load_kit
 import tagseq
@@ -50,7 +51,11 @@ def recommend(cfg, n_samples=None):
     if (cfg.get("dual_organism") or {}).get("enabled"):
         # Reads are assigned to an organism first; each organism then gets its own route.
         try:
-            dual_organism.validate(cfg)
+            # Each organism then runs as its own project: refuse here what that project would refuse,
+            # before any read is assigned. A child config has no dual_organism block, so this ends.
+            for role in dual_organism.ROLES:
+                child = config_resolve.resolve(POLICY.parent.parent, [("project", dual_organism.child_config(cfg, role))])[0]
+                issues.extend(f"{role}: {issue}" for issue in recommend(child)["issues"])
         except (ValueError, TypeError) as exc:
             issues.append(str(exc))
         # The shared checks that still apply before any per-organism route is chosen.
