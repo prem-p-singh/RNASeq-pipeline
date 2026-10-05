@@ -9,6 +9,7 @@ import math
 import re
 
 import yaml
+import dual_organism
 import metadata
 import tagseq
 from small_rna import load_kit, kit_policy
@@ -28,8 +29,8 @@ def read_intake(path, sheet_name=None):
     try:
         version = workbook["README"]["B2"].value if "README" in workbook.sheetnames else None
         version = 1 if version in (None, "") else version
-        if type(version) is not int or version not in (1, 2, 3, 4, 5, 6, 7):
-            raise ValueError("README!B2: unsupported intake schema version; expected 1 to 7")
+        if type(version) is not int or version not in (1, 2, 3, 4, 5, 6, 7, 8):
+            raise ValueError("README!B2: unsupported intake schema version; expected 1 to 8")
         candidates = []
         for name in tabs:
             if name in workbook.sheetnames:
@@ -359,6 +360,31 @@ def setup_inputs(record):
     if a["run_wgcna"] == "yes" and goal == "QC only":
         fail("run_wgcna", "WGCNA needs expression; QC only produces no counts")
     objectives += (["enrichment"] if enrichment else []) + (["coexpression"] if a["run_wgcna"] == "yes" else [])
+    dual = None
+    if (a.get("dual_organism") or "no") == "yes":
+        if not (a.get("reference_genome") and a.get("reference_gtf")):
+            fail("reference_genome", "dual-organism needs the host genome and GTF as the custom reference answers")
+        for key in ("pathogen_label", "pathogen_genome", "pathogen_gtf") + (() if quantifier == "star" else ("pathogen_transcriptome",)):
+            if not a.get(key):
+                fail(key, f"{key} is required when host and pathogen is yes" + ("" if key != "pathogen_transcriptome" else " and the quantification method is not star"))
+
+        def uri(value):
+            return value if "://" in str(value) else Path(absolute(str(value))).as_uri()
+
+        pathogen_objectives = ["gene_expression"] + (["differential_expression"] if a.get("pathogen_objective") == "differential expression" else [])
+        dual = dict(enabled=True,
+                    host=dict(label=re.sub(r"[^A-Za-z0-9_.-]", "_", organism),
+                              genome_fasta_url=custom_ref["genome_fasta_url"], gtf_url=custom_ref["gtf_url"],
+                              transcriptome_fasta_url=custom_ref["transcriptome_fasta_url"], objectives=list(objectives)),
+                    pathogen=dict(label=str(a["pathogen_label"]), genome_fasta_url=uri(a["pathogen_genome"]),
+                                  gtf_url=uri(a["pathogen_gtf"]),
+                                  transcriptome_fasta_url=uri(a["pathogen_transcriptome"]) if a.get("pathogen_transcriptome") else None,
+                                  objectives=pathogen_objectives,
+                                  min_assigned_reads=int(a.get("pathogen_min_reads") or 10000)))
+        try:
+            dual_organism.validate(dict(samples=dict(seq_type=layout), analysis=dict(quantifier=quantifier), dual_organism=dual))
+        except ValueError as exc:
+            fail("dual_organism", str(exc))
     contrasts = []
     for row in record.get("contrast_rows") or []:
         cid = row.get("contrast_id", "")
@@ -427,6 +453,7 @@ def setup_inputs(record):
                 sample_id_column=str(a["sample_id_column"]), primary_factor=factor,
                 model_fixed_effects=fixed, model_random_effects=random, contrasts=contrasts or None,
                 objectives=objectives, screening=screening,
+                **({"dual_organism": dual} if dual else {}),
                 expected_libtype=supplied or expected, description=a["biological_question"],
                 run_enrichment=enrichment, run_wgcna=a["run_wgcna"] == "yes", subject_column=subject,
                 orgdb_strategy=a["orgdb_strategy"] if enrichment else "skip",
@@ -442,6 +469,7 @@ IMPACT = [
       "metadata_file", "sample_id_column"), "preprocessing, screening, quantification, counts, statistics, report"),
     (("analysis.quantifier",), "quantification, counts, statistics, report"),
     (("screening",), "screening, report"),
+    (("dual_organism",), "assignment, quantification, counts, statistics, report"),
     (("objectives",), "requested targets"),
     (("analysis.backend", "model_fixed_effects", "model_random_effects", "primary_factor", "contrasts",
       "subject_column", "expected_min_samples"), "differential expression, enrichment, report"),

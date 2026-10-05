@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
                 row[2].value = answers[key]
     w.save(book)
     record = read_intake(book)
-    assert record["schema_version"] == 7
+    assert record["schema_version"] == 8
     inputs = setup_inputs(record)
     assert inputs["tax_id"] == 9606 and inputs["seq_type"] == "rnaseq_paired"
     assert inputs["expected_libtype"] == "ISR" and inputs["model_random_effects"] is None
@@ -371,7 +371,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
             s2[srna_cells[key]] = value
     sr.save(base / "srna.xlsx")
     srna_record = read_intake(base / "srna.xlsx", "sRNA-seq")
-    assert srna_record["schema_version"] == 7
+    assert srna_record["schema_version"] == 8
     srna_inputs = setup_inputs(srna_record)
     assert srna_inputs["seq_type"] == "srnaseq"
     assert srna_inputs["analysis"] == {"small_rna_profile": "plant", "small_rna_kit": "TruSeq Small RNA"}
@@ -478,7 +478,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
             s3[tagseq_cells[key]] = value
     tg.save(base / "tagseq.xlsx")
     tagseq_record = read_intake(base / "tagseq.xlsx", "TAGseq")
-    assert tagseq_record["schema_version"] == 7
+    assert tagseq_record["schema_version"] == 8
     tagseq_inputs = setup_inputs(tagseq_record)
     assert tagseq_inputs["seq_type"] == "tagseq"
     assert tagseq_inputs["analysis"] == {"quantifier": "star", "backend": "auto", "kit": "QuantSeq REV"}
@@ -526,5 +526,94 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     assert tagseq_cfg["reference"]["gtf_url"] == (base / "genes.gtf").as_uri()
     tagseq_reco = recommend_cfg(tagseq_cfg)
     assert tagseq_reco["status"] == "selected" and tagseq_reco["route"] == "star_tagseq", tagseq_reco
+
+    # Dual organism (Bulk tab only). Schema 7 workbooks and dual_organism=no give the same inputs.
+    dual_ids = {"dual_organism", "pathogen_label", "pathogen_genome", "pathogen_gtf",
+                "pathogen_transcriptome", "pathogen_objective", "pathogen_min_reads"}
+    for tab in q["tabs"]:
+        present = {x["id"] for x in tab["extra_questions"]} & dual_ids
+        assert present == (dual_ids if tab["name"] == "Bulk RNA-seq" else set()), tab["name"]
+    assert "dual_organism" not in inputs
+    v7 = openpyxl.load_workbook(book)
+    v7["README"]["B2"] = 7
+    first = min(s[cells[k]].row for k in dual_ids)
+    v7["Bulk RNA-seq"].delete_rows(first, len(dual_ids))
+    v7.save(base / "schema7.xlsx")
+    seven = read_intake(base / "schema7.xlsx")
+    assert seven["schema_version"] == 7 and not dual_ids & set(seven["answers"])
+    assert setup_inputs(seven) == inputs
+
+    w = openpyxl.load_workbook(book)
+    s = w["Bulk RNA-seq"]
+    dual_answers = dict(dual_organism="yes", pathogen_label="Botrytis", pathogen_genome="botrytis.fa",
+                        pathogen_gtf="botrytis.gtf", pathogen_transcriptome="botrytis_tx.fa",
+                        pathogen_objective="differential expression", pathogen_min_reads=500,
+                        reference_genome="genome.fa", reference_gtf="genes.gtf", reference_transcriptome="tx.fa",
+                        organism="Homo sapiens")
+    saved_dual = {key: s[cells[key]].value for key in dual_answers}
+    for key, value in dual_answers.items():
+        s[cells[key]] = value
+    w.save(base / "dual.xlsx")
+    dual_inputs = setup_inputs(read_intake(base / "dual.xlsx"))
+    block = dual_inputs["dual_organism"]
+    assert block["enabled"] is True
+    assert block["host"] == dict(label="Homo_sapiens", genome_fasta_url=(base / "genome.fa").as_uri(),
+                                 gtf_url=(base / "genes.gtf").as_uri(), transcriptome_fasta_url=(base / "tx.fa").as_uri(),
+                                 objectives=["gene_expression", "differential_expression"])
+    assert block["pathogen"] == dict(label="Botrytis", genome_fasta_url=(base / "botrytis.fa").as_uri(),
+                                     gtf_url=(base / "botrytis.gtf").as_uri(),
+                                     transcriptome_fasta_url=(base / "botrytis_tx.fa").as_uri(),
+                                     objectives=["gene_expression", "differential_expression"], min_assigned_reads=500)
+    import dual_organism
+    dual_organism.validate(dict(samples=dict(seq_type="rnaseq_paired"), analysis=dict(quantifier="auto"), dual_organism=block))
+
+    s[cells["organism"]] = "human"
+    dual_project = base / "dual project"
+    from recommend import recommend as recommend_cfg
+    w.save(base / "dual.xlsx")
+    with patch.object(sys, "argv", ["setup.py", "--intake", str(base / "dual.xlsx"), "--project-dir", str(dual_project), "--plan-only"]), \
+         patch.object(setup, "resolve_organism", return_value=org), \
+         patch.object(setup, "resolve_reference_urls", side_effect=AssertionError("dual used network reference lookup")):
+        setup.main()
+    dual_cfg = yaml.safe_load((dual_project / "config/config.yaml").read_text())
+    assert dual_cfg["dual_organism"]["enabled"] is True and dual_cfg["dual_organism"]["host"]["label"] == "human"
+    assert dual_cfg["dual_organism"]["pathogen"]["min_assigned_reads"] == 500
+    assert dual_cfg["dual_organism"]["multimap_limit"] == 20, "template defaults survive"
+    dual_reco = recommend_cfg(dual_cfg)
+    assert dual_reco["status"] == "selected" and dual_reco["route"] == "dual_assignment", dual_reco
+
+    def dual_rejected(key, value, message):
+        old = s[cells[key]].value
+        s[cells[key]] = value
+        w.save(base / "dual_bad.xlsx")
+        try:
+            setup_inputs(read_intake(base / "dual_bad.xlsx"))
+        except ValueError as exc:
+            assert message in str(exc), str(exc)
+        else:
+            raise AssertionError(f"accepted invalid dual {key}={value!r}")
+        s[cells[key]] = old
+
+    dual_rejected("pathogen_genome", None, "pathogen_genome is required")
+    dual_rejected("pathogen_label", None, "pathogen_label is required")
+    dual_rejected("pathogen_gtf", None, "pathogen_gtf is required")
+    dual_rejected("pathogen_transcriptome", None, "pathogen_transcriptome is required")
+    dual_rejected("pathogen_label", "a|b", "dual_organism.pathogen.label")
+    dual_rejected("pathogen_label", "human", "labels must differ")
+    dual_rejected("reference_gtf", None, "Incomplete custom reference")
+    for key in ("reference_genome", "reference_gtf", "reference_transcriptome"):
+        s[cells[key]] = None
+    dual_rejected("dual_organism", "yes", "host genome and GTF")
+    for key in ("reference_genome", "reference_gtf", "reference_transcriptome"):
+        s[cells[key]] = dual_answers[key]
+    # STAR needs no transcripts and asks for a declared strand (strandedness is reverse here).
+    for key in ("reference_transcriptome", "pathogen_transcriptome"):
+        s[cells[key]] = None
+    s[cells["analysis_quantifier"]] = "star"
+    w.save(base / "dual_star.xlsx")
+    assert setup_inputs(read_intake(base / "dual_star.xlsx"))["dual_organism"]["pathogen"]["transcriptome_fasta_url"] is None
+    s[cells["analysis_quantifier"]] = "auto"
+    for key, value in saved_dual.items():
+        s[cells[key]] = value
 
 print("check_intake.py: all assertions passed")

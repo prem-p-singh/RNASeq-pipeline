@@ -23,7 +23,7 @@
 # -----------------------------------------------------------------------------
 # Questions that appear on EVERY assay tab (project basics, paths, design)
 # -----------------------------------------------------------------------------
-schema_version: 7
+schema_version: 8
 readme:
   - "Fill the Bulk RNA-seq, sRNA-seq or TAGseq tab for your assay. Yellow cells are required; gray cells are optional. Enter literal values, not formulas."
   - "Current execution: annotated, non-UMI bulk QC, gene expression and differential expression; Salmon or STAR; independent groups, batch, subject-blocked or repeated-measures (dream) designs, interactions and continuous covariates."
@@ -41,6 +41,7 @@ readme:
   - "Contact, tissue, platform and kit answers are recorded context. They do not configure notifications, platform-specific trimming or kit-specific processing."
   - "Bulk method, analysis goal, model formula, subject effects, custom references, kit profile, preprocessing and screening have input fields. Optional Contrasts tab: one row per comparison; blank uses generated pairwise contrasts. Executor settings are submit.sh options."
   - "Changing a workbook after setup: submit.sh reports which settings and stages change and applies the revision only with --accept-revision."
+  - "Host and pathogen in the same libraries (Bulk RNA-seq only): choose yes for dual-organism intake, give the host genome and GTF as the custom reference, and fill the pathogen answers."
   - "Blank strandedness knowledge is not a reverse-stranded assumption: choose don't know. Salmon detects library type and reports disagreement. STAR requires a known declared strand; it does not infer strand."
   - "Do not change the field IDs in column E. Sorting complete rows and editing display labels do not change the field identities."
   - "Full intake and route coverage remains incomplete. See docs/INTAKE_TEMPLATE_AUDIT.md for required fields, implementation gaps and the v2 publication gate."
@@ -404,6 +405,55 @@ tabs:
         default: 100000
         required: false
         introduced_in: 5
+
+      - id: dual_organism
+        text: Host and pathogen in the same libraries
+        help: "yes splits each read to the host or the pathogen by alignment to both genomes, then counts each on its own. The host is the organism above; give its genome and GTF in the custom reference answers, plus its transcripts if you use Salmon. Not for TAGseq or sRNA-seq."
+        type: dropdown
+        options: ['no', 'yes']
+        default: 'no'
+        required: false
+        introduced_in: 8
+      - id: pathogen_label
+        text: Pathogen name (short label)
+        help: "Required when host and pathogen is yes. Letters, digits, underscore, dot and hyphen only, and different from the host. Example: Botrytis"
+        type: text
+        required: false
+        introduced_in: 8
+      - id: pathogen_genome
+        text: Pathogen genome FASTA path or URL
+        help: Required when host and pathogen is yes.
+        type: text
+        required: false
+        introduced_in: 8
+      - id: pathogen_gtf
+        text: Pathogen annotation GTF path or URL
+        help: Required when host and pathogen is yes. The pathogen is counted against its own annotation.
+        type: text
+        required: false
+        introduced_in: 8
+      - id: pathogen_transcriptome
+        text: Pathogen transcriptome FASTA path or URL
+        help: Required when host and pathogen is yes and the quantification method is not star.
+        type: text
+        required: false
+        introduced_in: 8
+      - id: pathogen_objective
+        text: Pathogen analysis
+        help: counts only gives pathogen gene counts. differential expression also tests the pathogen between groups. Pathogen enrichment and co-expression are not available.
+        type: dropdown
+        options: [counts only, differential expression]
+        default: counts only
+        required: false
+        introduced_in: 8
+      - id: pathogen_min_reads
+        text: Fewest pathogen reads for a sample to be analysed
+        help: Samples with fewer reads assigned to the pathogen are left out of the pathogen analysis.
+        type: number
+        maximum: 1000000000
+        default: 10000
+        required: false
+        introduced_in: 8
 
   - name: "TAGseq"
     description: |

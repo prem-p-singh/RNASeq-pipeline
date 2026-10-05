@@ -665,6 +665,8 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
         cfg["analysis"]["objectives"] = inputs["objectives"]
     if inputs.get("screening"):
         cfg["screening"] = inputs["screening"]
+    if inputs.get("dual_organism"):
+        cfg["dual_organism"].update(inputs["dual_organism"])
     # Handbook default is resolved once here and recorded; `auto` in an
     # existing config keeps its release meaning (no silent model change).
     if cfg["analysis"].get("backend", "auto") == "auto" and not inputs.get("model_random_effects") \
