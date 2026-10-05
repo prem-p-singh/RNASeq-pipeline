@@ -6,7 +6,7 @@
 # Host genome 40 kb and pathogen genome 30 kb, both one contig named chr1, random
 # sequence with one identical 2 kb segment in each. All genes are on the plus strand
 # and all reads are 100 nt plus-strand copies with no N bases.
-#   host      H1 5001-10000, HS 30001-32000 (the shared segment)
+#   host      H1 5001-10000, H2 15001-17000 (no reads), HS 30001-32000 (the shared segment)
 #   pathogen  P1 4001-8000;  the shared segment is 20001-22000, in no gene
 # Six single-end samples, S1-S3 mock and S4-S6 infected. Per sample:
 #   300 reads inside H1                -> host
@@ -51,9 +51,12 @@ inputs.mkdir(parents=True)
 (inputs / 'host.fa').write_text(f'>chr1\n{host}\n')
 (inputs / 'pathogen.fa').write_text(f'>chr1\n{pathogen}\n')
 gtf = 'chr1\tfixture\texon\t{}\t{}\t.\t+\t.\tgene_id "{}"; transcript_id "{}_tx";\n'
-(inputs / 'host.gtf').write_text(gtf.format(5001, 10000, 'H1', 'H1') + gtf.format(30001, 32000, 'HS', 'HS'))
+# H2 has no reads. It is here because Salmon 1.10.3 with --posBias crashes (segmentation fault) on an
+# index of exactly two transcripts when one of them has no reads (FARM job 39410501).
+(inputs / 'host.gtf').write_text(gtf.format(5001, 10000, 'H1', 'H1') + gtf.format(15001, 17000, 'H2', 'H2')
+                                 + gtf.format(30001, 32000, 'HS', 'HS'))
 (inputs / 'pathogen.gtf').write_text(gtf.format(4001, 8000, 'P1', 'P1'))
-(inputs / 'host.transcripts.fa').write_text(f'>H1_tx\n{host[slice(*H1)]}\n>HS_tx\n{shared}\n')
+(inputs / 'host.transcripts.fa').write_text(f'>H1_tx\n{host[slice(*H1)]}\n>H2_tx\n{host[15000:17000]}\n>HS_tx\n{shared}\n')
 (inputs / 'pathogen.transcripts.fa').write_text(f'>P1_tx\n{pathogen[slice(*P1)]}\n')
 
 record = lambda name, seq: f'@{name}\n{seq}\n+\n{"I" * len(seq)}\n'
@@ -104,7 +107,7 @@ for name, quantifier, layout, sheet in (('star', 'star', 'single', single), ('sa
         'orgdb': {'strategy': 'skip'},
         'hpc': {'delete_fastq_after_quant': True},
         'thresholds': {'sample_qc': {'min_reads_on_genes_rnaseq': 1}},
-        # Two genes cannot carry a differential-expression fit: both organisms are counts only.
+        # Three genes, one expressed, cannot carry a differential-expression fit: both organisms are counts only.
         'dual_organism': {'enabled': True,
                           'host': dict(organism('host', 'hostorg'), objectives=['gene_expression']),
                           'pathogen': dict(organism('pathogen', 'pathorg'), min_assigned_reads=100)},
@@ -262,7 +265,7 @@ elif mode == 'status':
         check('pathogen child objectives', yaml.safe_load((child / 'config.yaml').read_text())['analysis']['objectives'], ['gene_expression'])
 
 elif mode == 'children':  # arg = star or salmon
-    for role, samples, genes in (('host', MOCK + INFECTED, {'H1': 300, 'HS': 0}), ('pathogen', INFECTED, {'P1': 200})):
+    for role, samples, genes in (('host', MOCK + INFECTED, {'H1': 300, 'H2': 0, 'HS': 0}), ('pathogen', INFECTED, {'P1': 200})):
         out, n = proj / 'results' / role, sum(genes.values())
         for s in samples:
             q = out / 'quant' / s
