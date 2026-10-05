@@ -237,11 +237,10 @@ if mode == 'parent':
               r['warnings'].startswith('ambiguous fraction') and r['warnings'].endswith('above 0.05'))
 
 elif mode == 'paired':
-    # Design section 4: mates pointing to different organisms make the pair ambiguous.
-    # If the 20 cross-organism pairs come back unassigned, STAR left them unaligned: with default
-    # filters one aligned mate of 100 nt is under 66% of the 200 nt pair. That is a pipeline or
-    # design question (see the task 5 report), not a fixture error.
-    labels('PE1', dict(host=30, pathogen=0, ambiguous=20, unassigned=0), mates=('_R1', '_R2'))
+    # STAR leaves a pair with one mate in each organism unaligned: with default filters one
+    # aligned mate of 100 nt is under 66% of the 200 nt pair. So the 20 cross-organism pairs
+    # are unassigned (FARM job 39411334).
+    labels('PE1', dict(host=30, pathogen=0, ambiguous=0, unassigned=20), mates=('_R1', '_R2'))
     check('paired assignment.tsv samples', [r['sample'] for r in rows(proj / 'results/assignment.tsv')], ['PE1'])
 
 elif mode == 'status':

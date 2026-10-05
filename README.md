@@ -423,8 +423,8 @@ Reads are preprocessed once. STAR then aligns each read or pair to one combined 
 |---|---|---|
 | `host` | the host only | goes to the host analysis |
 | `pathogen` | the pathogen only | goes to the pathogen analysis |
-| `ambiguous` | both organisms, or the two mates are in different organisms | counted, in neither count table |
-| `unassigned` | no alignment, or more best hits than `multimap_limit` | counted, in neither count table |
+| `ambiguous` | both organisms | counted, in neither count table |
+| `unassigned` | no alignment, more best hits than `multimap_limit`, or a pair with one mate in each organism (STAR does not align such a pair) | counted, in neither count table |
 
 `results/assignment.tsv` has one row per sample: `reads`, the four label counts, `too_many_loci` (the unassigned reads that had more best hits than the limit), the four fractions, and a `warnings` column that is filled when the ambiguous fraction is above `ambiguous_warn_fraction`. The four label counts must add up to `reads`; a sample where they do not fails.
 
