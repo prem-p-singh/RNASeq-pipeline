@@ -42,8 +42,9 @@ def validate(cfg):
         d[role] = o
     if d['host']['label'] == d['pathogen']['label']:
         raise ValueError('dual_organism host and pathogen labels must differ')
-    if not d['host'].get('gtf_url'):
-        raise ValueError('dual_organism.host.gtf_url is required')
+    for role in ROLES:
+        if not d[role].get('gtf_url'):
+            raise ValueError(f'dual_organism.{role}.gtf_url is required')
     # Each organism is quantified on its own afterwards; Salmon needs that organism's transcripts.
     quantifier = (cfg.get('analysis') or {}).get('quantifier', 'auto')
     for role in ROLES:
@@ -345,9 +346,8 @@ if __name__ == '__main__':
     ap = argparse.ArgumentParser(description=__doc__)
     sub = ap.add_subparsers(dest='command', required=True)
     c = sub.add_parser('combine')
-    for name in ('host', 'pathogen', 'host-gtf', 'out-fa', 'out-gtf'):
+    for name in ('host', 'pathogen', 'host-gtf', 'pathogen-gtf', 'out-fa', 'out-gtf'):
         c.add_argument(f'--{name}', required=True)
-    c.add_argument('--pathogen-gtf', default='')
     a = sub.add_parser('assign')
     a.add_argument('--index', required=True); a.add_argument('--reads', nargs='+', required=True)
     a.add_argument('--outdir', required=True); a.add_argument('--sample', required=True)
@@ -363,7 +363,7 @@ if __name__ == '__main__':
     if args.command == 'combine':
         with tempfile.TemporaryDirectory(prefix='.combine-', dir=Path(args.out_fa).parent) as tmp:
             fa, gtf = Path(tmp) / 'combined.fa', Path(tmp) / 'combined.gtf'
-            combine(args.host, args.pathogen, args.host_gtf, args.pathogen_gtf or None, fa, gtf,
+            combine(args.host, args.pathogen, args.host_gtf, args.pathogen_gtf, fa, gtf,
                     args.host_label, args.pathogen_label)
             os.replace(fa, args.out_fa)
             os.replace(gtf, args.out_gtf)

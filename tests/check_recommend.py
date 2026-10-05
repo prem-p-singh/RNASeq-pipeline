@@ -98,7 +98,7 @@ print('TAG-seq kit route blocks passed')
 dual = {'samples': {'seq_type': 'rnaseq_paired'},
         'dual_organism': {'enabled': True,
                           'host': {'label': 'grape', 'genome_fasta_url': 'file:///h.fa', 'gtf_url': 'file:///h.gtf'},
-                          'pathogen': {'label': 'GRBV', 'genome_fasta_url': 'file:///p.fa'}}}
+                          'pathogen': {'label': 'GRBV', 'genome_fasta_url': 'file:///p.fa', 'gtf_url': 'file:///p.gtf'}}}
 # Each organism runs as its own project afterwards, so the parent refuses whatever a child would refuse.
 star = {**dual, 'analysis': {'quantifier': 'star'}, 'samples': {'seq_type': 'rnaseq_paired', 'expected_libtype': 'ISR'}}
 salmon = {**dual, 'dual_organism': {**dual['dual_organism'], **{
@@ -109,9 +109,11 @@ for valid in (star, salmon):
     assert not r['issues'] and r['qualification'] == 'experimental; no public-data check passed', r
 enrich = {**star, 'dual_organism': {**dual['dual_organism'], 'pathogen': {**dual['dual_organism']['pathogen'], 'objectives': ['gene_expression', 'enrichment']}}}
 coexpr = {**star, 'dual_organism': {**dual['dual_organism'], 'pathogen': {**dual['dual_organism']['pathogen'], 'objectives': ['gene_expression', 'coexpression']}}}
+nogtf = {**star, 'dual_organism': {**dual['dual_organism'], 'pathogen': {'label': 'GRBV', 'genome_fasta_url': 'file:///p.fa'}}}
 half = {**salmon, 'dual_organism': {**salmon['dual_organism'], 'pathogen': dual['dual_organism']['pathogen']}}
 for bad, words in (({**star, 'samples': {'seq_type': 'rnaseq_paired'}}, ('host: ', 'pathogen: ', 'expected_libtype')),
                    (half, ('dual_organism.pathogen.transcriptome_fasta_url',)),
+                   (nogtf, ('dual_organism.pathogen.gtf_url',)),
                    (enrich, ('pathogen: Enrichment objective',)), (coexpr, ('pathogen: Coexpression objective',))):
     b = recommend(bad)
     assert b['status'] == 'blocked' and b['route'] == 'dual_assignment', b

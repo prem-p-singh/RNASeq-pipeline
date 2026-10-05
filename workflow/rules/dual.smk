@@ -24,13 +24,13 @@ rule dual_fetch_gtf:
     shell:
         "bash {REPO_DIR:q}/workflow/scripts/fetch_reference_file.sh --url {params.url:q} --out {output.gtf:q} --kind gtf"
 
-# Contig names get the organism label and "|" as prefix; the pathogen annotation is optional.
+# Contig names get the organism label and "|" as prefix.
 rule dual_combine:
     input:
         host = DUAL_REF / "host.genome.fa",
         pathogen = DUAL_REF / "pathogen.genome.fa",
         host_gtf = DUAL_REF / "host.annotation.gtf",
-        pathogen_gtf = [DUAL_REF / "pathogen.annotation.gtf"] if DUAL["pathogen"].get("gtf_url") else [],
+        pathogen_gtf = DUAL_REF / "pathogen.annotation.gtf",
         helper = REPO_DIR / "scripts/dual_organism.py",
     output:
         fa = DUAL_REF / "combined.fa",
@@ -46,7 +46,7 @@ rule dual_combine:
         "logs/dual_combine.log",
     shell:
         "python3 {input.helper:q} combine --host {input.host:q} --pathogen {input.pathogen:q} "
-        "--host-gtf {input.host_gtf:q} --pathogen-gtf={input.pathogen_gtf:q} "
+        "--host-gtf {input.host_gtf:q} --pathogen-gtf {input.pathogen_gtf:q} "
         "--host-label {params.host_label:q} --pathogen-label {params.pathogen_label:q} "
         "--out-fa {output.fa:q} --out-gtf {output.gtf:q} > {log:q} 2>&1"
 

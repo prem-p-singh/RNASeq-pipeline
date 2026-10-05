@@ -124,7 +124,7 @@ dual_organism:
   pathogen:
     label: null
     genome_fasta_url: null
-    gtf_url: null                               # optional
+    gtf_url: null                               # required: the pathogen is counted against its own annotation
     transcriptome_fasta_url: null
     objectives: null                            # null: gene_expression
     min_assigned_reads: 10000

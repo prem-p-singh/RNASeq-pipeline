@@ -8,7 +8,7 @@ from dual_organism import validate, combine, label, assign
 
 ok = {'dual_organism': {'enabled': True,
       'host': {'label': 'grape', 'genome_fasta_url': 'file:///h.fa', 'gtf_url': 'file:///h.gtf'},
-      'pathogen': {'label': 'GRBV', 'genome_fasta_url': 'file:///p.fa'}},
+      'pathogen': {'label': 'GRBV', 'genome_fasta_url': 'file:///p.fa', 'gtf_url': 'file:///p.gtf'}},
       'samples': {'seq_type': 'rnaseq_single'}, 'analysis': {'quantifier': 'star'}}
 v = validate(ok)
 # Salmon quantifies against transcripts: each organism needs its own.
@@ -19,10 +19,13 @@ for quantifier in ('salmon', 'auto'):
 assert v['multimap_limit'] == 20 and v['ambiguous_warn_fraction'] == 0.05
 assert v['pathogen']['min_assigned_reads'] == 10000 and v['pathogen']['objectives'] == ['gene_expression']
 # Null fields from the config template mean unset.
-nulls = {**ok, 'dual_organism': {**ok['dual_organism'], 'pathogen': {**ok['dual_organism']['pathogen'], 'objectives': None, 'min_assigned_reads': None, 'gtf_url': None}}}
-assert validate(nulls)['pathogen'] == v['pathogen'] | {'gtf_url': None}
+nulls = {**ok, 'dual_organism': {**ok['dual_organism'], 'pathogen': {**ok['dual_organism']['pathogen'], 'objectives': None, 'min_assigned_reads': None}}}
+assert validate(nulls)['pathogen'] == v['pathogen']
 for path, value, word in ((('host', 'label'), 'a|b', 'label'), (('pathogen', 'label'), 'grape', 'differ'),
-                          (('pathogen', 'genome_fasta_url'), None, 'genome_fasta_url')):
+                          (('pathogen', 'genome_fasta_url'), None, 'genome_fasta_url'),
+                          # Each organism is counted against its own annotation afterwards.
+                          (('host', 'gtf_url'), None, 'dual_organism.host.gtf_url'),
+                          (('pathogen', 'gtf_url'), None, 'dual_organism.pathogen.gtf_url')):
     bad = {**ok, 'dual_organism': {**ok['dual_organism'], path[0]: {**ok['dual_organism'][path[0]], path[1]: value}}}
     try: validate(bad)
     except ValueError as exc: assert word in str(exc), exc
