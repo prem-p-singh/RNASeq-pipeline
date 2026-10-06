@@ -1,0 +1,13 @@
+diff --git a/scripts/bootstrap.sh b/scripts/bootstrap.sh
+index 1b8990c..241e2ec 100644
+--- a/scripts/bootstrap.sh
++++ b/scripts/bootstrap.sh
+@@ -45,6 +45,8 @@ fi
+ set +u
+ source "$(conda info --base)/etc/profile.d/conda.sh"
+ conda activate "$prefix"
++# Explicitly select this module even when another tool prefix precedes Conda on PATH.
++export PATH="$prefix/bin:$PATH"
+ set -u
+ export PYTHONNOUSERSITE=1 R_ENVIRON_USER=/dev/null R_PROFILE_USER=/dev/null
+ export R_LIBS_USER="$prefix/lib/R/library" R_LIBS_SITE="$prefix/lib/R/library"

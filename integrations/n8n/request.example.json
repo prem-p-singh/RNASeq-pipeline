@@ -1,0 +1,17 @@
+{
+  "project": "/srv/rnaseq/projects/my_study",
+  "conda_bin": "/opt/miniconda3/bin",
+  "executor": "local",
+  "cores": 4,
+  "mode": "dry_run",
+  "intake": "/srv/rnaseq/intakes/my_study.xlsx",
+  "intake_sheet": "Bulk RNA-seq",
+  "env_prefix": "/srv/rnaseq/environments/core",
+  "star_env_prefix": "/srv/rnaseq/environments/star",
+  "screen_env_prefix": "/srv/rnaseq/environments/screen",
+  "pipeline_repo": "/srv/rnaseq/RNASeq_pipeline-3.0",
+  "expected_source_sha256": "c0927cf7f31e0fc603c39eec9b432f9efcdcbbc53971d422dfe1ba2b2de6750c",
+  "accept_revision": false,
+  "srna_env_prefix": "/srv/rnaseq/environments/srna",
+  "umi_env_prefix": "/srv/rnaseq/environments/umi"
+}

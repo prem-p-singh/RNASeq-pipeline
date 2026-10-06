@@ -478,6 +478,10 @@ The remote checkout defaults to `RNASeq_pipeline` under the remote home director
 
 </details>
 
+## n8n orchestration (development)
+
+Use the [importable n8n workflows](integrations/n8n/README.md) to control the separately reviewed schema-7 source over SSH. This release branch is already schema 8, with workbook revisions, TAG-seq/QuantSeq and small-RNA routes. The integration pins an older source snapshot; it does not qualify the schema-8 source or its dual-organism routes. Deploy the reviewed combined bundle and run the explicit integration gate described in the guide.
+
 ## License and citation
 
 <img src="assets/section-license.svg" alt="License and citation" width="100%" />
