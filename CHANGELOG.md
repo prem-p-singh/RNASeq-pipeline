@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Add the n8n orchestration handoff and an explicit three-test integration gate. It targets the separately reviewed schema-7 development source; this schema-4 parent gains no workbook revision, TAG-seq/QuantSeq, or small-RNA routes. Missing release-smoke prerequisites are visible skips and block strict qualification. See integrations/n8n/README.md and VALIDATION.md.
+
 - Optional FastQ Screen/Bowtie2 diagnostic panels: seeded fragment sampling, separate mate/read counts, reference checksums and explicit disabled status; never removes reads or excludes samples. Isolated locked deployment preserves the core interpreter.
 
 - Workbook schema 4 connects bulk quantifier/DE selection, complete custom reference sets, decoy profile and basic preprocessing to generated configuration; older schemas remain readable.

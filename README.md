@@ -444,6 +444,10 @@ The remote checkout defaults to `RNASeq_pipeline` under the remote home director
 
 </details>
 
+## n8n orchestration (development)
+
+Use the [importable n8n workflows](integrations/n8n/README.md) to control the separately reviewed schema-7 development source over SSH. This parent remains schema 4: adding the integration does **not** add workbook revision, TAG-seq/QuantSeq, or small-RNA routes here. Deploy the combined source bundle and run the explicit integration gate described in the guide.
+
 ## License and citation
 
 <img src="assets/section-license.svg" alt="License and citation" width="100%" />
