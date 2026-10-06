@@ -10,6 +10,7 @@ import io
 import json
 import sys
 import urllib.request
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 from prepare_tagseq_public import digest, downsample, fetch
@@ -106,17 +107,23 @@ def prepare(study, destination):
             genes = exon_annotation(files['source_gtf'], files['genome_fasta'], out / 'pathogen.exons.gtf', out / 'pathogen.transcripts.fa')
             evidence['references']['derived'] = dict(genes=genes, gtf_sha256=digest(out / 'pathogen.exons.gtf'),
                                                      transcripts_sha256=digest(out / 'pathogen.transcripts.fa'))
-        rows = []
+        rows, md5_of, jobs = [], {}, []
         for run in spec['runs']:
             acc = run['accession']
-            md5s = run['fastq_md5'] or ena_md5(run)
-            kept, entry = [], dict(group=run['group'], title=run['title'], files=[])
+            md5_of[acc] = md5s = run['fastq_md5'] or ena_md5(run)
             if not len(run['fastq_url']) == len(md5s) == len(run['fastq_bytes']):
                 raise ValueError(f"{acc}: {len(run['fastq_url'])} URL(s), {len(md5s)} MD5 value(s) and {len(run['fastq_bytes'])} size(s)")
+            jobs += [(url, raw_dir / url.rsplit('/', 1)[1], md5, size) for url, md5, size in zip(run['fastq_url'], md5s, run['fastq_bytes'])]
+        # ENA serves about 1 MB/s per connection, so the FASTQ files are fetched side by side.
+        with ThreadPoolExecutor(8) as pool:
+            fetched = dict(zip((job[1].name for job in jobs), pool.map(lambda job: fetch(*job), jobs)))
+        for run in spec['runs']:
+            acc = run['accession']
+            kept, entry = [], dict(group=run['group'], title=run['title'], files=[])
             cap = spec['downsample']['max_reads_per_run']
-            for url, md5, size in zip(run['fastq_url'], md5s, run['fastq_bytes']):
+            for url, md5 in zip(run['fastq_url'], md5_of[acc]):
                 name = url.rsplit('/', 1)[1]
-                source = fetch(url, raw_dir / name, md5, size)
+                source = fetched[name]
                 # The same seed keeps the same record numbers in both mates of a pair.
                 counts = as_is(raw_dir / name, out / name) if cap is None else downsample(raw_dir / name, out / name, cap, spec['downsample']['seed'])
                 entry['files'].append(dict(source=dict(source, md5=md5), derived=dict(sha256=digest(out / name), **counts)))
