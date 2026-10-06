@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "selected_not_qualified",
-  "note": "Metadata only (2026-10-04 and 2026-10-05); no FASTQ bytes fetched. Run titles, infection status and read counts are from the NCBI SRA records of each run; FASTQ URLs and byte sizes are from HTTP HEAD requests to the ENA FTP server; the ENA Portal API returned HTTP 500 for every request while this file was written, so fastq_md5 is null and prepare_dual_public.py reads the MD5 values from the ENA file report at download time and records them. Reference sizes are from HTTP HEAD requests. Nothing here has been run.",
+  "note": "Metadata only (2026-10-04 and 2026-10-05); no FASTQ bytes fetched. Run titles, infection status and read counts are from the NCBI SRA records of each run; FASTQ URLs and byte sizes are from HTTP HEAD requests to the ENA FTP server; FASTQ MD5 values are from the ENA file report of each study, fetched on 2026-10-05, after its URLs and byte sizes were checked against the pinned ones.",
   "acceptance_criteria": [
     "Conservation: for every sample, host + pathogen + ambiguous + unassigned equals the reads that entered assignment.",
     "Every mock or healthy sample has a lower pathogen-assigned fraction than every infected sample in the study.",
@@ -79,7 +79,9 @@
           "fastq_bytes": [
             481883760
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "9d6654871a04dc4f4488d38694c74a0d"
+          ]
         },
         {
           "accession": "SRR4043736",
@@ -94,7 +96,9 @@
           "fastq_bytes": [
             449171640
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "b9473f79eecfd965d58a449d500831e0"
+          ]
         },
         {
           "accession": "SRR4043737",
@@ -109,7 +113,9 @@
           "fastq_bytes": [
             626488632
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "09cf8ae4e12924556cfe9944a37ff6d2"
+          ]
         },
         {
           "accession": "SRR4043732",
@@ -124,7 +130,9 @@
           "fastq_bytes": [
             563950776
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "f484dbf62d86bcfd0d0cfa9b51849548"
+          ]
         },
         {
           "accession": "SRR4043733",
@@ -139,7 +147,9 @@
           "fastq_bytes": [
             314817007
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "4d3d26727bdb9fcfa7cb27963b8a730f"
+          ]
         },
         {
           "accession": "SRR4043734",
@@ -154,7 +164,9 @@
           "fastq_bytes": [
             399536402
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "e441b39b9f7e09e23e8e37fada51af12"
+          ]
         }
       ],
       "rejected_candidates": [
@@ -250,7 +262,10 @@
             1057596832,
             1079293761
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "b7fe1eaffd7e7a7d8aa1e5c126d1338d",
+            "6b3716b98f875ba5b870a191426a4e95"
+          ]
         },
         {
           "accession": "SRR35391035",
@@ -267,7 +282,10 @@
             1066983117,
             1093468097
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "83e48d6c2f7819c3a50d7171111b938e",
+            "938090528d8f2e002f8f7ef7660168c4"
+          ]
         },
         {
           "accession": "SRR35391026",
@@ -284,7 +302,10 @@
             1096892040,
             1116746672
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "7e78b84e633aff8daef41a946b1e5b63",
+            "a78c34df8c4e0d54d1117596cd35e4f7"
+          ]
         },
         {
           "accession": "SRR35391025",
@@ -301,7 +322,10 @@
             1105588506,
             1116331471
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "6870375c79ff4ab9e7b711720ae8d59b",
+            "ee3306143c7fe9cb67a1d304316e71ba"
+          ]
         },
         {
           "accession": "SRR35391028",
@@ -318,7 +342,10 @@
             1077787286,
             1094190058
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "4bac4a9d9775a4054ca0799242c44d57",
+            "28732276284b1f2012126df4bb6edb52"
+          ]
         },
         {
           "accession": "SRR35391027",
@@ -335,7 +362,10 @@
             1096452354,
             1125450577
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "6c964b2493b1270c0ce832dfb850922e",
+            "05b54f169d9d9702329542867f05e4f9"
+          ]
         },
         {
           "accession": "SRR35391024",
@@ -352,7 +382,10 @@
             1143667217,
             1175320600
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "41167ddceac6d1c725aa9c03a20e64e3",
+            "89773fa3d482d338bf1c511c253fb851"
+          ]
         },
         {
           "accession": "SRR35391023",
@@ -369,7 +402,10 @@
             1137769832,
             1145467954
           ],
-          "fastq_md5": null
+          "fastq_md5": [
+            "561fdc10c9f453a830f6423ac19810af",
+            "1d4579e844f0cf2891a5f11c79b48de9"
+          ]
         }
       ],
       "backup_candidate": {
