@@ -109,7 +109,7 @@ reference:
   # A species-correct map can be reintroduced when something actually needs it.
 
 # -----------------------------------------------------------------------------
-# Host and pathogen in one library (validated on the STAR route; experimental on Salmon)
+# Host and pathogen in one library (validated)
 # -----------------------------------------------------------------------------
 # One STAR alignment to the combined genome labels each read host, pathogen,
 # ambiguous or unassigned; ambiguous and unassigned reads enter neither organism.
