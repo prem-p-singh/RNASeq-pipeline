@@ -103,10 +103,10 @@ dual = {'samples': {'seq_type': 'rnaseq_paired'},
 star = {**dual, 'analysis': {'quantifier': 'star'}, 'samples': {'seq_type': 'rnaseq_paired', 'expected_libtype': 'ISR'}}
 salmon = {**dual, 'dual_organism': {**dual['dual_organism'], **{
     role: {**dual['dual_organism'][role], 'transcriptome_fasta_url': f'file:///{role}.rna.fa'} for role in ('host', 'pathogen')}}}
-for valid in (star, salmon):
+for valid, qualified in ((star, 'validated; public-data check passed'), (salmon, 'experimental; no public-data check passed')):
     r = recommend(valid)
     assert (r['status'], r['route'], r['backend'], r['count_treatment']) == ('selected', 'dual_assignment', None, None), r
-    assert not r['issues'] and r['qualification'] == 'experimental; no public-data check passed', r
+    assert not r['issues'] and r['qualification'] == qualified, r
 enrich = {**star, 'dual_organism': {**dual['dual_organism'], 'pathogen': {**dual['dual_organism']['pathogen'], 'objectives': ['gene_expression', 'enrichment']}}}
 coexpr = {**star, 'dual_organism': {**dual['dual_organism'], 'pathogen': {**dual['dual_organism']['pathogen'], 'objectives': ['gene_expression', 'coexpression']}}}
 nogtf = {**star, 'dual_organism': {**dual['dual_organism'], 'pathogen': {'label': 'GRBV', 'genome_fasta_url': 'file:///p.fa'}}}

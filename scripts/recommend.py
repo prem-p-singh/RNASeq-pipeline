@@ -81,7 +81,9 @@ def recommend(cfg, n_samples=None):
                        "fixed_effects": cfg.get("model", {}).get("fixed_effects"),
                        "random_effects": cfg.get("model", {}).get("random_effects")},
             "reasons": ["dual_organism.enabled: STAR assigns each read to host or pathogen on the combined genome."],
-            "qualification": "experimental; no public-data check passed",
+            # Both public studies passed on the STAR route (docs/RELEASE.md); Salmon has the synthetic check only.
+            "qualification": ("validated; public-data check passed" if (cfg.get("analysis") or {}).get("quantifier") == "star"
+                              else "experimental; no public-data check passed"),
             "alternatives": policy["alternatives"], "issues": issues,
         }
     route = policy["routes"].get(seq)

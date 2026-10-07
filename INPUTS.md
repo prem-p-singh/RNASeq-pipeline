@@ -104,7 +104,7 @@ Explicit R1/R2 adapters, poly-G policy and minimum retained length configure the
 - All three kits passed their public-data checks (FARM jobs 39025685, 39023623, 39023624) and are listed in `tagseq.validated_kits` in `config/spec.yaml`. A `tagseq` project without a kit stays provisional.
 - A `tagseq` project without a kit keeps the earlier provisional route unchanged.
 
-## Development: host and pathogen in the same libraries
+## Host and pathogen in the same libraries
 
 Status: `experimental`. Bulk RNA-seq only (single-end or paired-end); not for TAG-seq or small RNA.
 
