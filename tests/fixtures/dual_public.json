@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "status": "selected_not_qualified",
-  "note": "Metadata only (2026-10-04 and 2026-10-05); no FASTQ bytes fetched. Run titles, infection status and read counts are from the NCBI SRA records of each run; FASTQ URLs and byte sizes are from HTTP HEAD requests to the ENA FTP server; FASTQ MD5 values are from the ENA file report of each study, fetched on 2026-10-05, after its URLs and byte sizes were checked against the pinned ones.",
+  "note": "Metadata only (2026-10-04 and 2026-10-05); no FASTQ bytes fetched. Run titles, infection status and read counts are from the NCBI SRA records of each run; FASTQ URLs and byte sizes are from HTTP HEAD requests to the ENA FTP server; FASTQ MD5 values are from the ENA file report of each study, fetched on 2026-10-05, after its URLs and byte sizes were checked against the pinned ones. Reference sizes are from HTTP HEAD requests. The run results are in docs/RELEASE.md.",
   "acceptance_criteria": [
     "Conservation: for every sample, host + pathogen + ambiguous + unassigned equals the reads that entered assignment.",
     "Every mock or healthy sample has a lower pathogen-assigned fraction than every infected sample in the study.",
