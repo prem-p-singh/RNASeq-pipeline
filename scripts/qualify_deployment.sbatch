@@ -86,7 +86,8 @@ until ls "$WORK"/restart/results/quant/*/metrics.json >/dev/null 2>&1; do
     kill -0 $pid 2>/dev/null || { tail -60 "$EVIDENCE/restart-1.log"; fail "run ended before it could be interrupted"; }
     sleep 5
 done
-kill -INT $pid
+# $pid is the background subshell; its child is the launcher that became snakemake.
+pkill -INT -P $pid
 if wait $pid; then fail "interrupted run reported success"; fi
 kept=$(ls "$WORK"/restart/results/quant/*/metrics.json)
 before=$(stat -c '%n %Y' $kept)
