@@ -155,7 +155,7 @@ fi
 fi
 
 # Orchestration is a separate source line; never run its release smoke against
-# this schema-4 parent. --gate reports missing deployment prerequisites as 77.
+# this schema-5 parent. --gate reports missing deployment prerequisites as 77.
 echo "n8n integration gate"
 if command -v node >/dev/null 2>&1; then
     run check_n8n_nodes.js "node tests/check_n8n_nodes.js"
