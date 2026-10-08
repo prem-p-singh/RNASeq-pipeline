@@ -5,10 +5,13 @@ REPO=$(cd "$(dirname "$0")/.." && pwd)
 . "$REPO/tests/_gate.sh"
 gate_runtime r
 proj=${RNASEQ_PUBLIC_PROJECT:-$(mktemp -d)/public}
-python3 "$REPO/tests/fixtures/public_project.py" "$proj" "$REPO" "$@"
-python3 "$REPO/scripts/preflight.py" -d "$proj"
-if ! run_workflow "$proj" "$REPO" "$proj/run.log"; then
-    tail -80 "$proj/run.log"; exit 1
+# --verify checks a project that another launcher already ran.
+if [ "${1:-}" != --verify ]; then
+    python3 "$REPO/tests/fixtures/public_project.py" "$proj" "$REPO" "$@"
+    python3 "$REPO/scripts/preflight.py" -d "$proj"
+    if ! run_workflow "$proj" "$REPO" "$proj/run.log"; then
+        tail -80 "$proj/run.log"; exit 1
+    fi
 fi
 python3 - "$proj" <<'PY'
 import csv, json, sys, yaml

@@ -7,8 +7,9 @@
 #SBATCH --time=03:00:00
 set -eo pipefail
 # Make Conda available using your site's setup before submitting this job.
+# RNASEQ_VALIDATE_ROOT moves the temporary runtime off worker-local /tmp.
 TASK_REPO="$SLURM_SUBMIT_DIR"
-TASK_WORK=$(mktemp -d /tmp/rnaseq-release.XXXXXX)
+TASK_WORK=$(mktemp -d "${RNASEQ_VALIDATE_ROOT:-/tmp}/rnaseq-release.XXXXXX")
 TASK_EVIDENCE="$TASK_REPO/docs/evidence/slurm-$SLURM_JOB_ID"
 mkdir -p "$TASK_EVIDENCE"
 printf 'Worker: %s\nJob: %s\nUTC: %s\n' "$(hostname)" "$SLURM_JOB_ID" "$(date -u +%FT%TZ)" > "$TASK_EVIDENCE/worker.txt"
