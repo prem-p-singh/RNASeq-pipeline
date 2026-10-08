@@ -7,7 +7,9 @@ jobs: 20                      # upper bound; the dataset storage plan may reduce
 max-jobs-per-second: 1        # throttle submissions (queue-friendly)
 max-status-checks-per-second: 2
 restart-times: 3              # be patient with transient queue failures
-latency-wait: 60
+# NFS clients may cache a directory for 60 s or more (acdirmin). A resumed or
+# retried job whose old outputs the controller just removed needs longer.
+latency-wait: 120
 
 default-resources:
   # Uses scheduler defaults. Uncomment and set values required by your site.
