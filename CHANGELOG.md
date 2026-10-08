@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Deployment qualification (M8) passed on source `16f2e80`: fresh installation of five runtimes, the 44-check gate with zero skips, both bulk public routes, launcher-to-SLURM-worker execution, resume after interruption, two projects on one reference cache entry and a stock Ubuntu container. Public-data checks for small RNA, TAG-seq and dual organism were not repeated on this source. See docs/RELEASE.md for jobs, limits and the release matrix. The hosted release-validation workflow has not run on this source.
+- SLURM profiles wait 120 seconds for worker outputs (30 or 60 before). On NFS mounts that cache directories for 60 seconds, a resumed or retried job was reported as missing its outputs.
+- `scripts/qualify_deployment.sbatch` runs the distributed and container checks; `tests/check_public.sh --verify` checks a project that another launcher ran.
+
 - Track the n8n orchestration handoff and explicit three-test integration gate. Its reviewed schema-7 deployment snapshot predates this schema-8 release branch; it does not qualify schema-8 or dual-organism integration. Missing release-smoke prerequisites are visible skips and block strict qualification. See integrations/n8n/README.md and VALIDATION.md.
 
 - Small-RNA animal route (Bowtie 1 to species mature miRNAs, unique-hit counting) and plant route (ShortStack 4.1.0 joint loci, DicerCall size classes) via the workbook's sRNA-seq tab or direct project configuration. Both routes count reads, not molecules: no UMI deduplication, no isomiR resolution, no phased-siRNA calling. Named non-UMI kit profiles live in `config/small_rna_kits.yaml`; UMI small-RNA kits are rejected.
