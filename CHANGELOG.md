@@ -16,7 +16,10 @@
 - Full-genome Salmon decoy construction, identifier checks and reference/cache integrity verification.
 - STAR/featureCounts bulk route with declared strand, uniquely aligned fragment counts, indexed BAMs and a separately pinned tool module; public and recovery qualification in progress.
 - Candidate Linux runtime adds DESeq2 1.50.2 while preserving the previous 579 package records.
-- M1–M8 remain incomplete; new backend and full regression qualification is in progress. M2 remains partial: named chemistry profiles and new assay support remain open; declared-panel screening does not establish panel sensitivity.
+- Deployment qualification (M8) passed for this branch's bulk scope on source `82e70c5`: fresh installation, the 37-check gate with zero skips, both public routes, launcher-to-SLURM-worker execution, resume after interruption, two projects on one reference cache entry and a stock Ubuntu container. See docs/RELEASE.md for jobs, limits and the release matrix. The hosted release-validation workflow has not run on this source.
+- SLURM profiles wait 120 seconds for worker outputs (30 or 60 before). On NFS mounts that cache directories for 60 seconds, a resumed or retried job was reported as missing its outputs.
+- `scripts/qualify_deployment.sbatch` runs the distributed and container checks; `tests/check_public.sh --verify` checks a project that another launcher ran; `RNASEQ_VALIDATE_ROOT` relocates the validation runtime.
+- M1–M7 remain incomplete; new backend qualification is in progress. M2 remains partial: named chemistry profiles and new assay support remain open; declared-panel screening does not establish panel sensitivity.
 
 ## 2.0.0 — 2026-09-23
 

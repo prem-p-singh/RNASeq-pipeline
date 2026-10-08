@@ -174,7 +174,7 @@ Private repositories require GitHub authentication. Keep projects **outside the 
 
 ### 2. Install and verify the environment
 
-Prerequisites: **Linux x86_64**, Bash, Conda, Git, `curl`, `gzip` and `flock`; internet access for initial installation and remote references. Supply Conda yourself or load your site's Conda module. macOS, ARM and containers are not qualified deployment targets for v2.
+Prerequisites: **Linux x86_64**, Bash, Conda, Git, `curl`, `gzip` and `flock`; internet access for initial installation and remote references. Supply Conda yourself or load your site's Conda module. macOS, ARM and containers are not qualified deployment targets for v2. On the development branch a stock Ubuntu container passed installation and the Salmon route; see [release qualification](docs/RELEASE.md#deployment-qualification).
 
 ```bash
 # Choose a shared path when using SLURM.
@@ -429,7 +429,7 @@ bash tests/check_public.sh --star # same public study through STAR
 
 The published v2 strict suite has **22 checks**; the development runner adds raw QC, objective selection, genome decoys and backend comparisons for input contracts, read preparation, reference/cache safety, count agreement, DE directions, declared-model preservation, enrichment, WGCNA, storage and recovery. Scientific CI installs the lock and also runs the public smoke test. [Release qualification](docs/RELEASE.md) separates current source evidence from historical environment/SLURM checks. Synthetic tests and a downsampled public study do not establish validity for every organism or design.
 
-For clean installation on a SLURM worker, run `sbatch scripts/validate_slurm.sbatch` with your site's scheduler options. Developer mode (`bash tests/run_all.sh`) permits reported dependency skips; it is not the release gate. See [v2 changes](CHANGELOG.md), [input contracts](INPUTS.md) and [limitations](docs/RELEASE.md).
+For clean installation on a SLURM worker, run `sbatch scripts/validate_slurm.sbatch` with your site's scheduler options. `scripts/qualify_deployment.sbatch` checks launcher-to-worker execution, resume and a shared reference cache, or a stock container. Developer mode (`bash tests/run_all.sh`) permits reported dependency skips; it is not the release gate. See [v2 changes](CHANGELOG.md), [input contracts](INPUTS.md) and [limitations](docs/RELEASE.md).
 
 <details>
 <summary><strong>Optional remote setup helper</strong></summary>
