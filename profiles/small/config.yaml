@@ -6,7 +6,9 @@ jobs: 1
 max-jobs-per-second: 1
 max-status-checks-per-second: 1
 restart-times: 2
-latency-wait: 30
+# NFS clients may cache a directory for 60 s or more (acdirmin). A resumed or
+# retried job whose old outputs the controller just removed needs longer.
+latency-wait: 120
 
 # Default per-rule SLURM resources. Rules override via `resources:` blocks.
 default-resources:
