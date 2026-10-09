@@ -86,7 +86,21 @@ How these runs differ from the table above. Jobs 39620298 and 39620305 were subm
 
 Runs that are not evidence: 39618727 started a fresh installation whose package downloads filled the submitting account's home quota; 39618726 was cancelled after it hit the same quota errors; 39620291 failed during installation with a Conda package-cache error, before any test.
 
-The hosted `release-validation` workflow has not run on this source. This is not a published release.
+### Source without the n8n integration
+
+Source: commit `0416b47` on `claude/remove-n8n`: the 2.1.0 source with the n8n orchestration integration and its three checks removed, plus README artwork. `git archive` SHA256 `8c1d2b95481bba7e02ff7a36e1e929355c4aa5ce7b2121ef8716ff3b3170e39b`, verified on the cluster before extraction. The release gate for this source has **35 checks** and needs no prerequisites from outside the checkout.
+
+| Check | Job | Result |
+|---|---|---|
+| Fresh installation and release gate | 39621454, exit 0, 1:30:27, 2026-10-08 | Core, STAR and screening runtimes built from the locks in a new directory and verified. `tests/run_all.sh --strict`: **35 passed, 0 failed, 0 skipped**. GSE110004 Salmon with screening and GSE110004 STAR each passed six samples, counts, DE and QC report. The runtimes were then reused with `CONDA_OFFLINE=true`. |
+
+Log SHA256: `tests.log` `fe31492021c3447cf87014b4d4d3b38023f3597dea7a87d8a2fe8ef3569e2e9a`, `public.log` `c5d6b837c78c553155aed3a4b9bc00c85a93a6c17316e2ebd759f4d9d23ca86b`, `public-star.log` `ad93f63aa848380924b6366993b2c4ef3f84a218fd60d0ed991808af64d59424`.
+
+The job was submitted with `HOME` set to a directory on the shared filesystem, as for job 39620298. The SLURM-worker, resume, shared-cache and container checks were not repeated on this source; the removal changes no pipeline code, only the n8n files, the test runner and documentation.
+
+Why the integration was removed. On the tagged commit and on `master` the hosted `release-validation` workflow ended with 37 passed, 0 failed, 1 skipped (runs 37875969785 and 37875970151): `tests/check_n8n_release.py` needs a separately reviewed source bundle that the workflow does not supply, and a strict run counts a skip as a failure. The integration was not part of the planned 2.1.0 scope.
+
+The hosted `release-validation` workflow has not passed on any 2.1.0 source yet, and has not run on the source without the n8n integration. This is not a published release.
 
 Public protocol selection and evidence requirements are recorded in [Public-data qualification](PUBLIC_QUALIFICATION.md). The wider working plan remains incomplete.
 
