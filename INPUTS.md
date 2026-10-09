@@ -1,18 +1,65 @@
 # Project inputs
 
-Use the environment and launch instructions in [README.md](README.md). A project lives outside the source checkout and contains three files:
+Install and launch as described in the [README](README.md). This page explains what you provide.
+
+There are two ways to describe a study:
+
+- **The Excel workbook** ([intake_template.xlsx](intake_template.xlsx)). Recommended.
+- **Text files**: a YAML configuration and tab-separated tables. Use these for scripted setups or anything the workbook does not cover.
+
+Both produce the same project folder, which lives outside the source checkout:
 
 | File | Purpose |
 |---|---|
-| `config/config.yaml` | Organism, versioned references, assay/layout, model, contrasts and requested analyses |
-| `config/samples.tsv` | One row per biological measurement, with its read file or pair and model covariates |
-| `config/thresholds.yaml` | Explicit QC and analysis thresholds; project overrides are merged with defaults |
+| `config/config.yaml` | Organism, references, read layout, model, contrasts and requested analyses |
+| Sample records | `config/samples.tsv`, or the three tables under `metadata/` |
+| `config/thresholds.yaml` | QC and analysis thresholds; your values override the defaults |
 
-Copy the templates from `config/` into your project, then edit them. Do not run the shipped grapevine/model examples unchanged on a different experiment.
+## Excel workbook
 
-## Sample sheet
+Fill the **Bulk RNA-seq** tab with plain answers, not spreadsheet formulas. Then either let the launcher set up and run the project, or set it up first and review it:
 
-A paired-end example is:
+```bash
+bash submit.sh --intake /path/study.xlsx -d /path/new_project --executor slurm
+# or
+python3 scripts/setup.py --intake /path/study.xlsx --project-dir /path/new_project
+bash submit.sh -d /path/new_project
+```
+
+Setup keeps a copy of the workbook, its checksum and a record of which cell each setting came from, under `intake/` in the project. It will not overwrite an existing configuration. If you change the workbook later, the launcher lists the changed settings and the stages they affect, then stops; add `--accept-revision` to apply the change. A changed project name needs a new project folder.
+
+### Where the sample records come from
+
+| Choice | What to fill |
+|---|---|
+| **Workbook tables** | The Samples, Libraries and Reads tabs, from row 5. Leave the external metadata file and FASTQ folder answers empty |
+| **External files** | A metadata file (CSV, TSV or XLSX) and a FASTQ folder, one file or pair per sample. Leave the three tabs empty |
+
+Use workbook tables when a sample was sequenced on more than one run or lane. Relative paths are read relative to the workbook.
+
+### Questions that shape the analysis
+
+- **Analysis goal:** differential expression, expression only (counts, optional WGCNA) or QC only. Enrichment needs the differential expression goal.
+- **Quantifier:** `auto`, `salmon` or `star`. STAR needs a declared strand.
+- **DE method:** `auto`, `limma_voom`, `edger_ql` or `deseq2`. With `auto`, a new project gets DESeq2 for 3 to 12 biological units in the smallest group and limma-voom above 12. Two units per group needs an explicit method. The method never changes the model.
+- **Paired or repeated measures:** answer yes and name the subject column. `fixed block` adds the subject as a fixed term, for paired designs with any DE method. `random` fits a random subject effect with dream. Repeated rows of one subject count once toward the smallest group.
+- **Fixed-effects formula:** optional, for example `~ batch + genotype * treatment + age`. It must include the primary factor, a declared batch and a fixed subject block.
+- **Contrasts tab:** optional, one row per comparison. A pairwise row gives `factor`, optional `by`, and `numerator` and `denominator` levels; blank levels compare all pairs. A linear row gives `weights` as `coefficient=number` pairs separated by `;`. An empty tab keeps the automatic contrasts.
+- **Library protocol:** a named protocol (TruSeq, NEBNext) sets adapters and strand from [config/kit_profiles.yaml](config/kit_profiles.yaml). An answer that conflicts with it is an error. You can instead give R1 and R2 adapters and a minimum read length yourself.
+- **Platform:** sets poly-G trimming (on for NovaSeq and NextSeq, off for MiSeq) unless you choose it explicitly.
+- **Screening:** yes builds a contamination panel from the project reference and PhiX; add more references as `name=FASTA` pairs.
+- **Organism:** a common or scientific name for known organisms, otherwise an NCBI taxID.
+- **Custom references:** give a genome and GTF for STAR; a transcriptome and GTF for Salmon, plus the genome for decoys. A partial set is rejected, so two annotation releases cannot be mixed by accident. Leave all of them blank for automatic selection.
+
+Preparation, tissue and contact email are recorded for reference and change nothing. Only the Bulk RNA-seq tab can be run in this release; libraries with UMIs are not supported. Workbooks made for earlier releases still load.
+
+## Text files
+
+Copy the templates from `config/` into your project and edit them. They are examples: replace the organism, references, samples, model and contrasts with your own.
+
+### Sample sheet
+
+A paired-end example:
 
 ```tsv
 sample_id	fastq_url	fastq_url_r2	treatment
@@ -24,62 +71,44 @@ treated_2	/shared/reads/treated_2_R1.fastq.gz	/shared/reads/treated_2_R2.fastq.g
 treated_3	/shared/reads/treated_3_R1.fastq.gz	/shared/reads/treated_3_R2.fastq.gz	treated
 ```
 
-Use unique sample IDs, both mates for every paired library, and columns for every model variable. For single-end input, omit or leave the second-mate column blank and choose `rnaseq_single`. Repeated measurements require their biological-unit column and an explicit random-effect term; repeated rows from one unit are not independent biological replicates.
+Use unique sample IDs, both mates for every paired library, and a column for every model variable. For single-end input, leave the second-mate column blank and choose `rnaseq_single`. Repeated measurements of one subject are not independent replicates: give the subject column and model it as a fixed block or a random effect.
 
-Local input files must be readable on every worker. HTTPS inputs are downloaded per sample. S3 requires additional AWS tooling and credentials and is outside the locked release's tested input routes. Local source FASTQs are read in place and never deleted by workflow cleanup.
+A sample sheet takes one file or pair per row. For samples sequenced on several runs or lanes, use the three tables instead by setting `samples.metadata_dir: metadata` and `samples.sheet: metadata/samples.tsv`.
 
-Legacy sample sheets accept one read file/pair per row. For multiple sequencing runs or lanes, set `samples.metadata_dir: metadata` and `samples.sheet: metadata/samples.tsv`, or select workbook tables in the Excel intake. Canonical bulk execution accepts one non-UMI library per sample, with multiple run/lane units. Libraries declare `assay_family=bulk`, layout, strandedness and `umi=no`; each paired unit needs R1 and R2. Strandedness is forward, reverse, unstranded or unknown. Relative canonical TSV URIs resolve beside the metadata tables; relative workbook URIs resolve beside the workbook.
+### Samples, Libraries and Reads tables
 
-If any `metadata/samples.tsv`, `metadata/libraries.tsv` or `metadata/reads.tsv` file is present, preflight requires all three populated tables. Required cells and parent relationships must be complete; every sample needs a library and every library needs reads. Reused lane numbers in different sequencing runs need distinct `run` values. Canonical execution checks gzip FASTQ structure, mate IDs/counts, declared checksums/sizes and repeated source assignments before merging within the library. Each library retains `read_preparation.json` with source hashes and per-unit fragment counts. Original FASTQs are preserved; successful cleanup removes only owned merged/trimmed copies. Multiple prepared libraries per sample and UMI/barcode processing remain unavailable.
+These are `metadata/samples.tsv`, `metadata/libraries.tsv` and `metadata/reads.tsv`; templates are in [templates/](templates/).
 
-Sample identifiers are text, including leading zeros and a literal `NA`. When preparing metadata in Excel, format the identifier column as **Text before entering IDs**: zeros already removed by Excel cannot be recovered from a numeric value or its display format.
+- If any of the three is present, all three must be filled in. Every sample needs a library and every library needs reads.
+- One library per sample, with `assay_family=bulk`, the layout, the strandedness (forward, reverse, unstranded or unknown) and `umi=no`.
+- Each paired read unit needs R1 and R2. Lane numbers reused in different sequencing runs need distinct `run` values.
+- Before merging lanes, the workflow checks gzip FASTQ structure, mate IDs and counts, and any checksums or sizes you declared. Each library keeps a `read_preparation.json` with source hashes and fragment counts.
+- Relative read paths are read relative to the tables.
 
-## References and analysis
+### Read files
 
-Provide a transcriptome FASTA and a matching GTF from a recorded reference release. Every quantifiable transcript must map unambiguously to one annotated gene. The pipeline stops on unmatched or duplicated transcript identifiers. Record accession and organism identity; use immutable source URLs. The current default is a transcriptome-only Salmon index. Do not describe it as decoy-aware unless a compatible decoy reference and identifier list were explicitly supplied.
+Local files must be readable on every worker and are read in place; the workflow never deletes them. HTTPS inputs are downloaded per sample. S3 needs extra AWS tooling and credentials and is not a tested input.
 
-Set the fixed-effects formula, any random-effects term, primary factor and contrasts to match the experiment. Preflight checks estimability and supported capabilities. `analysis.backend: auto` follows the dependence structure; unavailable backend choices block. Optional GO/KEGG/WGCNA settings must match the requested objectives and available annotation.
+### Sample IDs
 
-For GO, provide a compatible OrgDb package and the correct `orgdb.key_type` (`ENTREZID` for suitable public packages, or `GID` for a compatible custom package). Non-Entrez input gene identifiers require a valid annotation mapping. A numeric-looking identifier alone is not biological proof of the correct namespace; review mapping and reference provenance.
+Sample IDs are text, including leading zeros and a literal `NA`. In Excel, format the ID column as **Text before typing the IDs**: zeros that Excel has already removed cannot be recovered.
 
-## Optional setup helpers
+## References
 
-`python3 scripts/setup.py --project-dir PROJECT INPUTS.yaml` can generate the project files from a spreadsheet and read-source directory/list. Start from `scripts/setup_inputs.template.yaml` and review every generated reference URL, sample match and model field. Automatic lookups can change as external services change; preserve the resolved configuration.
+Provide a transcriptome FASTA and a matching GTF from one reference release; STAR also needs the genome. Every transcript must map to exactly one annotated gene, and the workflow stops on unmatched or duplicated transcript IDs. Use versioned URLs, because a file that changes at the same URL is not detected.
 
-The interactive `scripts/new_project.sh` helper uses the same locked runtime and reads an inbox at `~/new_project_inbox/PROJECT_NAME`. `scripts/start_new.sh` is a convenience uploader/wizard launcher whose transfer and interactive path is not covered by the release's end-to-end qualification. Explicit TSV/YAML input is the tested release interface.
+New projects build the Salmon index with genome decoys. Set `reference.decoys: null` for a transcriptome-only index.
 
-Storage is planned from the dataset and filesystem capacity. New setup files have `storage_budget_gb: null`; there is no 20 GB platform cap. A supplied legacy value is advisory quota information. Low or unknown capacity warns without blocking launch or reducing concurrency; real failed writes remain task failures.
+## Model, contrasts and optional analyses
 
-## Direct Excel intake: initial bulk support
+Set the fixed-effects formula, any random-effects term, the primary factor and the contrasts to match the experiment. The pre-run check confirms the design can be estimated and blocks unsupported choices. In an existing configuration `analysis.backend: auto` keeps limma-voom, and a random-effects term selects dream. Details are in [docs/OPTIONS.md](docs/OPTIONS.md).
 
-The existing `intake_template.xlsx` can now drive setup directly. Fill the **Bulk RNA-seq** tab. Choose external files for the existing metadata-plus-folder workflow, or workbook tables to fill **Samples**, **Libraries** and **Reads** starting at row 5. In table mode, clear the external metadata and FASTQ folder answers. Add sample covariate columns as needed, matching the declared model fields. Then run in the prepared analysis environment:
+For GO, provide a compatible OrgDb package and the right `orgdb.key_type` (`ENTREZID` for suitable public packages, `GID` for a compatible custom one). Gene IDs that are not Entrez IDs need a valid mapping. An ID that merely looks numeric is not proof of the right namespace, so check the mapping.
 
-```bash
-python3 scripts/setup.py --intake /path/completed_intake.xlsx --project-dir /path/new_project
-bash submit.sh -d /path/new_project
-```
+## Storage
 
-Use `--intake-sheet 'Bulk RNA-seq'` to select a sheet explicitly. Relative paths resolve beside the workbook. Setup saves the original workbook, checksum, field-to-cell map and resolved setup inputs inside the project's `intake/` directory. It will not overwrite an existing configuration; resume existing projects with `submit.sh`.
+Storage is estimated from the dataset and the filesystem. There is no fixed size limit. Low or unknown capacity gives a warning and does not block the launch or reduce parallel jobs; a real failed write still stops the affected step.
 
-This first adapter supports independent bulk designs with an optional declared batch. It preserves enrichment/WGCNA choices and strand expectations, checks the declared smallest group size, and rejects formulas and ambiguous answers. Known organism presets accept common/scientific names; otherwise enter an NCBI taxID. Platform sets poly-G trimming (on for NovaSeq/NextSeq, off for MiSeq) unless poly-G is chosen explicitly. Preparation, tissue and contact email are recorded context only and do not configure trimming or scheduler mail.
+## Other setup helpers
 
-Schema 3 adds source ownership and the canonical tables to schema 2's stable field IDs, explicit raw-FASTQ stage and non-UMI eligibility. Legacy schema 1/2 questionnaires remain readable. Unknown UMI status must be resolved; UMI input and processed-object/instrument input are not supported. Kit and strandedness defaults do not invent a protocol or orientation. Non-bulk routes remain pending; TAG-seq and small-RNA intake are rejected explicitly. Repeated measures are available from schema 5. See the [intake coverage audit](docs/INTAKE_TEMPLATE_AUDIT.md) and [v2 scope](docs/RELEASE.md).
-
-## Development workbook schema 4 (retained in schema 5)
-
-The Bulk RNA-seq questionnaire includes method and processing controls at rows 30–39. Row positions are display only; column E holds stable field IDs. Choose `auto`, `salmon` or `star`; choose `auto`, `limma_voom`, `edger_ql` or `deseq2` for the independent fixed-effect model. STAR requires declared strandedness. The method choice never changes the model or invents replicates.
-
-For custom references, provide genome plus GTF for STAR; transcriptome plus GTF for Salmon, and genome as well when using genomic decoys. Supply paths on the analysis host or URLs. Relative paths resolve beside the workbook. Partial custom sets are rejected, so a live lookup cannot silently mix annotation releases. Leaving every custom-reference field blank retains automatic reference selection.
-
-Explicit R1/R2 adapters, poly-G policy and minimum retained length configure the shared bulk processor. R2 adapters require paired reads and an R1 adapter. These settings do not qualify an arbitrary kit, UMI protocol or small-RNA assay. Existing workbook schemas 1–3 remain readable.
-
-## Development workbook schema 5
-
-- **Analysis goal:** differential expression, expression only (counts, optional WGCNA) or QC only. Enrichment needs the differential expression goal.
-- **Repeated measures:** answer yes and name the subject column. `random` fits `(1|subject)` with dream; `fixed block` adds the subject as a fixed term for paired designs with any fixed-effect method. Repeated rows of one subject are counted once for the smallest-group check.
-- **Fixed-effects formula:** optional, for example `~ batch + genotype * treatment + age`. It must include the primary factor, a declared batch and a fixed subject block.
-- **Contrasts tab:** optional, one row per comparison. Pairwise rows give `factor`, optional `by`, and `numerator`/`denominator` levels (blank levels compare all pairs with reverse order). Linear rows give only `weights` as `coefficient=number` pairs separated by `;`. A blank tab keeps the generated contrasts.
-- **Named library protocol:** sets adapters and strand from [config/kit_profiles.yaml](config/kit_profiles.yaml). A conflicting explicit adapter, strand or Libraries strandedness is an error.
-- **Screening:** yes builds the panel described in the README; extra references use `name=FASTA` pairs.
-- **DE method `auto`:** setup records the handbook default for the new project (DESeq2 for 3–12 biological units in the smallest group, limma-voom above 12, dream with a random subject). Two units per group needs an explicit method.
-- **Revisions:** see `--accept-revision` in the README.
+`python3 scripts/setup.py --project-dir PROJECT INPUTS.yaml` builds the project files from a YAML description; start from `scripts/setup_inputs.template.yaml` and review every generated reference URL, sample match and model field. `scripts/new_project.sh` and `scripts/start_new.sh` are interactive conveniences and are not covered by the release tests.

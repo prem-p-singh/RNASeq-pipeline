@@ -1,6 +1,6 @@
 <div align="center">
   <img src="assets/readme-banner.svg" alt="RNASeq pipeline v2: raw reads to traceable bulk RNA-seq results" width="100%" />
-  <h1>RNASeq pipeline · v2</h1>
+  <h1>RNASeq pipeline · v2.1.1</h1>
   <p><strong>Your study design. Your reads. A traceable analysis.</strong></p>
   <p>Excel-driven intake · Snakemake execution · Locked Linux runtime</p>
   <a href="https://github.com/prem-p-singh/RNASeq-pipeline/releases/tag/v2.1.1">Release notes</a> ·
@@ -22,140 +22,45 @@
 Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and differential-expression results. Fill an Excel intake or provide explicit TSV/YAML inputs, review the study configuration, and run locally on Linux or through SLURM. Every project has its own configuration, logs and results.
 
 > [!NOTE]
-> **V2.1.1 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. V2.0.0 shipped workbook schema 3; v2.1 supplies **schema 5**. Workbook schema and software release numbers are separate.
-
-The table and diagram below describe the v2.0.0 scope. For the routes and controls added in v2.1.0 and their qualification status, see [added in 2.1.0](#added-in-210).
+> **v2.1.1 is the current release.** It covers bulk RNA-seq. Other assay types are in progress; see [Future scope](#future-scope).
 
 ## What you can run
 
 <img src="assets/section-capabilities.svg" alt="What you can run" width="100%" />
 
-| Capability | V2 status | Boundary |
+| Capability | Status | Notes |
 |---|---|---|
-| Single-end and paired-end bulk RNA-seq | 🟢 **Tested** | Annotated, non-UMI raw FASTQ input |
-| Multiple sequencing runs/lanes | 🟢 **Tested** | Merge within one compatible library per sample using canonical records |
-| Independent groups and fixed-effect contrasts | 🟢 **Tested** | Estimable declared model and biological replication required |
-| Excel intake | 🟢 **Tested** | Independent bulk designs, optional batch; external files or inline records |
-| GO enrichment | 🔵 **Fixture-tested** | Compatible OrgDb and gene-ID mapping required |
-| WGCNA | 🔵 **Fixture-tested** | Eligible cohort and expression; no large-cohort sizing guarantee |
-| Random effects with `dream` | 🟡 **Provisional** | YAML configuration; full mixed-model qualification remains open |
-| TAG-seq / 3′ end-tag | 🟡 **Provisional** | No named kit qualified; Excel execution blocked |
-| KEGG enrichment | 🟠 **Conditional** | Network and organism mapping required; live results need separate qualification |
+| Single-end and paired-end bulk RNA-seq | 🟢 **Tested** | Annotated organism, raw FASTQ input, libraries without UMIs |
+| Multiple sequencing runs and lanes | 🟢 **Tested** | Merged within one library per sample |
+| Excel intake | 🟢 **Tested** | Analysis goal, paired or repeated subjects, formula and contrasts; records in the workbook or in external files |
+| Quantification with Salmon | 🟢 **Tested** | Genome decoys by default for new projects |
+| Alignment with STAR and featureCounts | 🟢 **Tested** | Needs a genome, a GTF and a declared strand |
+| Differential expression: limma-voom, edgeR QL, DESeq2 | 🟢 **Tested** | Fixed-effect designs with biological replication |
+| QC-only and expression-only runs | 🟢 **Tested** | No statistical design needed |
+| Paired and repeated measures | 🔵 **Fixture-tested** | Fixed subject block, or a random subject effect with `dream` |
+| Read screening for contamination | 🔵 **Fixture-tested** | Diagnostic only; it never removes reads or samples |
+| GO enrichment | 🔵 **Fixture-tested** | Needs a compatible OrgDb and gene-ID mapping |
+| WGCNA | 🔵 **Fixture-tested** | Needs an eligible cohort; not sized for very large cohorts |
+| KEGG enrichment | 🟠 **Conditional** | Needs network access and organism mapping |
 
-> [!WARNING]
-> **Not implemented:** UMI processing; multiple prepared libraries per sample; small/viral RNA; single-cell/nucleus; spatial; long-read; dual-organism and specialized RNA assays; STAR counting, DESeq2/edgeR inference adapters; splicing/fusions/variants; generic count-matrix, processed-object or instrument-data imports.
+**Tested** means the route passed synthetic checks and a six-sample public study. **Fixture-tested** means it passed synthetic checks only.
 
-Salmon is the implemented quantifier. The [recommendation rules](config/recommendation_rules.yaml) record this selection and reject unsupported choices. Dependence structure selects limma-voom or provisional dream. Sample count does not silently change the model. PCA may flag a batch association, but it does **not** add model terms automatically.
+You choose the quantifier and the DE method in the workbook or the configuration; the [recommendation rules](config/recommendation_rules.yaml) record the choice and reject unsupported ones. Sample count never changes the model silently. PCA may flag a batch association, but it does **not** add model terms.
 
 ## How the workflow runs
 
 <img src="assets/section-workflow.svg" alt="How the workflow runs" width="100%" />
 
-<p align="center"><img src="assets/workflow-map.svg" alt="Workflow map: six stages from study description to reviewed results; dashed boxes are optional analyses" width="100%" /></p>
-
-<details>
-<summary><strong>Exact DAG as a Mermaid diagram</strong></summary>
-
-```mermaid
-flowchart TD
-    A(["Study details + raw gzip FASTQs"])
-
-    subgraph S1["① Describe the study"]
-        B{"Choose intake"}
-        C["Excel questionnaire + Samples / Libraries / Reads"]
-        D["Explicit YAML + TSV records"]
-    end
-
-    subgraph S2["② Prepare and review"]
-        E["Setup: save workbook, source map and configuration"]
-        F["Review references, model, contrasts and QC policy"]
-    end
-
-    subgraph S3["③ Check before analysis"]
-        G["Verify runtime and preflight scientific inputs"]
-        H["Estimate storage: cautions only"]
-    end
-
-    subgraph S4["④ Process and quantify"]
-        I["Validate reference; build Salmon index"]
-        J{"Prepare reads per sample"}
-        K["Canonical: verify mates and hashes; merge library lanes"]
-        L["Legacy: one FASTQ or mate pair"]
-        M["fastp: trimming + before/after QC"]
-        N["Salmon: transcript quantification + metrics"]
-        O["MultiQC + comparative QC report"]
-    end
-
-    subgraph S5["⑤ Build the cohort"]
-        P["tximport: gene counts + provenance"]
-        Q["Apply sample policy; record inclusion/exclusion"]
-    end
-
-    subgraph S6["⑥ Analyze and report"]
-        R["Fit declared model and contrasts"]
-        S["DE tables + direction/output manifests"]
-        T["Optional GO / KEGG enrichment"]
-        U["Optional WGCNA on eligible gene counts"]
-    end
-
-    V(["Review reports, diagnostics and provenance"])
-
-    A --> B
-    B --> C
-    B --> D
-    C --> E
-    E --> F
-    D --> F
-    F --> G
-    G --> H
-    H --> I
-    I --> J
-    J --> K
-    J --> L
-    K --> M
-    L --> M
-    M --> N
-    N --> O
-    N --> P
-    P --> Q
-    Q --> R
-    R --> S
-    S --> T
-    R --> U
-    O --> V
-    S --> V
-    T --> V
-    U --> V
-
-    classDef default fill:#FFFFFF,stroke:#8A94A6,color:#1F2937
-    classDef io fill:#285F47,stroke:#1B4332,color:#FFFFFF,font-weight:bold
-    classDef choice fill:#FFF4D6,stroke:#B7791F,color:#5C3D00
-    classDef optional fill:#F4F6FB,stroke:#46567D,color:#46567D,stroke-dasharray:5 4
-    class A,V io
-    class B,J choice
-    class T,U optional
-
-    style S1 fill:#EAF4EE,stroke:#285F47,color:#1B4332
-    style S2 fill:#EEF1F8,stroke:#46567D,color:#2E3A57
-    style S3 fill:#FDF3E7,stroke:#B7791F,color:#5C3D00
-    style S4 fill:#E8F3F6,stroke:#2B6C80,color:#1D4A58
-    style S5 fill:#F3EEF8,stroke:#6B4E8C,color:#45325C
-    style S6 fill:#FBEDEE,stroke:#9B3D48,color:#5E232A
-```
-
-</details>
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/workflow-2.1-dark.png" /><img src="assets/workflow-2.1-light.png" alt="Workflow map: study intake, setup and review, preflight, reference, read preparation, fastp, quantification with Salmon or STAR, QC report, gene counts and the DE model, with optional read screening, WGCNA and GO/KEGG" width="100%" /></picture></p>
 
 | | Stage | What happens |
 |:-:|---|---|
 | **①** | **Describe the study** | Samples identify biological observations; libraries describe preparation; reads identify each file, mate, run and lane. Lanes do not become biological replicates. |
 | **②** | **Prepare and review** | Excel setup saves the original workbook and cell-level source map. Automatic reference lookup needs network access; review the exact reference before launching. |
 | **③** | **Check before analysis** | The launcher verifies software, validates metadata/design and records recommendations. Unsupported scientific inputs stop here. Low/unknown storage generates a caution and execution continues. |
-| **④** | **Process and quantify** | Canonical inputs undergo FASTQ/mate/checksum checks and within-library merging. fastp cleans reads, then Salmon quantifies transcripts. Local source FASTQs are preserved. |
-| **⑤** | **Build the cohort** | tximport produces bulk gene counts using `lengthScaledTPM`. Effective lengths and count provenance are saved. The configured QC exclusion policy determines retained samples. |
+| **④** | **Process and quantify** | Reads pass FASTQ, mate and checksum checks and lanes are merged within a library. fastp cleans reads; Salmon quantifies transcripts, or STAR aligns to the genome. Optional screening reports possible contamination. Local source FASTQs are preserved. |
+| **⑤** | **Build the cohort** | Gene counts come from tximport (`lengthScaledTPM`) for Salmon or from featureCounts for STAR. Lengths and count provenance are saved. The configured QC exclusion policy determines retained samples. |
 | **⑥** | **Analyze and report** | Fit the declared model, record contrast directions and produce requested optional results. Empty, skipped, unavailable and failed are distinct outcomes. |
-
-> [!NOTE]
-> The diagram reflects the v2.0.0 DAG: QC reporting follows quantification, and WGCNA waits for DE completion although it uses gene counts. See [added in 2.1.0](#added-in-210) for the newer graph and independent raw-QC command.
 
 ## Quick start
 
@@ -163,7 +68,10 @@ flowchart TD
 
 **[Get v2](#1-get-v2-and-choose-paths) → [Install](#2-install-and-verify-the-environment) → [Fill the intake](#3-fill-the-excel-intake) → [Review](#4-review-the-study-configuration) → [Run](#5-plan-run-and-resume)**
 
-### 1. Get v2 and choose paths
+<p align="center"><img src="assets/quickstart-terminal.svg" alt="Quick start in a terminal: clone the release, install the environment, set up from the Excel intake, then run with submit.sh" width="100%" /></p>
+
+<a id="1-get-v2-and-choose-paths"></a>
+<img src="assets/step-1.svg" alt="Step 1 of 5: Get the code and choose paths" width="100%" />
 
 ```bash
 git clone --branch v2.1.1 https://github.com/prem-p-singh/RNASeq-pipeline.git
@@ -174,9 +82,10 @@ export PROJECT="$HOME/rnaseq_projects/my_study"
 
 Private repositories require GitHub authentication. Keep projects **outside the source checkout**. For SLURM, choose absolute shared paths visible on every worker for the repository, project, environment, reads and reference cache.
 
-### 2. Install and verify the environment
+<a id="2-install-and-verify-the-environment"></a>
+<img src="assets/step-2.svg" alt="Step 2 of 5: Install the environment" width="100%" />
 
-Prerequisites: **Linux x86_64**, Bash, Conda, Git, `curl`, `gzip` and `flock`; internet access for initial installation and remote references. Supply Conda yourself or load your site's Conda module. macOS, ARM and containers are not qualified deployment targets for v2. On the development branch a stock Ubuntu container passed installation and the Salmon route; see [release qualification](docs/RELEASE.md#deployment-qualification).
+Prerequisites: **Linux x86_64**, Bash, Conda, Git, `curl`, `gzip` and `flock`; internet access for initial installation and remote references. Supply Conda yourself or load your site's Conda module. macOS and ARM are not supported. A stock Ubuntu container passed installation and the Salmon route, but no container image is shipped; see [release qualification](docs/RELEASE.md#what-was-tested).
 
 ```bash
 # Choose a shared path when using SLURM.
@@ -193,11 +102,12 @@ export R_LIBS_USER="$prefix/lib/R/library" R_LIBS_SITE="$prefix/lib/R/library"
 
 Bootstrap installs the **580 exact package builds** in the [Linux lock](environments/linux-64.explicit.txt), checks installed package records, imports required Python/R libraries and verifies tool versions and locations. Missing packages are downloaded during environment creation. A mismatched existing environment is refused; create a fresh prefix. Normal launches repeat verification. Bootstrap does not install Conda or operating-system packages. Project annotation packages belong outside the qualified runtime.
 
-Core versions: Python 3.12.14 · Snakemake 9.19.0 · R 4.5.2 · Salmon 1.10.3 · fastp 0.23.4. See [the runtime contract](docs/RELEASE.md#runtime-contract). `environment.yml` is a maintainer solve specification; use the explicit lock for installation.
+Core versions: Python 3.12.14 · Snakemake 9.19.0 · R 4.5.2 · Salmon 1.10.3 · fastp 0.23.4. See [the runtime list](docs/RELEASE.md#runtime). `environment.yml` is a maintainer solve specification; use the explicit lock for installation.
 
-### 3. Fill the Excel intake
+<a id="3-fill-the-excel-intake"></a>
+<img src="assets/step-3.svg" alt="Step 3 of 5: Fill the Excel intake" width="100%" />
 
-Copy [intake_template.xlsx](intake_template.xlsx) and fill **Bulk RNA-seq**. Enter literal answers, not formulas. Select raw FASTQ, confirm **UMI = no**, and supply organism, layout, strand expectation, biological question, primary factor and smallest biological group size. Choose enrichment/WGCNA settings explicitly.
+Copy [intake_template.xlsx](intake_template.xlsx) and fill **Bulk RNA-seq**. Enter literal answers, not formulas. Select raw FASTQ, confirm **UMI = no**, and supply the analysis goal, organism, layout, strand expectation, biological question, primary factor and smallest biological group size. For paired or repeated measures, name the subject column. Choose enrichment/WGCNA settings explicitly.
 
 | Record source | What to fill |
 |---|---|
@@ -205,7 +115,7 @@ Copy [intake_template.xlsx](intake_template.xlsx) and fill **Bulk RNA-seq**. Ent
 | **external files** | Provide metadata CSV/TSV/XLSX and FASTQ folder; leave record tabs empty; one file/pair per sample |
 
 - **Samples:** one row per biological observation, unique `sample_id`, biological-unit identity and model covariates. Add or rename covariate columns to match your primary factor and batch.
-- **Libraries:** one library per sample; supply `library_id`, `sample_id`, `assay_family=bulk`, `layout`, `strandedness` and `umi=no`. Kit/platform fields record context, not automatic protocol-specific processing.
+- **Libraries:** one library per sample; supply `library_id`, `sample_id`, `assay_family=bulk`, `layout`, `strandedness` and `umi=no`. A named library protocol (TruSeq, NEBNext) sets adapters and strand, and the platform sets poly-G trimming.
 - **Reads:** one gzip FASTQ per row, with read/library IDs, role and URI. Identify each run/lane. Paired units need R1 and R2. Byte size and SHA256 are optional checks.
 
 Format identifiers as **Text before entry**, including `001` or `NA`. Append rows beyond the preformatted area as needed. Relative workbook paths resolve beside the workbook. Copy the intake and reads to the analysis host before setup. External-file mode matches FASTQ filenames to sample IDs; explicit read records do not rely on filenames.
@@ -216,7 +126,7 @@ python3 "$REPO/scripts/setup.py" \
   --project-dir "$PROJECT"
 ```
 
-Fill Project name on exactly one assay tab, or add `--intake-sheet 'Bulk RNA-seq'`. Setup refuses to overwrite an existing project configuration. [INPUTS.md](INPUTS.md) covers workbook compatibility and canonical TSV/YAML contracts. Repeated measures and `use_existing` OrgDb package selection require explicit YAML configuration.
+Fill Project name on exactly one assay tab, or add `--intake-sheet 'Bulk RNA-seq'`. Setup refuses to overwrite an existing project configuration. [INPUTS.md](INPUTS.md) covers workbook compatibility and canonical TSV/YAML contracts. Selecting an already installed OrgDb package (`use_existing`) requires explicit YAML configuration.
 
 <details>
 <summary><strong>Alternative: start directly from YAML and TSV templates</strong></summary>
@@ -230,7 +140,7 @@ cp "$REPO/config/samples.tsv.template" "$PROJECT/config/samples.tsv"
 
 These are examples, not study-specific defaults. Replace organism, references, assay/layout, sample records, model, contrasts, QC policy and optional analyses. Use `rnaseq_single` or `rnaseq_paired` for bulk. Replace the example interaction/random-effect model with your own design.
 
-For canonical input, populate the three [metadata templates](templates/) under `$PROJECT/metadata` and set:
+To use the Samples, Libraries and Reads tables, fill in the three [metadata templates](templates/) under `$PROJECT/metadata` and set:
 
 ```yaml
 samples:
@@ -239,7 +149,7 @@ samples:
   sheet: metadata/samples.tsv
 ```
 
-Relative canonical TSV read paths resolve beside those tables. Legacy `config/samples.tsv` has one file/pair per row. YAML-assisted setup is also available via [setup_inputs.template.yaml](scripts/setup_inputs.template.yaml):
+Relative read paths in those tables resolve beside them. The simpler `config/samples.tsv` has one file or pair per row. YAML-assisted setup is also available via [setup_inputs.template.yaml](scripts/setup_inputs.template.yaml):
 
 ```bash
 python3 "$REPO/scripts/setup.py" --project-dir "$PROJECT" /absolute/path/setup_inputs.yaml
@@ -247,22 +157,25 @@ python3 "$REPO/scripts/setup.py" --project-dir "$PROJECT" /absolute/path/setup_i
 
 </details>
 
-### 4. Review the study configuration
+<a id="4-review-the-study-configuration"></a>
+<img src="assets/step-4.svg" alt="Step 4 of 5: Review the configuration" width="100%" />
 
 Inspect `$PROJECT/config/config.yaml`, the selected sample sheet and `config/thresholds.yaml` before launch:
 
 | Setting | Confirm |
 |---|---|
 | Reference | Correct organism/release, matching transcriptome FASTA/GTF, versioned URLs and gene identifiers |
-| Layout and strand | Correct mates and protocol; unknown strand is not assumed reverse |
+| Layout and strand | Correct mates and protocol; unknown strand is not assumed reverse, and STAR needs it declared |
+| Quantifier and DE method | Salmon or STAR; limma-voom, edgeR QL or DESeq2 (see [options](docs/OPTIONS.md)) |
 | Model and contrasts | Biological units, covariates and intended comparisons; inspect resolved directions afterward |
 | Sample policy | Whether failing-QC samples may be excluded; experiment-appropriate thresholds |
 | Optional analyses | GO/KEGG/WGCNA choices, annotation package, `orgdb.key_type` and mapping |
 | Paths and retention | Output/cache locations, worker access and `hpc.delete_fastq_after_quant` |
 
-The default index is transcriptome-only; it is decoy-aware only when compatible decoys are explicitly supplied. Use immutable references: changed remote content at an unchanged URL is not automatically detected. Bulk counts already carry length correction; do not apply it again downstream. Review live reference lookups before analysis.
+New projects build the Salmon index with genome decoys; set `reference.decoys: null` for a transcriptome-only index. Use immutable references: changed remote content at an unchanged URL is not automatically detected. Bulk counts already carry length correction; do not apply it again downstream. Review live reference lookups before analysis.
 
-### 5. Plan, run and resume
+<a id="5-plan-run-and-resume"></a>
+<img src="assets/step-5.svg" alt="Step 5 of 5: Plan, run and resume" width="100%" />
 
 **SLURM:** configure account, partition and QoS in the selected [profile](profiles/) for your site. No cluster name/account is hard-coded. The controller must be allowed to submit jobs; scientific rules execute on workers.
 
@@ -274,6 +187,14 @@ bash "$REPO/submit.sh" -d "$PROJECT" --dry-run
 # Launch; repeat to resume after fixing failures.
 bash "$REPO/submit.sh" -d "$PROJECT" -p small
 ```
+
+You can also launch straight from the workbook, without a separate setup step:
+
+```bash
+bash "$REPO/submit.sh" --intake /path/study.xlsx -d "$PROJECT" --executor slurm
+```
+
+If the workbook changes later, the launcher lists the changed settings and the stages they affect, then stops; add `--accept-revision` to apply the change.
 
 Profiles `small`, `medium` and `large` set scheduler concurrency. Default profile selection considers sample count; profile limits, library count and `hpc.samples_in_flight` determine concurrent jobs. Storage never reduces concurrency. Snakemake options follow `--`, for example `-- --forcerun differential_expression`.
 
@@ -291,10 +212,9 @@ Repeat the Snakemake command to resume. Dry-run DAG construction can update reso
 
 ### Storage and cleanup
 
-> [!IMPORTANT]
-> There is **no 20 GB limit**. Estimates use measurable input sizes, all library lanes, retained outputs/intermediates, reference/runtime costs and concurrent working space. More libraries increase retained storage; fixed concurrency can keep peak temporary storage similar. Unknown remote sizes and expansion coefficients remain labelled estimates.
+Before launch, the workflow estimates the disk space the project needs from the size of your reads, the reference and the number of jobs running at once. If space looks short or cannot be measured, you get a **warning only**: the run still starts and nothing is slowed down. A write that really fails stops that step; free some space and relaunch to resume.
 
-Low/unknown capacity is a **caution only**; it does not block launch or change the route. Actual failed writes still fail the affected task: restore capacity and resume. Legacy `hpc.storage_budget_gb` supplies advisory quota information. Local source FASTQs are preserved. When `hpc.delete_fastq_after_quant` is enabled, successful cleanup removes workflow-owned downloads, merged reads and trims; failed work keeps intermediates for diagnosis.
+Your original FASTQ files are never deleted. With `hpc.delete_fastq_after_quant` enabled, the workflow removes its own downloads, merged reads and trimmed reads after a sample finishes successfully, and keeps them when a step fails so you can inspect it.
 
 ## Find and interpret results
 
@@ -307,7 +227,7 @@ Low/unknown capacity is a **caution only**; it does not block launch or change t
 | `intake/<workbook-hash>/` | Original workbook, cell source map and normalized setup inputs |
 | `metadata/` or `config/samples.tsv` | Sample/library/read records |
 | `gates/` | Preflight, recommendations, resolved settings, resource plan and decisions; launcher runtime verification |
-| `<output>/quant/<sample>/` | `quant.sf`, fastp reports, input hashes and metrics; canonical `read_preparation.json` with lane inputs and fragment counts |
+| `<output>/quant/<sample>/` | `quant.sf` (Salmon) or indexed BAM and gene counts (STAR), fastp reports, input hashes and metrics; `read_preparation.json` with lane inputs and fragment counts |
 | `<output>/qc_report/` | Comparative HTML/PNG/TSV and MultiQC |
 | `<output>/counts.tsv`, `gene_lengths.tsv`, `gene_import.rds` | Retained-cohort counts, effective lengths and tximport object |
 | `<output>/counts_provenance.json`, `sample_disposition.tsv` | Count semantics and inclusion/exclusion reasons |
@@ -331,7 +251,7 @@ Preserve the project, original inputs, reference identity, runtime lock and exac
 | Workbook import error | Check the reported cell; use literal answers, unique text IDs and one selected assay tab |
 | Conflicting sources | Choose external files or workbook tables; clear unused records/paths |
 | Missing mate/duplicate read | Correct library/run/lane/role assignments; never downgrade paired input |
-| Unsupported assay/UMI | V2 cannot execute that route; use an appropriate external workflow |
+| Unsupported assay/UMI | This release cannot run that route; see [Future scope](#future-scope) |
 | Non-estimable design | Resolve missing covariates, confounding or inadequate biological replication |
 | Reference ID mismatch | Supply matching FASTA/GTF releases and inspect reference logs |
 | Runtime mismatch | Read the verifier report and create a fresh locked prefix |
@@ -342,100 +262,36 @@ Preserve the project, original inputs, reference identity, runtime lock and exac
 > [!CAUTION]
 > For an issue, include the commit/tag, command, relevant configuration, preflight findings and failing rule log. Remove credentials and private participant metadata before sharing.
 
-## Validation and development
+## Options
 
-### Added in 2.1.0
+| You want | Set |
+|---|---|
+| QC only, or counts without statistics | Analysis goal in the workbook, or `analysis.objectives: [qc]` / `[gene_expression]` |
+| Genome alignments and BAM files | `analysis.quantifier: star`, with a genome, a GTF and a declared strand |
+| A specific DE method | `analysis.backend: limma_voom`, `edger_ql` or `deseq2` |
+| Paired or repeated measures | Subject column in the workbook |
+| Custom comparisons | Contrasts tab in the workbook, or `contrasts` in the configuration |
+| A contamination check | Screening answer in the workbook, or a `screening` block |
+| Read quality before any analysis | `python3 "$REPO/scripts/raw_qc.py" -d "$PROJECT" --out "$PROJECT/raw_qc_run1"` |
 
-<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/workflow-2.1-dark.png" /><img src="assets/workflow-2.1-light.png" alt="Workflow in v2.1.0: study intake, setup and review, preflight, reference, read preparation, fastp, quantification with Salmon or STAR, QC report, gene counts and the DE model, with optional read screening, WGCNA and GO/KEGG" width="100%" /></picture></p>
+New projects default to DESeq2 for 3 to 12 biological units in the smallest group and limma-voom above 12; two units per group needs an explicit choice. [docs/OPTIONS.md](docs/OPTIONS.md) explains each option.
 
-The map above shows the v2.1.0 workflow: quantification with Salmon or with STAR and featureCounts, optional read screening, and a DE model fitted with limma-voom or dream, edgeR QL or DESeq2 Wald. Its source is [assets/workflow-2.1.workflow.json](assets/workflow-2.1.workflow.json).
+## Validation
 
-Version 2.1.0 adds an observation-only QC command for canonical non-UMI bulk projects (the Samples/Libraries/Reads intake). Activate the locked Linux environment, then run:
+<img src="assets/section-validation.svg" alt="Validation" width="100%" />
 
-```bash
-python3 "$REPO/scripts/raw_qc.py" -d "$PROJECT" \
-  --out "$PROJECT/raw_qc_run1" --threads 2
-```
-
-This command checks lane/mate integrity and writes per-sample fastp JSON/HTML, read provenance, `manifest.json` and a cohort `index.html`. It needs no reference, Salmon index, annotation or DE model. It disables trimming/filtering and preserves original reads; temporary merged reads are removed after inspection. Use a new output directory for each run. A failure stops the command with a failed status while previously completed reports remain available.
-
-```mermaid
-flowchart TD
-    A[Excel intake or project YAML/TSV] --> B[Validate study, references and selected objectives]
-    B --> C[Verify core and selected tool environments]
-    C --> D[Prepare lanes and mates; fastp preprocessing]
-    D --> E[Durable early QC and read-loss reports]
-    D --> F[Optional declared-panel screening; no read removal]
-    D --> G{Counts or alignments requested?}
-    G -->|No: QC only| E
-    G -->|Yes| H{Declared quantifier / objective}
-    H --> I[Salmon: transcript abundance]
-    H --> J[STAR + featureCounts: indexed BAMs and raw gene counts]
-    I --> K[Aggregate gene counts and comparative QC]
-    J --> K
-    K --> L{Inference requested?}
-    L -->|Yes| M[Declared contrasts: limma, edgeR, DESeq2 or dream]
-    M --> N[Requested enrichment]
-    K --> O[Requested coexpression]
-```
-
-The development DAG now separates preprocessing from Salmon quantification and retains fastp reports plus a read-loss ledger. `analysis.objectives: [qc]` builds the preprocessing report without a reference or DE model; `[gene_expression]` also produces counts without running inference. The standalone command above remains observation-only; the DAG QC objective performs the configured preprocessing. Optional declared-panel screening is available in development. Named kit profiles in [config/kit_profiles.yaml](config/kit_profiles.yaml) set TruSeq/NEBNext adapters and strand; they are not UMI, end-tag or small-RNA profiles. Fastp overrepresentation is a diagnostic, not a contamination verdict.
-
-The development workbook (schema 5) exposes the analysis goal (differential expression, expression only or QC only), Salmon/STAR selection, DE method, subject column for repeated measures (random subject with dream, or a fixed subject block for pairing), an optional fixed-effects formula (interactions, continuous covariates), an optional Contrasts tab, complete custom reference sets, genomic-decoy choice, a named library protocol, platform-based poly-G handling, adapters, minimum retained read length and contamination screening. Custom reference paths resolve beside the workbook; supplying a custom set bypasses automatic reference selection. Schemas 1–4 remain readable. Non-bulk producers are still outside the executable Excel adapter.
-
-The main launcher accepts the bulk workbook directly:
+Every release must pass **35 checks with none skipped**, plus a six-sample public study run through both Salmon and STAR. v2.1.1 passed on a SLURM cluster and in the [hosted workflow](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml). To repeat it in an installed environment:
 
 ```bash
-bash "$REPO/submit.sh" --intake /path/study.xlsx -d "$PROJECT" --plan-only
-bash "$REPO/submit.sh" --intake /path/study.xlsx -d "$PROJECT" --executor local --cores 4
-# Or use --executor slurm with the configured site profile.
-```
-
-Planning needs Python with pandas/openpyxl/PyYAML and R with jsonlite/emmeans; it does not build the scientific runtime or download annotation tables. It may query reference metadata services. A normal launch prepares the locked runtime automatically. Resume accepts the current workbook checksum. A changed workbook prints which settings changed and which stages they reach, then stops; add `--accept-revision` to apply it (the previous configuration is kept under `intake/<old checksum>/`, and Snakemake reruns only affected work). A changed project name still needs a new project directory.
-
-For explicit fixed-effect inference, development configuration accepts `analysis.backend: limma_voom`, `edger_ql`, or `deseq2`; `auto` in an existing configuration retains limma-voom. New projects created by setup record the handbook default instead: DESeq2 for 3–12 biological units in the smallest group, limma-voom above 12. Two units per group is exploratory and requires an explicit method choice. Random-effects models select dream. These methods share count provenance and declared contrasts. DESeq2 uses rounded lengthScaledTPM counts from Salmon or raw integer gene counts from STAR, its own size-factor estimation and Wald statistics; edgeR uses TMM and quasi-likelihood F tests. Neither adds another transcript-length offset. The development runtime adds DESeq2 1.50.2 to the existing package lock.
-
-Contrasts may select `numerator` and `denominator` levels instead of `reverse`, or use `type: linear` with named design-coefficient `weights`. Preflight validates these against the actual model. New setup projects default to genomic decoys; existing configurations keep their setting. To enable genome decoys on an existing project, set `reference.decoys: genome` with a compatible `genome_fasta_url`. The builder combines transcriptome and genome, checks identifiers, records hashes and verifies cache reuse. Its default worker request is 64 GB RAM; override rule resources for your reference where appropriate. `decoys: null` explicitly retains the legacy transcriptome-only index. See [Salmon's construction method](https://salmon.readthedocs.io/en/latest/salmon.html).
-
-For genomic alignments and exon-level gene counting, set `analysis.quantifier: star` (or request `analysis.objectives: [alignment]` with `quantifier: auto`), supply compatible `reference.genome_fasta_url` and `gtf_url`, and declare strandedness. Legacy paired libraries use `IU`, `ISF` or `ISR`; single-end libraries use `U`, `SF` or `SR`. Canonical libraries use their own declared strand. Unknown strandedness blocks this route. Sample number does not choose the quantifier.
-
-STAR 2.7.11b and featureCounts 2.1.1 produce sorted/indexed BAMs and raw exon-union gene counts. Only uniquely aligned, unambiguously assigned reads/fragments count; paired mates count as one fragment. Counts have **no transcript-length scaling**. Gene lengths are exon-union lengths. The launcher installs and verifies a separate [locked tool module](environments/star-linux-64.explicit.txt), retaining the core R runtime. Index and alignment workers request 64 GB and 40 GB respectively; these are worker memory requests, not storage limits. Missing declared BAM indexes and gene-length files trigger recovery.
-
-Optional post-preprocessing screening uses FastQ Screen 0.16.0 with Bowtie2 2.5.4. Declare the expected organism and any suspected contaminants as prebuilt Bowtie2 indexes (`index`) or as FASTA sources (`fasta`: a path, URL, `transcriptome` or `genome`) that the workflow indexes under `screening_panel/`:
-
-```yaml
-screening:
-  enabled: true
-  fragments: 100000
-  seed: 1
-  references:
-    - {name: Host, role: expected, index: /references/host_transcriptome}
-    - {name: PhiX, role: possible_contaminant, fasta: https://eutils.ncbi.nlm.nih.gov/entrez/eutils/efetch.fcgi?db=nuccore&id=NC_001422.1&rettype=fasta&retmode=text}
-```
-
-Relative paths resolve against the project directory. FASTA members are downloaded or copied, hashed and indexed with the screening module's bowtie2-build; the build version and FASTA checksum are recorded in `screening_panel/<name>/built.txt`. The workbook's screening answer builds the panel automatically: the project transcriptome (genome for STAR) as expected, PhiX, and any extra `name=FASTA` entries as possible contaminants. Include an intended pathogen as `expected`, never as an assumed contaminant.
-
-The launcher prepares the separate [screening runtime](environments/screen-linux-64.explicit.txt) only when enabled. Uniform seeded sampling retains paired fragments together, then screens mates separately: reported counts are **reads, not fragments**. Per-sample `screening/screening.json`, `.tsv` and `.html` record sampling, reference-file checksums, exclusive/shared matches and zero reads removed. Disabled runs explicitly say `not_performed`. Screening neither excludes samples nor removes reads. Shared matches are ambiguous; matches are not organism abundance or proof of contamination, and absence of a match cannot rule out organisms omitted from the panel. Bowtie2 is not splice-aware: prefer a compatible host transcriptome for RNA screening and interpret genomic screens accordingly. Panel sensitivity and study-specific thresholds still need qualification.
-
-These additions are part of v2.1.0; they do not complete the multi-assay roadmap. The capability table above describes the v2.0.0 scope; further assay producers, broader intake controls and protocol-specific QC remain open.
-
-<img src="assets/section-validation.svg" alt="Validation and development" width="100%" />
-
-```bash
-python3 scripts/environment_check.py --out environment_report.json
 star_prefix=$(bash scripts/bootstrap.sh --module star)
-export PATH="$star_prefix/bin:$PATH"
 screen_prefix=$(bash scripts/bootstrap.sh --module screen)
-# Keep the core Python/R runtime ahead of optional module dependencies.
-export PATH="$CONDA_PREFIX/bin:$screen_prefix/bin:$PATH"
-bash tests/run_all.sh --strict   # any missing dependency/skip fails qualification
-bash tests/check_public.sh      # six-sample public Salmon smoke test
-bash tests/check_public.sh --star # same public study through STAR
+export PATH="$CONDA_PREFIX/bin:$star_prefix/bin:$screen_prefix/bin:$PATH"
+bash tests/run_all.sh --strict
+bash tests/check_public.sh --screen
+bash tests/check_public.sh --star
 ```
 
-The v2.0.0 strict suite had **22 checks**; the v2.1.1 gate has **35**, adding raw QC, objective selection, genome decoys and backend comparisons for input contracts, read preparation, reference/cache safety, count agreement, DE directions, declared-model preservation, enrichment, WGCNA, storage and recovery. Scientific CI installs the lock and also runs the public smoke test. [Release qualification](docs/RELEASE.md) separates current source evidence from historical environment/SLURM checks. Synthetic tests and a downsampled public study do not establish validity for every organism or design.
-
-For clean installation on a SLURM worker, run `sbatch scripts/validate_slurm.sbatch` with your site's scheduler options. `scripts/qualify_deployment.sbatch` checks launcher-to-worker execution, resume and a shared reference cache, or a stock container. Developer mode (`bash tests/run_all.sh`) permits reported dependency skips; it is not the release gate. See [v2 changes](CHANGELOG.md), [input contracts](INPUTS.md) and [limitations](docs/RELEASE.md).
+These checks use synthetic data and one downsampled public study, so they do not prove correctness for every organism or design. Job records and known limits are in [docs/RELEASE.md](docs/RELEASE.md); changes are in the [changelog](CHANGELOG.md).
 
 <details>
 <summary><strong>Optional remote setup helper</strong></summary>
@@ -450,10 +306,22 @@ The remote checkout defaults to `RNASeq_pipeline` under the remote home director
 
 </details>
 
+## Future scope
+
+Work under way for later releases:
+
+- **3′ end-tag libraries** (Lexogen QuantSeq FWD, REV and FWD-UMI), including UMI counting
+- **Small RNA** for animals and plants
+- **Host and pathogen in the same libraries** (dual-organism analysis)
+
+Planned after that: single-cell and single-nucleus, spatial, long-read and specialized RNA assays.
+
+Until those are released, this workflow handles bulk libraries without UMIs, with one library per sample. Splicing, fusion and variant analysis, and import of ready-made count matrices, are outside its scope.
+
 ## License and citation
 
 <img src="assets/section-license.svg" alt="License and citation" width="100%" />
 
 Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.1.1**, references and tool versions in your methods.
 
-Maintained by **Prem Pratap Singh**, Department of Viticulture and Enology, University of California, Davis.
+Maintained by **Prem Pratap Singh**, Department of Plant Pathology, University of California, Davis.

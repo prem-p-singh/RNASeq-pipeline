@@ -43,7 +43,7 @@ readme:
   - "Changing a workbook after setup: submit.sh reports which settings and stages change and applies the revision only with --accept-revision."
   - "Blank strandedness knowledge is not a reverse-stranded assumption: choose don't know. Salmon detects library type and reports disagreement. STAR requires a known declared strand; it does not infer strand."
   - "Do not change the field IDs in column E. Sorting complete rows and editing display labels do not change the field identities."
-  - "Full intake and route coverage remains incomplete. See docs/INTAKE_TEMPLATE_AUDIT.md for required fields, implementation gaps and the v2 publication gate."
+  - "Only the Bulk RNA-seq tab can be run in this release. The other assay tabs are for planning."
 
 record_tables:
   Samples:

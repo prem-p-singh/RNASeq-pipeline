@@ -4,43 +4,42 @@
 
 Nothing yet.
 
-## 2.1.1 — 2026-10-08
+## 2.1.1 (2026-10-08)
 
-- Removed the n8n orchestration integration (`integrations/n8n/`) and its three checks. It was not part of the planned 2.1.0 scope. The release gate is 35 checks; source `0416b47` passed it with zero skips and both public routes (job 39621454). See docs/RELEASE.md.
+- Removed the n8n automation integration and its three checks. It was not part of the planned release. No pipeline code changed. All 35 checks passed with none skipped, with the public study run through both Salmon and STAR.
 
-## 2.1.0 — 2026-10-08
+## 2.1.0 (2026-10-08)
 
-Scope: bulk completion (milestones M1–M3). Later assay families are planned for 3.0.0 and beyond.
+Superseded by 2.1.1.
 
-- Workbook schema 5: analysis goal (differential expression, expression only, QC only), repeated measures with a subject column (random subject with dream, or fixed subject block for pairing), optional fixed-effects formula, optional Contrasts tab (pairwise with levels or linear weights), named library protocol, and contamination screening questions.
+### Added
+
+- Intake workbook: analysis goal (differential expression, expression only, QC only); paired and repeated measures with a subject column; optional fixed-effects formula; optional Contrasts tab; named library protocol; contamination screening questions; method and reference choices.
 - A changed workbook reports the changed settings and affected stages; `submit.sh --accept-revision` applies it and keeps the previous configuration.
-- Named non-UMI bulk kit profiles (TruSeq, NEBNext) set adapters and strand; conflicting answers are rejected. The sequencing platform sets poly-G trimming unless chosen explicitly.
-- Screening panels accept FASTA sources (path, URL, project transcriptome or genome) that the workflow indexes automatically, with the build version and FASTA checksum recorded.
-- New projects record the handbook DE default (DESeq2 for 3–12 biological units per group, limma-voom above 12); `auto` in existing configurations is unchanged. Two units per group needs an explicit method.
-- Design checks compare an interaction (DESeq2), a donor-blocked pairing (edgeR QL) and a continuous covariate (limma-voom) against direct fits.
+- `submit.sh` can launch and resume directly from the workbook, locally or through SLURM.
+- STAR and featureCounts route with a declared strand, uniquely aligned fragment counts and indexed BAMs, in a separately locked tool module.
+- edgeR QL and DESeq2 Wald beside limma-voom and dream, with shared contrast checks, explicit pair direction and named coefficient contrasts.
+- New projects record a default DE method: DESeq2 for 3 to 12 biological units per group, limma-voom above 12. `auto` in existing configurations is unchanged.
+- QC-only, expression-only and coexpression goals.
+- Salmon index with full-genome decoys, identifier checks and cache integrity verification.
+- Named bulk library protocols (TruSeq, NEBNext) set adapters and strand; the sequencing platform sets poly-G trimming unless chosen explicitly.
+- Optional FastQ Screen and Bowtie2 contamination panels, built from FASTA sources and indexed by the workflow. Screening never removes reads or excludes samples.
+- Stand-alone raw read QC command that needs no reference and no statistical design.
+- Preprocessing and quantification run as separate, resumable steps, with read-loss records and an early MultiQC report.
 
-- Optional FastQ Screen/Bowtie2 diagnostic panels: seeded fragment sampling, separate mate/read counts, reference checksums and explicit disabled status; never removes reads or excludes samples. Isolated locked deployment preserves the core interpreter.
+### Changed
 
-- Workbook schema 4 connects bulk quantifier/DE selection, complete custom reference sets, decoy profile and basic preprocessing to generated configuration; older schemas remain readable.
+- The core runtime adds DESeq2 1.50.2 (580 packages).
+- SLURM profiles wait 120 seconds for worker outputs. On shared filesystems that cache directory listings, a resumed job could be reported as missing its outputs.
 
-- Independent, observation-only raw QC for canonical non-UMI bulk projects using locked fastp 0.23.4; no reference or statistical design required.
-- Durable per-sample reports and run status, input checksum/mate validation, exact command provenance and protected source reads. Existing output directories are refused to prevent stale results.
-- Separate resumable preprocessing and quantification producers, explicit adapter/quality/poly-G settings, read-loss provenance and an early MultiQC report.
-- QC-only, expression-only and coexpression objectives; local/SLURM launcher selection and direct Excel launch/resume with snapshot checks.
-- Fixed-effect edgeR QL and DESeq2 Wald adapters, shared preflight contrast validation, explicit pair direction and named coefficient contrasts.
-- Full-genome Salmon decoy construction, identifier checks and reference/cache integrity verification.
-- STAR/featureCounts bulk route with declared strand, uniquely aligned fragment counts, indexed BAMs and a separately pinned tool module; public (38992390) and recovery (38992412) checks passed.
-- Candidate Linux runtime adds DESeq2 1.50.2 while preserving the previous 579 package records.
-- This branch combines the deployment-qualified source `82e70c5` with the 2.1.0 work. The combined source `0a857c6` passed the 38-check gate with zero skips and both public routes (job 39620298), SLURM-worker execution, resume and the shared reference cache (39620305) and the stock container check (39618728). See docs/RELEASE.md. The hosted release-validation workflow has not run on this source.
-- Deployment qualification (M8) passed for this branch's bulk scope on source `82e70c5`: fresh installation, the 37-check gate with zero skips, both public routes, launcher-to-SLURM-worker execution, resume after interruption, two projects on one reference cache entry and a stock Ubuntu container. See docs/RELEASE.md for jobs, limits and the release matrix. The hosted release-validation workflow has not run on this source.
-- SLURM profiles wait 120 seconds for worker outputs (30 or 60 before). On NFS mounts that cache directories for 60 seconds, a resumed or retried job was reported as missing its outputs.
-- `scripts/qualify_deployment.sbatch` runs the distributed and container checks; `tests/check_public.sh --verify` checks a project that another launcher ran; `RNASEQ_VALIDATE_ROOT` relocates the validation runtime.
-- M1–M7 remain incomplete; new backend qualification is in progress. M2 remains partial: named chemistry profiles and new assay support remain open; declared-panel screening does not establish panel sensitivity.
-- Full regression: 35 checks, 0 failed, 0 skipped, plus Salmon (with screening) and STAR public routes (39010068). This run predates the n8n checks and the deployment qualification below. M4–M7 remain incomplete. M2 remains partial: named chemistry profiles and new assay support remain open; declared-panel screening does not establish panel sensitivity.
+### Checks
 
-## 2.0.0 — 2026-09-23
+- `scripts/qualify_deployment.sbatch` checks SLURM-worker execution, resume, a shared reference cache and a stock container.
+- Read screening reports matches; it does not establish how sensitive a panel is.
 
-V2 releases the currently implemented **annotated, non-UMI bulk RNA-seq workflow**. The broader multi-assay roadmap is not part of this release's supported scope. Workbook schema version 3 is independent of software version 2.0.0.
+## 2.0.0 (2026-09-23)
+
+V2 releases the currently implemented **annotated, non-UMI bulk RNA-seq workflow**. The broader multi-assay roadmap is not part of this release's supported scope.
 
 ### Added
 
@@ -53,7 +52,7 @@ V2 releases the currently implemented **annotated, non-UMI bulk RNA-seq workflow
 
 ### Changed and repaired
 
-- Storage estimates warn without blocking launch or reducing concurrency. No default 20 GB limit; estimates include complete libraries and retained merged/trimmed reads.
+- Storage estimates warn without blocking launch or reducing concurrency. Estimates include complete libraries and retained merged and trimmed reads.
 - PCA batch diagnostics preserve the declared scientific model and record review suggestions.
 - Complete canonical-table relationships are validated; duplicate roles are retained for diagnostics instead of overwritten.
 - Empty shell arguments are quoted correctly in both legacy and canonical execution.

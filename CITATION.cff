@@ -8,7 +8,7 @@ authors:
   - family-names: Singh
     given-names: Prem Pratap
     orcid: "https://orcid.org/0000-0001-7921-9379"
-    affiliation: "Department of Viticulture and Enology, University of California, Davis"
+    affiliation: "Department of Plant Pathology, University of California, Davis"
 repository-code: "https://github.com/prem-p-singh/RNASeq-pipeline"
 url: "https://github.com/prem-p-singh/RNASeq-pipeline"
 license: MIT
