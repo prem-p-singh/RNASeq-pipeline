@@ -6,19 +6,16 @@
 # absent are reported as SKIP, with the reason, and do not count as passes:
 # a skipped check is not a passed check.
 #
-# Use --n8n to run only the three orchestration checks.
 # Run:  bash tests/run_all.sh
 set -uo pipefail
 
 strict=0
-n8n_only=0
-for option in "$@"; do
-    case "$option" in
-        --strict) strict=1 ;;
-        --n8n) n8n_only=1 ;;
-        *) echo "Usage: bash tests/run_all.sh [--strict] [--n8n]" >&2; exit 2 ;;
-    esac
-done
+case "${1:-}" in
+    --strict) strict=1 ;;
+    "") ;;
+    *) echo "Usage: bash tests/run_all.sh [--strict]" >&2; exit 2 ;;
+esac
+[ "$#" -le 1 ] || { echo "Too many arguments" >&2; exit 2; }
 
 cd "$(dirname "$0")/.."
 
@@ -62,8 +59,6 @@ skip() {
 }
 
 echo "Self-checks"
-
-if [ "$n8n_only" -eq 0 ]; then
 
 if command -v Rscript >/dev/null 2>&1; then
     if have_r_pkgs edgeR limma emmeans; then
@@ -150,25 +145,6 @@ if have_py_mods yaml && command -v Rscript >/dev/null 2>&1 \
     run check_project_isolation.sh "bash tests/check_project_isolation.sh"
 else
     skip check_project_isolation.sh "needs pyyaml, Rscript and jsonlite (submit.sh runs preflight)"
-fi
-
-fi
-
-# Orchestration is a separate source line; never run its release smoke against
-# this schema-5 parent. --gate reports missing deployment prerequisites as 77.
-echo "n8n integration gate"
-if command -v node >/dev/null 2>&1; then
-    run check_n8n_nodes.js "node tests/check_n8n_nodes.js"
-else
-    skip check_n8n_nodes.js "needs Node.js"
-fi
-if command -v python3 >/dev/null 2>&1 \
-   && python3 -c "import fcntl, sys; sys.exit(sys.version_info < (3, 9))" >/dev/null 2>&1; then
-    run check_n8n.py "python3 tests/check_n8n.py"
-    run check_n8n_release.py "python3 tests/check_n8n_release.py --gate"
-else
-    skip check_n8n.py "needs Python 3.9+ and POSIX fcntl"
-    skip check_n8n_release.py "needs Python 3.9+, Linux x86_64, reviewed schema-7 source and locked modules"
 fi
 
 echo

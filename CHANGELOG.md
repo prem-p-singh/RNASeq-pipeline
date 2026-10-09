@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-Nothing yet.
+- Removed the n8n orchestration integration (`integrations/n8n/`) and its three checks. It was not part of the planned 2.1.0 scope. The release gate is 35 checks. Qualification of this source: pending.
 
 ## 2.1.0 — 2026-10-08
 
@@ -14,7 +14,6 @@ Scope: bulk completion (milestones M1–M3). Later assay families are planned fo
 - Screening panels accept FASTA sources (path, URL, project transcriptome or genome) that the workflow indexes automatically, with the build version and FASTA checksum recorded.
 - New projects record the handbook DE default (DESeq2 for 3–12 biological units per group, limma-voom above 12); `auto` in existing configurations is unchanged. Two units per group needs an explicit method.
 - Design checks compare an interaction (DESeq2), a donor-blocked pairing (edgeR QL) and a continuous covariate (limma-voom) against direct fits.
-- Add the n8n orchestration handoff and an explicit three-test integration gate. It targets the separately reviewed schema-7 development source; this schema-5 parent gains no TAG-seq/QuantSeq or small-RNA routes. Missing release-smoke prerequisites are visible skips and block strict qualification. See integrations/n8n/README.md and VALIDATION.md.
 
 - Optional FastQ Screen/Bowtie2 diagnostic panels: seeded fragment sampling, separate mate/read counts, reference checksums and explicit disabled status; never removes reads or excludes samples. Isolated locked deployment preserves the core interpreter.
 
