@@ -10,6 +10,8 @@
   <a href="docs/RELEASE.md">Validation</a>
 </div>
 
+<p align="center"><img src="assets/release-2.1.0.gif" alt="Animated overview of v2.1.0: 38 strict checks passed, the Excel intake with subjects and contrasts, the six stages with Salmon or STAR, and the 580-package locked runtime" width="100%" /></p>
+
 <p align="center">
   <a href="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml"><img src="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml/badge.svg" alt="Scientific Linux checks" /></a>
   <a href="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/checks.yml"><img src="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/checks.yml/badge.svg" alt="Lightweight checks" /></a>
@@ -343,6 +345,10 @@ Preserve the project, original inputs, reference identity, runtime lock and exac
 ## Validation and development
 
 ### Added in 2.1.0
+
+<p align="center"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/workflow-2.1-dark.png" /><img src="assets/workflow-2.1-light.png" alt="Workflow in v2.1.0: study intake, setup and review, preflight, reference, read preparation, fastp, quantification with Salmon or STAR, QC report, gene counts and the DE model, with optional read screening, WGCNA and GO/KEGG" width="100%" /></picture></p>
+
+The map above shows the v2.1.0 workflow: quantification with Salmon or with STAR and featureCounts, optional read screening, and a DE model fitted with limma-voom or dream, edgeR QL or DESeq2 Wald. Its source is [assets/workflow-2.1.workflow.json](assets/workflow-2.1.workflow.json).
 
 Version 2.1.0 adds an observation-only QC command for canonical non-UMI bulk projects (the Samples/Libraries/Reads intake). Activate the locked Linux environment, then run:
 
