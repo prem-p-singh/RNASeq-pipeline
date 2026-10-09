@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+Nothing yet.
+
+## 2.1.1 — 2026-10-08
+
 - Removed the n8n orchestration integration (`integrations/n8n/`) and its three checks. It was not part of the planned 2.1.0 scope. The release gate is 35 checks; source `0416b47` passed it with zero skips and both public routes (job 39621454). See docs/RELEASE.md.
 
 ## 2.1.0 — 2026-10-08

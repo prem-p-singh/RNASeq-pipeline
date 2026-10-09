@@ -1,6 +1,6 @@
 # V2 release qualification
 
-Release: **v2.1.0**, qualified 2026-10-08 on source `0a857c6`; publication still requires the hosted workflow to pass on the tagged commit. Previous release: v2.0.0, 2026-09-23. Scope: **Linux x86_64, annotated non-UMI bulk gene expression**. The user authorized publication of the current bulk release; full multi-assay coverage is not a v2 claim.
+Release: **v2.1.1**, qualified 2026-10-08 on source `0416b47` (see [Source without the n8n integration](#source-without-the-n8n-integration)); publication requires the hosted workflow to pass on the tagged commit. Previous releases: v2.1.0, 2026-10-08 (tagged; its hosted workflow run stopped on one skipped n8n check), and v2.0.0, 2026-09-23. Scope: **Linux x86_64, annotated non-UMI bulk gene expression**. The user authorized publication of the current bulk release; full multi-assay coverage is not a v2 claim.
 
 ## Release versions
 
@@ -10,6 +10,7 @@ Each software version groups development milestones (M1–M8). Workbook schema n
 |---|---|---|
 | 2.0.0 | Annotated non-UMI bulk: Salmon, limma-voom/dream, workbook schema 3 | Released 2026-09-23 |
 | 2.1.0 | Bulk completion: workbook schema 5 with analysis goal, subject models, formula, Contrasts tab and revision reports (M1); named bulk kit profiles, platform poly-G and automatic screening panel (M2); handbook DE default and interaction/paired/continuous design checks (M3); earlier schema 4 and Excel launch/resume (M1); raw QC, preprocessing and screening (M2); Salmon decoys, STAR/featureCounts, DESeq2, edgeR QL and objective selection (M3) | Qualified 2026-10-08 on source `0a857c6`: 38 checks, 0 failed, 0 skipped, both public routes, SLURM workers, resume, shared cache and a stock container (jobs 39620298, 39620305, 39618728). The 2.1.0 code alone had passed 35 checks in job 39010068. Not published: the hosted workflow has not run on this source |
+| 2.1.1 | 2.1.0 without the n8n orchestration integration; no pipeline code change | Qualified 2026-10-08 on source `0416b47`: 35 checks, 0 failed, 0 skipped and both public routes (job 39621454) |
 | 3.0.0 | Named end-tag kits, small RNA and dual organism (M4) | Test data prepared only |
 | Later | Cell/nucleus and spatial (M5), long-read and reference-poor (M6), specialized RNA (M7) | Not started; versions assigned when scoped |
 

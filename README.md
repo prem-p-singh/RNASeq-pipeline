@@ -3,14 +3,14 @@
   <h1>RNASeq pipeline · v2</h1>
   <p><strong>Your study design. Your reads. A traceable analysis.</strong></p>
   <p>Excel-driven intake · Snakemake execution · Locked Linux runtime</p>
-  <a href="https://github.com/prem-p-singh/RNASeq-pipeline/releases/tag/v2.1.0">Release notes</a> ·
+  <a href="https://github.com/prem-p-singh/RNASeq-pipeline/releases/tag/v2.1.1">Release notes</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#how-the-workflow-runs">Workflow</a> ·
   <a href="INPUTS.md">Input guide</a> ·
   <a href="docs/RELEASE.md">Validation</a>
 </div>
 
-<p align="center"><img src="assets/release-2.1.0.gif" alt="Animated overview of v2.1.0: 38 strict checks passed, the Excel intake with subjects and contrasts, the six stages with Salmon or STAR, and the 580-package locked runtime" width="100%" /></p>
+<p align="center"><img src="assets/release-overview.gif" alt="Animated overview of v2.1.1: 35 strict checks passed, the Excel intake with subjects and contrasts, the six stages with Salmon or STAR, and the 580-package locked runtime" width="100%" /></p>
 
 <p align="center">
   <a href="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml"><img src="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml/badge.svg" alt="Scientific Linux checks" /></a>
@@ -22,7 +22,7 @@
 Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and differential-expression results. Fill an Excel intake or provide explicit TSV/YAML inputs, review the study configuration, and run locally on Linux or through SLURM. Every project has its own configuration, logs and results.
 
 > [!NOTE]
-> **V2.1.0 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. V2.0.0 shipped workbook schema 3; v2.1.0 supplies **schema 5**. Workbook schema and software release numbers are separate.
+> **V2.1.1 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. V2.0.0 shipped workbook schema 3; v2.1 supplies **schema 5**. Workbook schema and software release numbers are separate.
 
 The table and diagram below describe the v2.0.0 scope. For the routes and controls added in v2.1.0 and their qualification status, see [added in 2.1.0](#added-in-210).
 
@@ -166,7 +166,7 @@ flowchart TD
 ### 1. Get v2 and choose paths
 
 ```bash
-git clone --branch v2.1.0 https://github.com/prem-p-singh/RNASeq-pipeline.git
+git clone --branch v2.1.1 https://github.com/prem-p-singh/RNASeq-pipeline.git
 cd RNASeq-pipeline
 export REPO="$(pwd)"
 export PROJECT="$HOME/rnaseq_projects/my_study"
@@ -433,7 +433,7 @@ bash tests/check_public.sh      # six-sample public Salmon smoke test
 bash tests/check_public.sh --star # same public study through STAR
 ```
 
-The v2.0.0 strict suite had **22 checks**; the v2.1.0 gate has **38**, adding raw QC, objective selection, genome decoys and backend comparisons for input contracts, read preparation, reference/cache safety, count agreement, DE directions, declared-model preservation, enrichment, WGCNA, storage and recovery. Scientific CI installs the lock and also runs the public smoke test. [Release qualification](docs/RELEASE.md) separates current source evidence from historical environment/SLURM checks. Synthetic tests and a downsampled public study do not establish validity for every organism or design.
+The v2.0.0 strict suite had **22 checks**; the v2.1.1 gate has **35**, adding raw QC, objective selection, genome decoys and backend comparisons for input contracts, read preparation, reference/cache safety, count agreement, DE directions, declared-model preservation, enrichment, WGCNA, storage and recovery. Scientific CI installs the lock and also runs the public smoke test. [Release qualification](docs/RELEASE.md) separates current source evidence from historical environment/SLURM checks. Synthetic tests and a downsampled public study do not establish validity for every organism or design.
 
 For clean installation on a SLURM worker, run `sbatch scripts/validate_slurm.sbatch` with your site's scheduler options. `scripts/qualify_deployment.sbatch` checks launcher-to-worker execution, resume and a shared reference cache, or a stock container. Developer mode (`bash tests/run_all.sh`) permits reported dependency skips; it is not the release gate. See [v2 changes](CHANGELOG.md), [input contracts](INPUTS.md) and [limitations](docs/RELEASE.md).
 
@@ -454,6 +454,6 @@ The remote checkout defaults to `RNASeq_pipeline` under the remote home director
 
 <img src="assets/section-license.svg" alt="License and citation" width="100%" />
 
-Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.1.0**, references and tool versions in your methods.
+Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.1.1**, references and tool versions in your methods.
 
 Maintained by **Prem Pratap Singh**, Department of Viticulture and Enology, University of California, Davis.
