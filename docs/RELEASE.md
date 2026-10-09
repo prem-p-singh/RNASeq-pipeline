@@ -70,7 +70,23 @@ This closes the deployment milestone for the bulk scope of this source. It does 
 
 ### Combined 2.1.0 source
 
-This branch adds the 2.1.0 work (workbook schema 5, named bulk kit profiles, automatic screening panel, design checks; previously qualified alone in job 39010068 with 35 passed, 0 failed, 0 skipped) on top of the deployment-qualified source above. The release gate for the combined source has **38 checks**. Its qualification is pending; the jobs above do not cover it.
+Source: commit `0a857c6` on `claude/release-2.1`: the deployment-qualified source above plus the 2.1.0 work (workbook schema 5, named bulk kit profiles, automatic screening panel, design checks; previously qualified alone in job 39010068 with 35 passed, 0 failed, 0 skipped). `git archive` SHA256 `4f1acc8c551bec5599aab235946178e3e7b5d0829ac0b0f2f20b6cca6b7ff92f`, verified on the cluster before extraction. The jobs in the table above do not cover this source; the jobs below do. All ran on 2026-10-08 (Pacific) on Linux x86_64 under SLURM with source, runtimes and projects on one NFS filesystem.
+
+| Check | Job | Result |
+|---|---|---|
+| Fresh installation and release gate | 39620298, exit 0, 1:41:45 | Core, STAR and screening runtimes built from the locks in a new directory and verified. `tests/run_all.sh --strict`: **38 passed, 0 failed, 0 skipped**. GSE110004 Salmon with screening and GSE110004 STAR each passed six samples, counts, DE and QC report. The runtimes were then reused with `CONDA_OFFLINE=true`. |
+| Launcher to SLURM workers | 39620305, exit 0, 1:24:08 | `submit.sh --executor slurm` ran the six-sample public Salmon project from a controller job; 27 rule jobs completed as separate SLURM jobs. The verified core runtime of job 39620298 was reused. |
+| Interruption and resume | same job | The launcher was interrupted and a second `submit.sh` finished the project with 10 worker jobs. |
+| Two projects, one reference cache entry | same job | Two projects naming the same reference and cache directory were launched together. Largest per-sample count-total difference 0.018%, inside the 1% tolerance written into the script before the run. |
+| Stock Linux container | 39618728, exit 0, 0:25:46 | `condaforge/miniforge3:26.7.2-0` (Ubuntu 24.04.5, conda 26.7.2) under Apptainer: fresh core install, `tests/check_end_to_end.sh` and the public Salmon route passed. |
+
+Log SHA256: `tests.log` `041e7220ecd597c082b79d499d6589b576828b88d648b8755248c51ec550e029`, `public.log` `24b2e3c1504d70242af769f70190359844b7c5f7270eac9a41a27c095df0e086`, `public-star.log` `579bf25615b591920a92e377fbd2de650bc4dd13e89ce5b37efd43ac82a0492a`, `distributed.log` `f646475f00743eb95be36494c0be3a770cd2e827fdb16899db99bc99e777e1e4`, `restart-2.log` `9cccebc9e95af33df1f201d899e9ba99d6b07f01fe587916c11a2fcbe32fd5d1`, `container.log` `ce941a75cd02888dcc02680be5a841ec31296ffc6c2e1dd7f6e14fec81576c9e`.
+
+How these runs differ from the table above. Jobs 39620298 and 39620305 were submitted with `HOME` set to a directory on the shared filesystem, so that Conda's package cache could not fall back to the submitting account's home directory. The n8n prerequisites were again supplied from outside the checkout (Node.js 22.14.0, the reviewed schema-7 bundle, and its small-RNA and UMI runtimes). The release matrix above applies to this source with the gate count changed to 38; its limits are unchanged.
+
+Runs that are not evidence: 39618727 started a fresh installation whose package downloads filled the submitting account's home quota; 39618726 was cancelled after it hit the same quota errors; 39620291 failed during installation with a Conda package-cache error, before any test.
+
+The hosted `release-validation` workflow has not run on this source. This is not a published release.
 
 Public protocol selection and evidence requirements are recorded in [Public-data qualification](PUBLIC_QUALIFICATION.md). The wider working plan remains incomplete.
 
