@@ -3,7 +3,7 @@
   <h1>RNASeq pipeline · v2</h1>
   <p><strong>Your study design. Your reads. A traceable analysis.</strong></p>
   <p>Excel-driven intake · Snakemake execution · Locked Linux runtime</p>
-  <a href="https://github.com/prem-p-singh/RNASeq-pipeline/releases/tag/v2.0.0">Release notes</a> ·
+  <a href="https://github.com/prem-p-singh/RNASeq-pipeline/releases/tag/v2.1.0">Release notes</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#how-the-workflow-runs">Workflow</a> ·
   <a href="INPUTS.md">Input guide</a> ·
@@ -20,9 +20,9 @@
 Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and differential-expression results. Fill an Excel intake or provide explicit TSV/YAML inputs, review the study configuration, and run locally on Linux or through SLURM. Every project has its own configuration, logs and results.
 
 > [!NOTE]
-> **V2 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. V2 shipped workbook schema 3; this development branch supplies **schema 5**. Workbook schema and software release numbers are separate.
+> **V2.1.0 is the current bulk RNA-seq release.** The wider multi-assay platform remains a roadmap. V2.0.0 shipped workbook schema 3; v2.1.0 supplies **schema 5**. Workbook schema and software release numbers are separate.
 
-The table and diagram below describe the published v2 tag. For this branch’s added routes and their qualification status, see [next-version development](#next-version-development-unreleased).
+The table and diagram below describe the v2.0.0 scope. For the routes and controls added in v2.1.0 and their qualification status, see [added in 2.1.0](#added-in-210).
 
 ## What you can run
 
@@ -153,7 +153,7 @@ flowchart TD
 | **⑥** | **Analyze and report** | Fit the declared model, record contrast directions and produce requested optional results. Empty, skipped, unavailable and failed are distinct outcomes. |
 
 > [!NOTE]
-> The diagram reflects the published v2 DAG: QC reporting follows quantification, and WGCNA waits for DE completion although it uses gene counts. See the development section below for the newer graph and independent raw-QC command.
+> The diagram reflects the v2.0.0 DAG: QC reporting follows quantification, and WGCNA waits for DE completion although it uses gene counts. See [added in 2.1.0](#added-in-210) for the newer graph and independent raw-QC command.
 
 ## Quick start
 
@@ -164,7 +164,7 @@ flowchart TD
 ### 1. Get v2 and choose paths
 
 ```bash
-git clone --branch v2.0.0 https://github.com/prem-p-singh/RNASeq-pipeline.git
+git clone --branch v2.1.0 https://github.com/prem-p-singh/RNASeq-pipeline.git
 cd RNASeq-pipeline
 export REPO="$(pwd)"
 export PROJECT="$HOME/rnaseq_projects/my_study"
@@ -189,7 +189,7 @@ export PYTHONNOUSERSITE=1 R_ENVIRON_USER=/dev/null R_PROFILE_USER=/dev/null
 export R_LIBS_USER="$prefix/lib/R/library" R_LIBS_SITE="$prefix/lib/R/library"
 ```
 
-Bootstrap installs the **579 exact package builds** in the [Linux lock](environments/linux-64.explicit.txt), checks installed package records, imports required Python/R libraries and verifies tool versions and locations. Missing packages are downloaded during environment creation. A mismatched existing environment is refused; create a fresh prefix. Normal launches repeat verification. Bootstrap does not install Conda or operating-system packages. Project annotation packages belong outside the qualified runtime.
+Bootstrap installs the **580 exact package builds** in the [Linux lock](environments/linux-64.explicit.txt), checks installed package records, imports required Python/R libraries and verifies tool versions and locations. Missing packages are downloaded during environment creation. A mismatched existing environment is refused; create a fresh prefix. Normal launches repeat verification. Bootstrap does not install Conda or operating-system packages. Project annotation packages belong outside the qualified runtime.
 
 Core versions: Python 3.12.14 · Snakemake 9.19.0 · R 4.5.2 · Salmon 1.10.3 · fastp 0.23.4. See [the runtime contract](docs/RELEASE.md#runtime-contract). `environment.yml` is a maintainer solve specification; use the explicit lock for installation.
 
@@ -342,9 +342,9 @@ Preserve the project, original inputs, reference identity, runtime lock and exac
 
 ## Validation and development
 
-### Next-version development (unreleased)
+### Added in 2.1.0
 
-The development branch adds an observation-only QC command for canonical non-UMI bulk projects (the Samples/Libraries/Reads intake). Activate the locked Linux environment, then run:
+Version 2.1.0 adds an observation-only QC command for canonical non-UMI bulk projects (the Samples/Libraries/Reads intake). Activate the locked Linux environment, then run:
 
 ```bash
 python3 "$REPO/scripts/raw_qc.py" -d "$PROJECT" \
@@ -411,7 +411,7 @@ Relative paths resolve against the project directory. FASTA members are download
 
 The launcher prepares the separate [screening runtime](environments/screen-linux-64.explicit.txt) only when enabled. Uniform seeded sampling retains paired fragments together, then screens mates separately: reported counts are **reads, not fragments**. Per-sample `screening/screening.json`, `.tsv` and `.html` record sampling, reference-file checksums, exclusive/shared matches and zero reads removed. Disabled runs explicitly say `not_performed`. Screening neither excludes samples nor removes reads. Shared matches are ambiguous; matches are not organism abundance or proof of contamination, and absence of a match cannot rule out organisms omitted from the panel. Bowtie2 is not splice-aware: prefer a compatible host transcriptome for RNA screening and interpret genomic screens accordingly. Panel sensitivity and study-specific thresholds still need qualification.
 
-These are development changes, not a new release or completion of the multi-assay roadmap. The capability table above describes the published v2 tag; further assay producers, broader intake controls, protocol-specific QC and full release qualification remain open.
+These additions are part of v2.1.0; they do not complete the multi-assay roadmap. The capability table above describes the v2.0.0 scope; further assay producers, broader intake controls and protocol-specific QC remain open.
 
 <img src="assets/section-validation.svg" alt="Validation and development" width="100%" />
 
@@ -427,7 +427,7 @@ bash tests/check_public.sh      # six-sample public Salmon smoke test
 bash tests/check_public.sh --star # same public study through STAR
 ```
 
-The published v2 strict suite has **22 checks**; the development runner adds raw QC, objective selection, genome decoys and backend comparisons for input contracts, read preparation, reference/cache safety, count agreement, DE directions, declared-model preservation, enrichment, WGCNA, storage and recovery. Scientific CI installs the lock and also runs the public smoke test. [Release qualification](docs/RELEASE.md) separates current source evidence from historical environment/SLURM checks. Synthetic tests and a downsampled public study do not establish validity for every organism or design.
+The v2.0.0 strict suite had **22 checks**; the v2.1.0 gate has **38**, adding raw QC, objective selection, genome decoys and backend comparisons for input contracts, read preparation, reference/cache safety, count agreement, DE directions, declared-model preservation, enrichment, WGCNA, storage and recovery. Scientific CI installs the lock and also runs the public smoke test. [Release qualification](docs/RELEASE.md) separates current source evidence from historical environment/SLURM checks. Synthetic tests and a downsampled public study do not establish validity for every organism or design.
 
 For clean installation on a SLURM worker, run `sbatch scripts/validate_slurm.sbatch` with your site's scheduler options. `scripts/qualify_deployment.sbatch` checks launcher-to-worker execution, resume and a shared reference cache, or a stock container. Developer mode (`bash tests/run_all.sh`) permits reported dependency skips; it is not the release gate. See [v2 changes](CHANGELOG.md), [input contracts](INPUTS.md) and [limitations](docs/RELEASE.md).
 
@@ -452,6 +452,6 @@ Use the [importable n8n workflows](integrations/n8n/README.md) to control the se
 
 <img src="assets/section-license.svg" alt="License and citation" width="100%" />
 
-Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.0.0**, references and tool versions in your methods.
+Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.1.0**, references and tool versions in your methods.
 
 Maintained by **Prem Pratap Singh**, Department of Viticulture and Enology, University of California, Davis.

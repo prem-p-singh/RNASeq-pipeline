@@ -1,6 +1,6 @@
 # V2 release qualification
 
-Release: **v2.0.0**, 2026-09-23. Scope: **Linux x86_64, annotated non-UMI bulk gene expression**. The user authorized publication of the current bulk release; full multi-assay coverage is not a v2 claim.
+Release: **v2.1.0**, qualified 2026-10-08 on source `0a857c6`; publication still requires the hosted workflow to pass on the tagged commit. Previous release: v2.0.0, 2026-09-23. Scope: **Linux x86_64, annotated non-UMI bulk gene expression**. The user authorized publication of the current bulk release; full multi-assay coverage is not a v2 claim.
 
 ## Release versions
 
@@ -9,15 +9,15 @@ Each software version groups development milestones (M1–M8). Workbook schema n
 | Version | Scope | Status |
 |---|---|---|
 | 2.0.0 | Annotated non-UMI bulk: Salmon, limma-voom/dream, workbook schema 3 | Released 2026-09-23 |
-| 2.1.0 | Bulk completion: workbook schema 5 with analysis goal, subject models, formula, Contrasts tab and revision reports (M1); named bulk kit profiles, platform poly-G and automatic screening panel (M2); handbook DE default and interaction/paired/continuous design checks (M3); earlier schema 4 and Excel launch/resume (M1); raw QC, preprocessing and screening (M2); Salmon decoys, STAR/featureCounts, DESeq2, edgeR QL and objective selection (M3) | Candidate. Completed M1–M3 code passed 35 checks (0 failed, 0 skipped) and both public routes in Linux job 39010068 (exit 0, 55:09; source archive SHA256 `7fc10ce7987a11b9c195cd74420bab3ecf78c2cd1b3b9c3942d22c803e3afbb5`). Not tagged |
+| 2.1.0 | Bulk completion: workbook schema 5 with analysis goal, subject models, formula, Contrasts tab and revision reports (M1); named bulk kit profiles, platform poly-G and automatic screening panel (M2); handbook DE default and interaction/paired/continuous design checks (M3); earlier schema 4 and Excel launch/resume (M1); raw QC, preprocessing and screening (M2); Salmon decoys, STAR/featureCounts, DESeq2, edgeR QL and objective selection (M3) | Qualified 2026-10-08 on source `0a857c6`: 38 checks, 0 failed, 0 skipped, both public routes, SLURM workers, resume, shared cache and a stock container (jobs 39620298, 39620305, 39618728). The 2.1.0 code alone had passed 35 checks in job 39010068. Not published: the hosted workflow has not run on this source |
 | 3.0.0 | Named end-tag kits, small RNA and dual organism (M4) | Test data prepared only |
 | Later | Cell/nucleus and spatial (M5), long-read and reference-poor (M6), specialized RNA (M7) | Not started; versions assigned when scoped |
 
 Moved from M1–M2 to the assay milestones that need them: workbook intake for non-bulk assays (M4–M7) and barcode/UMI base protection (M4, with UMI and end-tag routes).
 
-## Unreleased development qualification
+## 2.1.0 qualification
 
-The development branch changes the runtime and adds bulk routes. The sections below this one describe the **v2 tag**, not a qualification claim for the current branch.
+Version 2.1.0 changes the runtime and adds bulk routes. This section and [Deployment qualification](#deployment-qualification) record its evidence; the gate that qualifies the released source is under [Combined 2.1.0 source](#combined-210-source). The sections from [V2 upgrade evidence](#v2-upgrade-evidence) onward describe the **v2.0.0 tag**.
 
 - Core candidate: 580 packages, preserving the previous 579 package identities and adding DESeq2 1.50.2. Lock SHA256: `dc1d1459bf56f4a5e93c72d2a966c1a96a37168ea49e15933fe549e3549bff75`.
 - Separate STAR module: 37 packages including STAR 2.7.11b, featureCounts 2.1.1 and samtools 1.24. Lock SHA256: `ebca83dc6a889b16291dadc923379a830b4596970b3cabe6c2c62c483c86c0d5`. The launcher verifies this module without replacing the core R environment.

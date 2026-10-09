@@ -2,9 +2,9 @@
 
 ## Unreleased
 
-Nothing yet beyond 2.1.0.
+Nothing yet.
 
-## 2.1.0 — candidate, not yet released
+## 2.1.0 — 2026-10-08
 
 Scope: bulk completion (milestones M1–M3). Later assay families are planned for 3.0.0 and beyond.
 
