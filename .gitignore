@@ -47,3 +47,9 @@ docs/archive/
 
 # Generated source release archives.
 /dist/
+
+# Unrelated local media and legacy Apple Silicon setup notes.
+# Preserve on disk; exclude from the pinned Linux release source.
+/image-1790918976790.png
+/laz31AcS2_2fsedtzBGZIA.mp4
+/rna_seq_env_setup.md

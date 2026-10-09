@@ -237,6 +237,12 @@ def build(dest: Path, repo: Path, seq_type: str = "tagseq", shape: str = "de"):
             rows.append(f"{quant_name(tx)}\t{int(lengths[tx]) + 150}"
                         f"\t{lengths[tx]:.1f}\t{1e6 * rate[tx] / denom:.6f}"
                         f"\t{reads[tx]}")
+        # These tests deliberately start at supplied quantification products.
+        # Match the upstream producer contract without pretending to run fastp.
+        (d / "fastp.json").write_text('{}\n')
+        (d / "fastp.html").write_text('fixture preprocessing product\n')
+        (d / "preprocessing.json").write_text('{}\n')
+        (d / f"{s}.trim.fastq.gz").touch()
         (d / "quant.sf").write_text("\n".join(rows) + "\n")
 
         # Depth is quoted against the floor for this assay: sample_qc asks for

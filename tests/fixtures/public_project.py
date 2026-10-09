@@ -17,6 +17,10 @@ REVISION = "626c8fab639062eade4b10747e919341cbf9b41a"
 BASE = f"https://raw.githubusercontent.com/nf-core/test-datasets/{REVISION}"
 
 dest, repo = Path(sys.argv[1]).resolve(), Path(sys.argv[2]).resolve()
+flags = sys.argv[3:]
+if set(flags) - {'--star', '--screen'} or len(flags) != len(set(flags)):
+    raise SystemExit('Usage: public_project.py PROJECT REPO [--star] [--screen]')
+star_route = '--star' in flags
 (dest / "config").mkdir(parents=True)
 (dest / "inputs").mkdir()
 # The upstream FASTA adds a GFP transgene absent from genes.gtf.gz. Build an
@@ -52,6 +56,42 @@ cfg = {
     # Explicit smoke-test thresholds for subsampled chromosome-I data only.
     "thresholds": {"sample_qc": {"min_reads_on_genes_rnaseq": 1, "mapping_rate_min": 0.20}},
 }
+if star_route:
+    # Upstream deliberately includes a not_in_genome contig in the GTF.
+    # Derive a compatible fixture; keep production reference checks strict.
+    genome = dest/'inputs/genome.fa'
+    upstream_gtf = dest/'inputs/upstream_genes.gtf'
+    for name, target in [('genome.fasta', genome), ('genes.gtf', upstream_gtf)]:
+        subprocess.run(['curl', '--fail', '--retry', '3', '-sSL', BASE+'/reference/'+name,
+                        '-o', str(target)], check=True)
+    contigs = {line[1:].split()[0] for line in genome.read_text().splitlines() if line.startswith('>')}
+    lines = upstream_gtf.read_text().splitlines(keepends=True)
+    removed_lines = [line for line in lines if line.strip() and not line.startswith('#') and line.split('\t')[0] not in contigs]
+    assert {line.split('\t')[0] for line in removed_lines} == {'not_in_genome'}
+    annotation = dest/'inputs/yeast_genes.gtf'
+    annotation.write_text(''.join(line for line in lines if line not in removed_lines))
+    derivation = dest/'inputs/reference_derivation.json'
+    record = json.loads(derivation.read_text())
+    record['genomic_annotation'] = {
+        'source_url': BASE+'/reference/genes.gtf',
+        'source_sha256': hashlib.sha256(upstream_gtf.read_bytes()).hexdigest(),
+        'removed_contigs': ['not_in_genome'], 'removed_rows': len(removed_lines),
+        'derived_sha256': hashlib.sha256(annotation.read_bytes()).hexdigest(),
+        'genome_source_url': BASE+'/reference/genome.fasta',
+        'genome_sha256': hashlib.sha256(genome.read_bytes()).hexdigest(),
+    }
+    derivation.write_text(json.dumps(record, indent=2)+'\n')
+    cfg['reference']['genome_fasta_url'] = genome.as_uri()
+    cfg['reference']['gtf_url'] = annotation.as_uri()
+    cfg['samples']['expected_libtype'] = 'ISR'
+    cfg['analysis'] = {'quantifier': 'star', 'backend': 'edger_ql'}
+if '--screen' in flags:
+    index = dest/'inputs/yeast_screen'
+    with (dest/'inputs/screen_index.log').open('w') as log:
+        subprocess.run(['bowtie2-build', str(transcripts), str(index)], check=True,
+                       stdout=log, stderr=subprocess.STDOUT)
+    cfg['screening'] = {'enabled': True, 'fragments': 10000, 'seed': 1,
+        'references': [{'name': 'Yeast', 'role': 'expected', 'index': str(index)}]}
 (dest / "config/config.yaml").write_text(yaml.safe_dump(cfg))
 (dest / "config/thresholds.yaml").write_text((repo / "config/thresholds.yaml").read_text())
 with open(dest / "config/samples.tsv", "w") as f:
@@ -68,3 +108,10 @@ with open(dest / "config/samples.tsv", "w") as f:
     "Reference derivation: upstream transcriptome includes Gfp_transgene_gene without a matching "
     "GTF record. This fixture removes that one artificial transgene, preserving all yeast records. "
     "Original and derived checksums are recorded in inputs/reference_derivation.json.\n")
+if star_route:
+    with (dest/'DATA_SOURCE.md').open('a') as f:
+        f.write(f'\nSTAR uses the pinned genomic reference and reverse strandedness documented in '
+                f'{BASE}/samplesheet/samplesheet.csv. Only strandedness is taken from that '
+                'workflow-test sheet; biological identities remain accession-level README metadata.\n')
+        f.write('The fixture GTF excludes upstream not_in_genome rows; the genome lacks that '
+                'test contig. Original/derived hashes and removed-row count are recorded.\n')

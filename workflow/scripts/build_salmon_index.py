@@ -31,6 +31,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "scripts"))
 import reference_cache  # noqa: E402
+from reference_lock import file_record
 
 
 def salmon_version() -> str:
@@ -71,6 +72,29 @@ def check_identifiers(fasta, gtf, decoys=""):
             "annotation_transcripts": len(mapping), "decoys": len(excluded)}
 
 
+def prepare_genome_decoys(transcriptome, genome, combined, names):
+    """Append genomic sequences after transcripts, as required by Salmon."""
+    seen = set()
+    decoys = []
+    with open(combined, "w") as out:
+        for source, is_genome in ((transcriptome, False), (genome, True)):
+            count = 0
+            with open(source) as inp:
+                for line in inp:
+                    if line.startswith(">"):
+                        identifier = line[1:].split()[0]
+                        if "|" in identifier or identifier in seen:
+                            raise ValueError(f"Ambiguous/duplicate FASTA identifier: {identifier}")
+                        seen.add(identifier)
+                        count += 1
+                        if is_genome:
+                            decoys.append(identifier)
+                    out.write(line.rstrip("\n") + "\n")
+            if not count:
+                raise ValueError(f"Empty FASTA reference: {source}")
+    Path(names).write_text("\n".join(decoys) + "\n")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--transcriptome", required=True)
@@ -81,6 +105,7 @@ def main():
     ap.add_argument("--helper", required=True, help="reference_lock.py")
     ap.add_argument("--kmer", type=int, default=31)
     ap.add_argument("--decoys", default="")
+    ap.add_argument("--genome", default="")
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--key-inputs", default="")
     for opt in ("organism", "accession", "assembly-name", "transcriptome-url",
@@ -88,7 +113,9 @@ def main():
         ap.add_argument(f"--{opt}", default="")
     ap.add_argument("--tax-id", type=int, default=0)
     a = ap.parse_args()
-    compatibility = check_identifiers(a.transcriptome, a.gtf, a.decoys)
+    compatibility = check_identifiers(a.transcriptome, a.gtf, "" if a.decoys == "genome" else a.decoys)
+    if a.decoys == "genome" and not a.genome:
+        raise ValueError("Genome decoys require --genome")
 
     final_index = Path(a.final_index)
     staging = Path(a.staging)
@@ -101,7 +128,7 @@ def main():
         if final_index.is_dir() and (final_index / "info.json").is_file() \
                 and lock_out.is_file():
             ref = {"accession": a.accession, "transcriptome_fasta_url": a.transcriptome_url,
-                   "gtf_url": a.gtf_url}
+                   "gtf_url": a.gtf_url, "genome_fasta_url": a.genome_url}
             problems = reference_cache.verify_entry(entry, ref, a.kmer, a.decoys or None)
             if problems:
                 raise RuntimeError("Existing reference is incompatible: " + "; ".join(problems))
@@ -117,10 +144,15 @@ def main():
             shutil.rmtree(staging)
         staging.parent.mkdir(parents=True, exist_ok=True)
 
-        cmd = ["salmon", "index", "-t", a.transcriptome, "-i", str(staging),
+        fasta, decoy_file = a.transcriptome, a.decoys
+        if a.decoys == "genome":
+            fasta, decoy_file = str(entry / "gentrome.fa"), str(entry / "decoys.txt")
+            prepare_genome_decoys(a.transcriptome, a.genome, fasta, decoy_file)
+            compatibility = check_identifiers(fasta, a.gtf, decoy_file)
+        cmd = ["salmon", "index", "-t", fasta, "-i", str(staging),
                "-k", str(a.kmer), "--threads", str(a.threads)]
         if a.decoys:
-            cmd += ["-d", a.decoys]
+            cmd += ["-d", decoy_file]
         print("build_salmon_index: " + " ".join(cmd), flush=True)
         subprocess.run(cmd, check=True)
 
@@ -139,7 +171,7 @@ def main():
             "--gtf", a.gtf,
             "--index", str(staging),
             "--kmer", str(a.kmer),
-            "--decoys", a.decoys,
+            "--decoys", decoy_file,
             "--salmon-version", salmon_version(),
             "--organism", a.organism,
             "--tax-id", str(a.tax_id),
@@ -158,6 +190,10 @@ def main():
         rec = json.loads(staged_lock.read_text())
         rec["index"]["path"] = str(final_index)
         rec["identifier_compatibility"] = compatibility
+        if a.decoys == "genome":
+            rec["files"]["genome"] = file_record(a.genome)
+            rec["files"]["decoy_names"] = file_record(decoy_file)
+            rec["files"]["index_fasta"] = file_record(fasta)
         staged_lock.write_text(json.dumps(rec, indent=2) + "\n")
 
         entry.mkdir(parents=True, exist_ok=True)
@@ -167,6 +203,8 @@ def main():
         temp_lock = lock_out.with_suffix(".json.tmp")
         temp_lock.write_text(json.dumps(rec, indent=2) + "\n")
         temp_lock.replace(lock_out)
+        if a.decoys == "genome":
+            Path(fasta).unlink()  # reproducible concatenation; retain source references
         print(f"build_salmon_index: {result} -> {final_index}")
 
 

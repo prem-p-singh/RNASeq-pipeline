@@ -225,6 +225,7 @@ def project(with_tables):
         "organism: {scientific_name: Vitis vinifera, tax_id: 29760}\n"
         "reference: {accession: GCF_1.1}\n"
         "samples: {sheet: config/samples.tsv, seq_type: tagseq}\n"
+        "contrasts: [{id: condition, type: pairwise, factor: condition}]\n"
         'model: {fixed_effects: "~ condition", random_effects: null, primary_factor: condition}\n')
     (p / "config" / "samples.tsv").write_text(
         "sample_id\tcondition\nS1\tctl\nS2\tctl\nS3\ttrt\nS4\ttrt\n")

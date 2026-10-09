@@ -32,7 +32,8 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
-[ -n "$json" ] && echo '{}' > "$json"
+[ -n "$json" ] && echo '{"summary":{"before_filtering":{"total_reads":1},"after_filtering":{"total_reads":1}}}' > "$json"
+[ -n "$out2" ] && sed -i.bak 's/:1/:2/g' "$json"
 [ -n "$html" ] && echo '<html></html>' > "$html"
 [ -n "$out" ]  && printf 'trimmed' | gzip > "$out"
 [ -n "$out2" ] && printf 'trimmed' | gzip > "$out2"
@@ -70,7 +71,7 @@ while [ $# -gt 0 ]; do
     *) shift ;;
   esac
 done
-printf 'downloaded' | gzip > "$dst"
+printf '@read1\nACGT\n+\nIIII\n' | gzip > "$dst"
 exit 0
 STUB
 
@@ -97,7 +98,7 @@ grep -q "released intermediate" "$TMP/c1.log" || fail "case 1: no release logged
 # The two source FASTQs belong to the user and must survive; the two trimmed
 # files are ours and must go.
 src1="$TMP/src/S2_R1.fastq.gz"; src2="$TMP/src/S2_R2.fastq.gz"
-mkdir -p "$TMP/src"; printf 'raw' | gzip > "$src1"; printf 'raw' | gzip > "$src2"
+mkdir -p "$TMP/src"; printf '@read1\nACGT\n+\nIIII\n' | gzip > "$src1"; printf '@read1\nACGT\n+\nIIII\n' | gzip > "$src2"
 d="$TMP/c2"
 bash "$SCRIPT" --sample S2 --url "$src1" --url2 "$src2" \
     --seq-type rnaseq_paired --index "$TMP/idx" --outdir "$d" --threads 1 \
@@ -126,5 +127,21 @@ STUB_NO_QUANT=1 bash "$SCRIPT" --sample S4 --url "http://example/S4.fastq.gz" --
 [ "$rc" -eq 3 ] || fail "case 4: expected exit 3 on missing quant.sf, got $rc"
 exists "$d/S4.fastq.gz" "case 4 download when quant.sf absent"
 grep -q "quant.sf missing or empty" "$TMP/c4.log" || fail "case 4: no failure reason logged"
+
+# Separate preprocessing preserves requested retention and needs no Salmon index.
+for retain in false true; do
+    d="$TMP/preprocess_$retain"
+    bash "$SCRIPT" --stage preprocess --sample S5 --url "http://example/S5.fastq.gz" \
+        --seq-type rnaseq_single --outdir "$d" --threads 1 \
+        --delete-intermediates "$retain" > "$TMP/preprocess_$retain.log" 2>&1 \
+        || fail "separate preprocessing failed"
+    exists "$d/S5.trim.fastq.gz" "preprocessing trim consumer input"
+    exists "$d/preprocessing.json" "preprocessing provenance"
+    if [ "$retain" = true ]; then
+        gone "$d/S5.fastq.gz" "owned raw cleanup"
+    else
+        exists "$d/S5.fastq.gz" "requested owned raw retention"
+    fi
+done
 
 echo "check_storage_policy.sh: all assertions passed"

@@ -49,7 +49,7 @@ variants = {
     "different k-mer":     rc.cache_key(REF, 25),
     "different annotation": rc.cache_key(dict(REF, gtf_url="https://x/v2.gtf.gz"), 31),
     "different transcriptome": rc.cache_key(dict(REF, transcriptome_fasta_url="https://x/v2.fa.gz"), 31),
-    "decoys added":        rc.cache_key(REF, 31, "genome.fa"),
+    "decoys added":        rc.cache_key(dict(REF, genome_fasta_url="https://x/genome.fa"), 31, "genome"),
 }
 for label, k in variants.items():
     assert k != base, f"{label} produced the same cache key"

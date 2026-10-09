@@ -61,6 +61,25 @@ bash submit.sh -d /path/new_project
 
 Use `--intake-sheet 'Bulk RNA-seq'` to select a sheet explicitly. Relative paths resolve beside the workbook. Setup saves the original workbook, checksum, field-to-cell map and resolved setup inputs inside the project's `intake/` directory. It will not overwrite an existing configuration; resume existing projects with `submit.sh`.
 
-This first adapter supports independent bulk designs with an optional declared batch. It preserves enrichment/WGCNA choices and strand expectations, checks the declared smallest group size, and rejects formulas and ambiguous answers. Known organism presets accept common/scientific names; otherwise enter an NCBI taxID. Platform, preparation, tissue and contact email are recorded context only and are explicitly reported as such. They do not yet configure trimming or scheduler mail.
+This first adapter supports independent bulk designs with an optional declared batch. It preserves enrichment/WGCNA choices and strand expectations, checks the declared smallest group size, and rejects formulas and ambiguous answers. Known organism presets accept common/scientific names; otherwise enter an NCBI taxID. Platform sets poly-G trimming (on for NovaSeq/NextSeq, off for MiSeq) unless poly-G is chosen explicitly. Preparation, tissue and contact email are recorded context only and do not configure trimming or scheduler mail.
 
-Schema 3 adds source ownership and the canonical tables to schema 2's stable field IDs, explicit raw-FASTQ stage and non-UMI eligibility. Legacy schema 1/2 questionnaires remain readable. Unknown UMI status must be resolved; UMI input and processed-object/instrument input are not supported. Kit and strandedness defaults do not invent a protocol or orientation. Repeated-measures fields and non-bulk routes remain pending. TAG-seq and small-RNA intake are rejected explicitly; use the provisional YAML path for explicit repeated-measures models. See the [intake coverage audit](docs/INTAKE_TEMPLATE_AUDIT.md) and [v2 scope](docs/RELEASE.md).
+Schema 3 adds source ownership and the canonical tables to schema 2's stable field IDs, explicit raw-FASTQ stage and non-UMI eligibility. Legacy schema 1/2 questionnaires remain readable. Unknown UMI status must be resolved; UMI input and processed-object/instrument input are not supported. Kit and strandedness defaults do not invent a protocol or orientation. Non-bulk routes remain pending; TAG-seq and small-RNA intake are rejected explicitly. Repeated measures are available from schema 5. See the [intake coverage audit](docs/INTAKE_TEMPLATE_AUDIT.md) and [v2 scope](docs/RELEASE.md).
+
+## Development workbook schema 4 (retained in schema 5)
+
+The Bulk RNA-seq questionnaire includes method and processing controls at rows 30–39. Row positions are display only; column E holds stable field IDs. Choose `auto`, `salmon` or `star`; choose `auto`, `limma_voom`, `edger_ql` or `deseq2` for the independent fixed-effect model. STAR requires declared strandedness. The method choice never changes the model or invents replicates.
+
+For custom references, provide genome plus GTF for STAR; transcriptome plus GTF for Salmon, and genome as well when using genomic decoys. Supply paths on the analysis host or URLs. Relative paths resolve beside the workbook. Partial custom sets are rejected, so a live lookup cannot silently mix annotation releases. Leaving every custom-reference field blank retains automatic reference selection.
+
+Explicit R1/R2 adapters, poly-G policy and minimum retained length configure the shared bulk processor. R2 adapters require paired reads and an R1 adapter. These settings do not qualify an arbitrary kit, UMI protocol or small-RNA assay. Existing workbook schemas 1–3 remain readable.
+
+## Development workbook schema 5
+
+- **Analysis goal:** differential expression, expression only (counts, optional WGCNA) or QC only. Enrichment needs the differential expression goal.
+- **Repeated measures:** answer yes and name the subject column. `random` fits `(1|subject)` with dream; `fixed block` adds the subject as a fixed term for paired designs with any fixed-effect method. Repeated rows of one subject are counted once for the smallest-group check.
+- **Fixed-effects formula:** optional, for example `~ batch + genotype * treatment + age`. It must include the primary factor, a declared batch and a fixed subject block.
+- **Contrasts tab:** optional, one row per comparison. Pairwise rows give `factor`, optional `by`, and `numerator`/`denominator` levels (blank levels compare all pairs with reverse order). Linear rows give only `weights` as `coefficient=number` pairs separated by `;`. A blank tab keeps the generated contrasts.
+- **Named library protocol:** sets adapters and strand from [config/kit_profiles.yaml](config/kit_profiles.yaml). A conflicting explicit adapter, strand or Libraries strandedness is an error.
+- **Screening:** yes builds the panel described in the README; extra references use `name=FASTA` pairs.
+- **DE method `auto`:** setup records the handbook default for the new project (DESeq2 for 3–12 biological units in the smallest group, limma-voom above 12, dream with a random subject). Two units per group needs an explicit method.
+- **Revisions:** see `--accept-revision` in the README.

@@ -16,11 +16,12 @@ routes:
     rule_ids: [AS02, UP04, CT03]
     handbook_ids: [H18, H35]
     count_treatment: 'no'
-objectives: [gene_expression, differential_expression, enrichment, coexpression]
+objectives: [alignment, qc, gene_expression, differential_expression, enrichment, coexpression]
 backends:
   fixed: {name: limma_voom, rule_ids: [ST01, ST02]}
   random: {name: dream, rule_ids: [ST04]}
+fixed_backends: [limma_voom, edger_ql, deseq2]
 alternatives:
-  - {route: star_counts, status: planned, reason: 'Genomic alignment and counting are not implemented.'}
-  - {route: deseq2, status: planned, reason: 'The DESeq2 count adapter is not implemented.'}
-  - {route: edger_ql, status: planned, reason: 'The edgeR QL adapter is not implemented.'}
+  - {route: star_counts, status: experimental, reason: 'Explicit non-UMI bulk genomic alignment; requires known strand and a matching genome/GTF.'}
+  - {route: deseq2, status: experimental, reason: 'Explicit fixed-effect Wald adapter; see development qualification.'}
+  - {route: edger_ql, status: experimental, reason: 'Explicit fixed-effect QL adapter; see development qualification.'}

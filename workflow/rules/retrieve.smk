@@ -39,6 +39,17 @@ rule fetch_gtf:
             --url {params.url:q} --out {output.gtf:q} --kind {params.kind}
         """
 
+rule fetch_genome:
+    output:
+        fa = REF / "genome.fa",
+    params:
+        url = config["reference"].get("genome_fasta_url") or "",
+    shell:
+        """
+        bash {REPO_DIR:q}/workflow/scripts/fetch_reference_file.sh \
+            --url {params.url:q} --out {output.fa:q} --kind fasta
+        """
+
 rule salmon_index:
     """Build a Salmon index, under a lock, published atomically.
 
@@ -56,11 +67,14 @@ rule salmon_index:
     input:
         fa = REF / "transcriptome.fa",
         gtf = REF / "annotation.gtf",
+        genome = [REF / "genome.fa"] if SALMON_DECOYS == "genome" else [],
+        decoys = [SALMON_DECOYS] if SALMON_DECOYS and SALMON_DECOYS != "genome" else [],
     output:
         idx = directory(REF / "salmon_idx"),
         sentinel = REF / "salmon_idx/info.json",
         lock = REF / "reference.lock.json",
     params:
+        genome = str(REF / "genome.fa") if SALMON_DECOYS == "genome" else "",
         staging = lambda wc: str(REF / ".salmon_idx.building"),
         lockdir = lambda wc: str(REF / "salmon_idx"),
         kmer = lambda wc: SALMON_KMER,
@@ -77,8 +91,8 @@ rule salmon_index:
         genome_url = lambda wc: (config.get("reference", {}) or {}).get("genome_fasta_url") or "",
     threads: 4
     resources:
-        mem_mb = 8000,
-        runtime = 60,
+        mem_mb = 64000 if SALMON_DECOYS == "genome" else 8000,
+        runtime = 180 if SALMON_DECOYS == "genome" else 60,
     shell:
         """
         set -euo pipefail
@@ -93,6 +107,7 @@ rule salmon_index:
             --lock-out {output.lock:q} \
             --kmer {params.kmer} \
             --decoys={params.decoys:q} \
+            --genome={params.genome:q} \
             --threads {threads} \
             --key-inputs {params.key_inputs:q} \
             --organism={params.organism:q} \

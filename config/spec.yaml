@@ -45,11 +45,11 @@ scope:
   designs:
     independent_groups:
       supported: true
-      backends: [limma_voom]
+      backends: [limma_voom, edger_ql, deseq2]
       requires_min_bio_replicates: 2
     factorial:
       supported: true
-      backends: [limma_voom]
+      backends: [limma_voom, edger_ql, deseq2]
       requires_min_bio_replicates: 2
       notes: "Interaction contrasts must be estimable; checked at preflight."
     repeated_measures:
@@ -61,6 +61,10 @@ scope:
         replicate count is the number of distinct units, not rows.
 
   backends:
+    deseq2:
+      handles_random_effects: false
+    edger_ql:
+      handles_random_effects: false
     limma_voom:
       handles_random_effects: false
     dream:

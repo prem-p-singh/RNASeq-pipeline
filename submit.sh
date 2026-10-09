@@ -35,7 +35,12 @@ Usage: submit.sh [options] [-- snakemake args...]
   -p, --profile NAME      force a tier profile (small|medium|large),
                           overriding the sample-count choice
   -n, --dry-run           show the DAG after preparing/verifying the runtime
+      --intake PATH       completed Excel workbook; create or resume its project
+      --intake-sheet NAME  select an assay worksheet explicitly
+      --accept-revision   apply a changed workbook to its existing project
       --plan-only         preflight and storage plan only; no environment build
+      --executor MODE     local or slurm (default: slurm)
+      --cores N           local CPU budget (default: 4)
   -h, --help              this message
 
 Anything after `--` is passed straight to snakemake, e.g.
@@ -48,11 +53,16 @@ CONFIG="config/config.yaml"
 FORCE_PROFILE=""
 DRY_RUN=""
 PLAN_ONLY=0
+EXECUTOR=slurm
+CORES=4
+INTAKE=""
+INTAKE_SHEET=""
+ACCEPT_REVISION=0
 PASSTHRU=()
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        -d|--directory|-c|--configfile|-p|--profile)
+        -d|--directory|-c|--configfile|-p|--profile|--executor|--cores|--intake|--intake-sheet)
             [ "$#" -ge 2 ] && [ -n "$2" ] && [[ "$2" != -* ]] || {
                 echo "Missing value for $1" >&2; exit 2;
             } ;;
@@ -63,6 +73,11 @@ while [ $# -gt 0 ]; do
         -p|--profile)    FORCE_PROFILE="$2"; shift 2 ;;
         -n|--dry-run)    DRY_RUN="--dry-run"; shift ;;
         --plan-only)     PLAN_ONLY=1; shift ;;
+        --executor)      EXECUTOR="$2"; shift 2 ;;
+        --cores)         CORES="$2"; shift 2 ;;
+        --intake)        INTAKE="$2"; shift 2 ;;
+        --intake-sheet)  INTAKE_SHEET="$2"; shift 2 ;;
+        --accept-revision) ACCEPT_REVISION=1; shift ;;
         -h|--help)       usage; exit 0 ;;
         --)              shift; PASSTHRU=("$@"); break ;;
         -*)              echo "Unknown option: $1" >&2; usage >&2; exit 1 ;;
@@ -71,6 +86,8 @@ while [ $# -gt 0 ]; do
                          exit 1 ;;
     esac
 done
+case "$EXECUTOR" in local|slurm) ;; *) echo "--executor must be local or slurm" >&2; exit 2 ;; esac
+[[ "$CORES" =~ ^[1-9][0-9]*$ ]] || { echo "--cores must be a positive integer" >&2; exit 2; }
 
 # Keep one explicit concurrency setting; storage never imposes a cap.
 for arg in ${PASSTHRU[@]+"${PASSTHRU[@]}"}; do
@@ -79,6 +96,16 @@ for arg in ${PASSTHRU[@]+"${PASSTHRU[@]}"}; do
             echo "Use hpc.samples_in_flight to lower planned concurrency." >&2; exit 2 ;;
     esac
 done
+
+if [ -n "$INTAKE_SHEET" ] && [ -z "$INTAKE" ]; then
+    echo "--intake-sheet requires --intake" >&2; exit 2
+fi
+if [ -n "$INTAKE" ]; then
+    [ -f "$INTAKE" ] || { echo "Intake workbook not found: $INTAKE" >&2; exit 2; }
+    INTAKE="$(cd "$(dirname "$INTAKE")" && pwd)/$(basename "$INTAKE")"
+    [ "$CONFIG" = config/config.yaml ] || { echo "--intake uses config/config.yaml" >&2; exit 2; }
+    mkdir -p "$PROJDIR"
+fi
 
 # Everything below reads and writes relative paths, so move into the project
 # first. This is what keeps two projects out of each other's state.
@@ -94,6 +121,65 @@ if [ "$PROJDIR" = "$REPO" ]; then
     echo "Give the project its own directory, e.g." >&2
     echo "  $REPO/submit.sh -d ~/rnaseq_projects/<name>" >&2
     exit 1
+fi
+
+prepare_runtime() {
+    # Prepare/verify the exact release runtime before importing analysis libraries.
+    if [ "$PLAN_ONLY" -eq 0 ]; then
+        ENV_PREFIX=$(bash "$REPO/scripts/bootstrap.sh")
+        set +u
+        source "$(conda info --base)/etc/profile.d/conda.sh"
+        conda activate "$ENV_PREFIX"
+        set -u
+        export PYTHONNOUSERSITE=1 R_ENVIRON_USER=/dev/null R_PROFILE_USER=/dev/null
+        export R_LIBS_USER="$ENV_PREFIX/lib/R/library" R_LIBS_SITE="$ENV_PREFIX/lib/R/library"
+        mkdir -p gates
+        cp "$ENV_PREFIX/environment_report.json" gates/environment_report.json
+    fi
+}
+
+if [ -n "$INTAKE" ]; then
+    prepare_runtime
+fi
+
+if [ -n "$INTAKE" ]; then
+    if [ -f "$CONFIG" ]; then
+        # Resume the current snapshotted intake. A changed workbook is reported,
+        # and replaces the configuration only with --accept-revision.
+        status=0
+        python3 - "$INTAKE" "$PROJDIR" "$INTAKE_SHEET" <<'PY_INTAKE' || status=$?
+import hashlib,json,sys
+from pathlib import Path
+book,project,sheet=Path(sys.argv[1]),Path(sys.argv[2]),sys.argv[3]
+root = project/'intake'
+if (root/'current').is_file():
+    current = (root/'current').read_text().strip()
+else:
+    found = [d.name for d in root.glob('*') if (d/'setup_inputs.yaml').is_file()] if root.is_dir() else []
+    current = found[0] if len(found) == 1 else None
+if current is None:
+    sys.exit('Project has no single current intake snapshot; use a new project directory.')
+if hashlib.sha256(book.read_bytes()).hexdigest() != current:
+    sys.exit(3)
+record=json.loads((root/current/'source_map.json').read_text())
+if sheet and sheet != record['sheet']:
+    sys.exit('Selected worksheet differs from this project intake; use a new project directory.')
+PY_INTAKE
+        if [ "$status" -eq 3 ]; then
+            INTAKE_ARGS=(--intake "$INTAKE" --project-dir "$PROJDIR")
+            [ -z "$INTAKE_SHEET" ] || INTAKE_ARGS+=(--intake-sheet "$INTAKE_SHEET")
+            if [ "$ACCEPT_REVISION" -eq 1 ]; then INTAKE_ARGS+=(--revision apply); else INTAKE_ARGS+=(--revision report); fi
+            [ "$PLAN_ONLY" -eq 0 ] || INTAKE_ARGS+=(--plan-only)
+            python3 "$REPO/scripts/setup.py" "${INTAKE_ARGS[@]}"
+        elif [ "$status" -ne 0 ]; then
+            exit "$status"
+        fi
+    else
+        INTAKE_ARGS=(--intake "$INTAKE" --project-dir "$PROJDIR")
+        [ -z "$INTAKE_SHEET" ] || INTAKE_ARGS+=(--intake-sheet "$INTAKE_SHEET")
+        [ "$PLAN_ONLY" -eq 0 ] || INTAKE_ARGS+=(--plan-only)
+        python3 "$REPO/scripts/setup.py" "${INTAKE_ARGS[@]}"
+    fi
 fi
 
 if [ ! -f "$CONFIG" ]; then
@@ -112,17 +198,8 @@ if [ ! -f "$THRESH" ]; then
     exit 1
 fi
 
-# Prepare/verify the exact release runtime before importing analysis libraries.
-if [ "$PLAN_ONLY" -eq 0 ]; then
-    ENV_PREFIX=$(bash "$REPO/scripts/bootstrap.sh")
-    set +u
-    source "$(conda info --base)/etc/profile.d/conda.sh"
-    conda activate "$ENV_PREFIX"
-    set -u
-    export PYTHONNOUSERSITE=1 R_ENVIRON_USER=/dev/null R_PROFILE_USER=/dev/null
-    export R_LIBS_USER="$ENV_PREFIX/lib/R/library" R_LIBS_SITE="$ENV_PREFIX/lib/R/library"
-    mkdir -p gates
-    cp "$ENV_PREFIX/environment_report.json" gates/environment_report.json
+if [ -z "$INTAKE" ]; then
+    prepare_runtime
 fi
 
 # --- Preflight ---------------------------------------------------------
@@ -137,6 +214,17 @@ if ! python3 "$REPO/scripts/preflight.py" -d "$PROJDIR" -c "$CONFIG"; then
     exit 1
 fi
 echo "-----------------"
+if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(json.load(open("gates/recommendation.json"))["route"])' )" = star_counts ]; then
+    STAR_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module star)
+    export PATH="$STAR_PREFIX/bin:$PATH"
+    cp "$STAR_PREFIX/environment_report.json" gates/star_environment_report.json
+fi
+
+if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(str(json.load(open("gates/preflight_plan.json"))["screening"]["enabled"]).lower())')" = true ]; then
+    SCREEN_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module screen)
+    export PATH="$ENV_PREFIX/bin:$SCREEN_PREFIX/bin:$PATH"
+    cp "$SCREEN_PREFIX/environment_report.json" gates/screen_environment_report.json
+fi
 
 SHEET=$(python3 -c 'import sys,yaml; print(yaml.safe_load(open(sys.argv[1]))["samples"]["sheet"])' "$CONFIG")
 
@@ -197,13 +285,14 @@ mkdir -p gates
     echo "[$(date -Iseconds)] STRATEGY: $TIER"
     echo "    N=$N  seq_type=$SEQ_TYPE  max_concurrent=$MAX_CONC"
     echo "    storage plan: $PLAN_JSON"
-    echo "    profile=$PROFILE"
+    echo "    executor=$EXECUTOR cores=$CORES profile=$PROFILE"
 } >> gates/decisions.log
 
 echo "==================================================="
 echo " Submitting RNA-Seq pipeline"
 echo "   project dir:   $PROJDIR"
 echo "   workflow:      $REPO"
+echo "   executor:      $EXECUTOR"
 echo "   samples:       $N"
 echo "   seq_type:      $SEQ_TYPE"
 echo "   tier:          $TIER"
@@ -221,9 +310,14 @@ echo "==================================================="
 # ${PASSTHRU[@]+"${PASSTHRU[@]}"} expands to nothing when the array is empty,
 # which plain "${PASSTHRU[@]}" does not do safely under `set -u` on bash 3.2
 # (the version macOS ships).
+if [ "$EXECUTOR" = local ]; then
+    EXECUTION_ARGS=(--executor local --cores "$CORES" --scheduler greedy)
+else
+    EXECUTION_ARGS=(--profile "$PROFILE")
+fi
 exec snakemake \
     --snakefile "$REPO/Snakefile" \
-    --profile "$PROFILE" \
+    "${EXECUTION_ARGS[@]}" \
     --configfile "$CONFIG" \
     --config repo_dir="$REPO" \
     --jobs "$MAX_CONC" \

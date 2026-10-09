@@ -18,17 +18,9 @@
 # =============================================================================
 set -euo pipefail
 
-# --- Tools --------------------------------------------------------------
-# Use the verified release environment; missing tools stop the stage.
-source "$(dirname "$0")/_tools.sh"
-ensure_tools fastp salmon
-
-# Recorded per sample so results carry the software that produced them.
-# tr -d '"' keeps the value safe to embed in metrics.json.
-salmon_version=$(salmon --version 2>&1 | head -1 | tr -d '"')
-fastp_version=$(fastp --version 2>&1 | head -1 | tr -d '"')
-
 # --- Parse args ---------------------------------------------------------
+stage="all"
+processing_json="{}"
 sample=""
 url=""
 url2=""
@@ -43,6 +35,8 @@ delete_intermediates="false"     # default off: an unpassed flag must never dele
 
 while [[ $# -gt 0 ]]; do
     case $1 in
+        --stage)                 stage=$2; shift 2 ;;
+        --processing-json)       processing_json=$2; shift 2 ;;
         --sample)                sample=$2;               shift 2 ;;
         --url)                   url=$2;                  shift 2 ;;
         --url2)                  url2=$2;                 shift 2 ;;
@@ -58,6 +52,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+case "$stage" in all|preprocess|quant) ;; *) echo "Unknown stage: $stage" >&2; exit 2 ;; esac
+source "$(dirname "$0")/_tools.sh"
+if [[ "$stage" == quant ]]; then ensure_tools salmon; else ensure_tools fastp; fi
+if [[ "$stage" == all ]]; then ensure_tools salmon; fi
 mkdir -p "$outdir"
 
 # Files this script creates. Cleanup only ever iterates this list.
@@ -77,6 +75,7 @@ fetch() {
     mv "$partial" "$dst"
 }
 
+if [[ "$stage" != quant ]]; then
 # --- Locate / pull R1 ---------------------------------------------------
 if [[ -n "$reads_json" ]]; then
     python3 "$(dirname "$0")/../../scripts/prepare_reads.py" \
@@ -113,6 +112,20 @@ if [[ "$seq_type" == "rnaseq_paired" ]]; then
     fi
 fi
 
+python3 "$(dirname "$0")/../../scripts/preprocessing.py" \
+    --r1 "$fastq_local" --r2 "${fastq_local_r2:-}" --outdir "$outdir" \
+    --sample "$sample" --threads "$threads" --policy-json "$processing_json"
+fi
+fastp_version=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["fastp_version"])' "$outdir/preprocessing.json")
+if [[ "$stage" == preprocess ]]; then
+    # Downloads/merged copies have no downstream consumer. Trimmed reads do.
+    if [[ "$delete_intermediates" == true ]]; then
+        for f in ${owned[@]+"${owned[@]}"}; do rm -f "$f"; done
+    fi
+    exit 0
+fi
+salmon_version=$(salmon --version 2>&1 | head -1 | tr -d '"')
+
 # --- Bias-correction flags (handbook section 7.2.2) ---------------------
 # --gcBias, --seqBias, --posBias are designed for standard RNA-seq where
 # fragments span the transcript. They REMOVE technical bias there.
@@ -126,60 +139,18 @@ else
     salmon_bias_flags="--gcBias --seqBias --posBias"
 fi
 
-# --- fastp clean -> salmon quant ---------------------------------------
-echo "[$(date -Iseconds)] Running fastp + salmon for $sample ($seq_type)"
-fastp_report="$outdir/fastp.json"
-
-if [[ "$seq_type" == "rnaseq_paired" ]]; then
-    # Paired-end: fastp cleans R1+R2 to disk, then salmon reads those files.
-    #   --detect_adapter_for_pe -> adapter detection for paired reads
-    #   --trim_poly_g           -> removes poly-G tails NextSeq/NovaSeq produce
+# Preprocessing is an independent producer; Salmon only consumes its trims.
+if [[ "$seq_type" == rnaseq_paired ]]; then
     trim_r1="$outdir/${sample}_R1.trim.fastq.gz"
     trim_r2="$outdir/${sample}_R2.trim.fastq.gz"
     owned+=("$trim_r1" "$trim_r2")
-    fastp \
-        -i "$fastq_local" \
-        -I "$fastq_local_r2" \
-        -o "$trim_r1" \
-        -O "$trim_r2" \
-        --detect_adapter_for_pe \
-        --trim_poly_g \
-        --json "$fastp_report" \
-        --html "$outdir/fastp.html" \
-        --thread "$threads" \
-        2> "$outdir/fastp.log"
-
-    salmon quant \
-        -i "$index" \
-        -l A \
-        -1 "$trim_r1" \
-        -2 "$trim_r2" \
-        -p "$threads" \
-        --validateMappings \
-        $salmon_bias_flags \
-        -o "$outdir" \
-        2> "$outdir/salmon.log"
+    salmon quant -i "$index" -l A -1 "$trim_r1" -2 "$trim_r2" \
+        -p "$threads" --validateMappings $salmon_bias_flags -o "$outdir" 2> "$outdir/salmon.log"
 else
-    # Keep a seekable input for every Salmon bias/optimization pass.
     trim_se="$outdir/${sample}.trim.fastq.gz"
     owned+=("$trim_se")
-    fastp \
-        -i "$fastq_local" \
-        -o "$trim_se" \
-        --trim_poly_g \
-        --json "$fastp_report" \
-        --html "$outdir/fastp.html" \
-        --thread "$threads" \
-        2> "$outdir/fastp.log"
-    salmon quant \
-        -i "$index" \
-        -l A \
-        -r "$trim_se" \
-        -p "$threads" \
-        --validateMappings \
-        $salmon_bias_flags \
-        -o "$outdir" \
-        2> "$outdir/salmon.log"
+    salmon quant -i "$index" -l A -r "$trim_se" -p "$threads" \
+        --validateMappings $salmon_bias_flags -o "$outdir" 2> "$outdir/salmon.log"
 fi
 
 # --- Verify salmon produced usable output -------------------------------
@@ -199,7 +170,7 @@ fi
 
 # Parse values as data, never as shell/Python source. Missing metrics fail closed.
 qc_values=$(python3 - "$meta" "$outdir" "$sample" "$seq_type" "$min_map_rate" \
-    "$expected_libtype" "$salmon_bias_flags" "$salmon_version" "$fastp_version" "$fastq_local" "${fastq_local_r2:-}" <<'PYQC'
+    "$expected_libtype" "$salmon_bias_flags" "$salmon_version" "$fastp_version" "${fastq_local:-}" "${fastq_local_r2:-}" <<'PYQC'
 import csv, hashlib, json, math, sys
 from pathlib import Path
 meta, outdir, sample, seq_type, min_map, expected, bias, salmon_ver, fastp_ver = sys.argv[1:10]
@@ -227,12 +198,10 @@ metrics = dict(sample=sample, seq_type=seq_type, num_reads_processed=processed,
     detected_libtype=detected, expected_libtype=expected, libtype_mismatch=mismatch,
     salmon_bias_flags=bias, salmon_version=salmon_ver, fastp_version=fastp_ver,
     fastp_report=str(out / "fastp.json"))
-metrics["input_files"] = []
-for raw in sys.argv[10:]:
-    if raw:
-        with open(raw, "rb") as f:
-            digest = hashlib.file_digest(f, "sha256").hexdigest()
-        metrics["input_files"].append(dict(path=raw, bytes=Path(raw).stat().st_size, sha256=digest))
+preprocessing = json.loads((out / "preprocessing.json").read_text())
+metrics["input_files"] = preprocessing["input_files"]
+metrics["preprocessing"] = {k: preprocessing[k] for k in
+    ("policy", "fragments_before", "fragments_after", "fraction_lost", "warnings")}
 (out / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
 print(rate, processed, str(flagged).lower(), str(mismatch).lower(), detected)
 PYQC

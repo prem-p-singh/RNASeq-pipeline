@@ -216,6 +216,11 @@ def write_questionnaire_tab(workbook, tab_name, tab_description, questions):
             )
             ws.add_data_validation(dv)
             dv.add(cell_answer)
+        elif question['type'] == 'number' and 'maximum' in question:
+            dv = DataValidation(type='whole', operator='between', formula1=1,
+                                formula2=question['maximum'], allow_blank=True)
+            ws.add_data_validation(dv)
+            dv.add(cell_answer)
 
         # Column D: help / example
         cell_help = ws.cell(row=row, column=4, value=question.get("help", ""))

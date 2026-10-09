@@ -281,14 +281,14 @@ def resolve_reference_urls(tax_id: int) -> dict:
                 "gene_info_url": None}
 
 
-def unresolved_reference_urls(ref: dict) -> list:
+def unresolved_reference_urls(ref: dict, required_keys=None) -> list:
     """Problems that would make a fetch job fail. Empty list means good to go.
 
     curl does not expand '*', so a wildcard URL is a guaranteed Stage 0 failure;
     catch it here instead of at job time.
     """
     problems = []
-    for key in ("genome_fasta_url", "transcriptome_fasta_url", "gtf_url"):
+    for key in (required_keys if required_keys is not None else ("genome_fasta_url", "transcriptome_fasta_url", "gtf_url")):
         url = ref.get(key) or ""
         if not url or url == "TODO":
             problems.append(f"{key} is unresolved")
@@ -553,16 +553,25 @@ def build_contrast_specs(inputs: dict, sheet_path: Path) -> list:
                          f"a column in {sheet_path}")
     if primary not in cols:
         sys.exit(f"primary_factor '{primary}' is not a column in {sheet_path}")
+    subject = inputs.get("subject_column")
+    if subject and subject not in cols:
+        sys.exit(f"subject column '{subject}' is not a column in {sheet_path}")
     if "expected_min_samples" in inputs:
         if sheet[primary].isna().any() or sheet[primary].astype(str).str.strip().eq("").any():
             sys.exit(f"Missing primary factor values: {primary}")
-        observed = int(sheet.groupby(primary).size().min())
+        observed = smallest_group(sheet, primary, subject)
         if observed != inputs["expected_min_samples"]:
             sys.exit(f"Intake smallest group size is {inputs['expected_min_samples']}, "
-                     f"but metadata has {observed}; reconcile biological sample records")
+                     f"but metadata has {observed} biological units; reconcile biological sample records")
     if sheet[primary].nunique() < 2:
         sys.exit(f"primary_factor '{primary}' has fewer than 2 levels; "
                  f"there is nothing to compare")
+    if inputs.get("contrasts"):
+        for spec in inputs["contrasts"]:
+            for key in ("factor", "by"):
+                if spec.get(key) and spec[key] not in formula_vars(fixed):
+                    sys.exit(f"contrast {spec['id']}: {key} '{spec[key]}' is not a model term in {fixed}")
+        return inputs["contrasts"]
 
     specs = [{"id": f"{primary}_pairwise", "type": "pairwise",
               "factor": primary, "by": None, "reverse": True}]
@@ -577,6 +586,20 @@ def build_contrast_specs(inputs: dict, sheet_path: Path) -> list:
             specs.append({"id": f"{primary}_within_{by}", "type": "pairwise",
                           "factor": primary, "by": by, "reverse": True})
     return specs
+
+
+def smallest_group(sheet, primary, subject=None):
+    """Biological units in the smallest primary-factor group; repeated rows of one subject count once."""
+    return int(sheet.groupby(primary)[subject].nunique().min() if subject else sheet.groupby(primary).size().min())
+
+
+def current_intake(project):
+    """Snapshot directory of the workbook the project configuration was built from."""
+    root = project / "intake"
+    if (root / "current").is_file():
+        return root / (root / "current").read_text().strip()
+    snapshots = [d for d in root.glob("*") if (d / "setup_inputs.yaml").is_file()] if root.is_dir() else []
+    return snapshots[0] if len(snapshots) == 1 else None
 
 
 # ==================================================== final config.yaml render
@@ -603,11 +626,16 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
         "genome_fasta_url": ref["genome_fasta_url"],
         "transcriptome_fasta_url": ref["transcriptome_fasta_url"],
         "gtf_url": ref["gtf_url"],
+        # New projects use full genomic decoys. Existing projects retain their
+        # explicit setting; the shared resolver's legacy default is unchanged.
+        "decoys": inputs.get("reference_decoys", "genome"),
     })
     cfg["reference"]["annotation_tsv"]["path"] = "reference/annotation_info.tsv"
     cfg["reference"].pop("ncbi_to_ensembl", None)
 
     cfg["samples"]["seq_type"] = inputs["seq_type"]
+    cfg['analysis'].update(inputs.get('analysis') or {})
+    cfg['preprocessing'].update(inputs.get('preprocessing') or {})
     if inputs.get("metadata_tables"):
         cfg["samples"].update(metadata_dir="metadata", sheet="metadata/samples.tsv")
     if "expected_libtype" in inputs:
@@ -626,6 +654,24 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
     # Replace the template's contrasts outright. Inheriting them is how a
     # treatment-only project ended up testing grape's group/stage variables.
     cfg["contrasts"] = build_contrast_specs(inputs, PROJECT / cfg["samples"]["sheet"])
+    if inputs.get("objectives"):
+        cfg["analysis"]["objectives"] = inputs["objectives"]
+    if inputs.get("screening"):
+        cfg["screening"] = inputs["screening"]
+    # Handbook default is resolved once here and recorded; `auto` in an
+    # existing config keeps its release meaning (no silent model change).
+    if cfg["analysis"].get("backend", "auto") == "auto" and not inputs.get("model_random_effects") \
+            and "differential_expression" in cfg["analysis"]["objectives"]:
+        import pandas as pd
+        from recommend import handbook_backend
+        sheet = pd.read_csv(PROJECT / cfg["samples"]["sheet"], sep="\t", comment="#", converters={"sample_id": str})
+        units = smallest_group(sheet, inputs["primary_factor"], inputs.get("subject_column"))
+        backend = handbook_backend(units)
+        if backend is None:
+            sys.exit(f"Smallest group has {units} biological unit(s). Two units per group is exploratory: "
+                     "choose a differential expression method explicitly to accept that; fewer cannot be tested.")
+        cfg["analysis"]["backend"] = backend
+        log("MODEL", f"handbook default backend {backend} for {units} biological units in the smallest group (ST01/ST02)")
     if inputs.get("metadata_tables"):
         import metadata
         metadata.execution_inputs(PROJECT, cfg)
@@ -641,8 +687,11 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("inputs_file", nargs="?", default=None)
     ap.add_argument("--interactive", action="store_true")
+    ap.add_argument("--plan-only", action="store_true", help="prepare configuration without downloading annotation tables")
     ap.add_argument("--intake", help="completed intake_template.xlsx (independent bulk first release)")
     ap.add_argument("--intake-sheet", help="explicit assay worksheet to import")
+    ap.add_argument("--revision", choices=["report", "apply"],
+                    help="changed workbook for an existing intake project: report its impact, or apply it")
     ap.add_argument("--project-dir", default=".",
                     help="project directory to write config/ and reference/ into "
                          "(default: current directory). Must not be the pipeline "
@@ -659,7 +708,9 @@ def main():
             f"--project-dir must not be the pipeline checkout ({ROOT}).\n"
             f"Give the project its own directory, e.g.\n"
             f"  python {Path(__file__).name} --project-dir ~/rnaseq_projects/<name> ...")
-    if args.intake and (CONFIG_DIR / "config.yaml").exists():
+    if args.revision and not args.intake:
+        ap.error("--revision requires --intake")
+    if args.intake and (CONFIG_DIR / "config.yaml").exists() and not args.revision:
         raise SystemExit("Intake setup will not overwrite an existing project configuration. "
                          "Resume with submit.sh, or create a new project for revised intake.")
     CONFIG_DIR.mkdir(parents=True, exist_ok=True)
@@ -678,17 +729,36 @@ def main():
         inputs = gather_inputs(args)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
+    if args.revision:
+        from intake import revision_impact
+        current = current_intake(PROJECT)
+        if current is None:
+            raise SystemExit("No current intake snapshot in this project; cannot assess a revision.")
+        impact = revision_impact(load_yaml(current / "setup_inputs.yaml"), inputs)
+        impact.update(previous=current.name, revised=args.intake_record["workbook_sha256"])
+        print("Workbook revision impact:")
+        for change in impact["changes"] or [dict(field="(no setting changed)", stages="none")]:
+            print(f"  {change['field']}: {change['stages']}")
+        if impact["blocked"]:
+            raise SystemExit("Project name changed: use a new project directory.")
+        if args.revision == "report":
+            raise SystemExit("Apply with submit.sh --accept-revision, or use a new project directory.")
+        shutil.copyfile(CONFIG_DIR / "config.yaml", current / "config.yaml")
     if args.intake:
         snapshot = PROJECT / "intake" / args.intake_record["workbook_sha256"]
         snapshot.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(args.intake_record["source"], snapshot / "intake.xlsx")
         (snapshot / "source_map.json").write_text(json.dumps(args.intake_record, indent=2) + "\n")
         dump_yaml(inputs, snapshot / "setup_inputs.yaml")
+        if args.revision:
+            (snapshot / "revision_impact.json").write_text(json.dumps(impact, indent=2) + "\n")
+        (PROJECT / "intake" / "current").write_text(snapshot.name + "\n")
     org = resolve_organism(int(inputs["tax_id"]))
-    ref = resolve_reference_urls(int(inputs["tax_id"]))
+    ref = inputs.get('reference_overrides') or resolve_reference_urls(int(inputs["tax_id"]))
 
     REFERENCE_DIR.mkdir(parents=True, exist_ok=True)
-    fetch_annotation_info(ref.get("gene_info_url"), REFERENCE_DIR / "annotation_info.tsv")
+    if not args.plan_only:
+        fetch_annotation_info(ref.get("gene_info_url"), REFERENCE_DIR / "annotation_info.tsv")
 
     if inputs.get("metadata_tables"):
         import metadata
@@ -721,7 +791,8 @@ def main():
 
     # Stop before anything can be submitted if the reference never resolved.
     # The config is still written so it can be corrected by hand.
-    problems = unresolved_reference_urls(ref)
+    required_refs = ['genome_fasta_url', 'gtf_url'] if (inputs.get('analysis') or {}).get('quantifier') == 'star' else ['transcriptome_fasta_url', 'gtf_url'] + (['genome_fasta_url'] if inputs.get('reference_decoys', 'genome') == 'genome' else [])
+    problems = unresolved_reference_urls(ref, required_refs)
     if problems:
         print("\n" + "=" * 60)
         print(" SETUP INCOMPLETE — reference URLs did not resolve")

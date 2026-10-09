@@ -49,14 +49,35 @@ if _cfg_blocking:
         "Configuration problems (preflight reports the same findings):\n  "
         + "\n  ".join(f"{code}: {detail}" for code, detail in _cfg_blocking))
 
-from recommend import recommend as _recommend
+from recommend import recommend as _recommend, requires_inference
+from preprocessing import policy_args
+from screen_reads import validate as validate_screen, index_files
+policy_args(config["preprocessing"], config["samples"]["seq_type"] == "rnaseq_paired")
 RECOMMENDATION = _recommend(config)
 if RECOMMENDATION["issues"]:
     raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
 
+SCREEN_POLICY = validate_screen(config["screening"])
+# FASTA panel members (transcriptome, genome, path or URL) are indexed in the
+# project by build_screen_index; the run policy then names only Bowtie2 indexes.
+SCREEN_BUILT = {r["name"]: r["fasta"] for r in SCREEN_POLICY["references"] if "fasta" in r} if SCREEN_POLICY["enabled"] else {}
+SCREEN_INDEXES = [str(f) for ref in SCREEN_POLICY["references"] if "index" in ref for f in index_files(ref["index"])] if SCREEN_POLICY["enabled"] else []
+SCREEN_INDEXES += [f"screening_panel/{name}/built.txt" for name in SCREEN_BUILT]
+SCREEN_RUN_POLICY = dict(SCREEN_POLICY, references=[
+    dict(name=r["name"], role=r["role"], index=str(Path("screening_panel", r["name"], r["name"]).resolve()))
+    if "fasta" in r else r for r in SCREEN_POLICY["references"]])
+
+QC_ONLY = set(config["analysis"]["objectives"]) == {"qc"}
+STAR_ROUTE = RECOMMENDATION["route"] == "star_counts"
+QUANT_PRODUCT = "star/gene_counts.tsv" if STAR_ROUTE else "quant.sf"
+
 # --- Load sample sheet ---------------------------------------------------
 import metadata as _metadata
 CANONICAL_INPUTS = _metadata.execution_inputs(Path.cwd(), config)
+if STAR_ROUTE and CANONICAL_INPUTS is not None:
+    for sample_id, library in CANONICAL_INPUTS.items():
+        if library['expected_libtype'] not in ('U', 'SF', 'SR', 'IU', 'ISF', 'ISR'):
+            raise ValueError(f'STAR requires known strandedness for {sample_id}')
 samples = pd.read_csv(
     config["samples"]["sheet"],
     sep="\t",
@@ -102,7 +123,8 @@ SALMON_DECOYS = _ref_cfg.get("decoys") or None
 # was the bare accession, so two projects agreeing on the genome but differing
 # in annotation release, k-mer or decoy status shared one directory and
 # consumed each other's index. The digest below covers all of them.
-CACHE_KEY = _refcache.cache_key(_ref_cfg, SALMON_KMER, SALMON_DECOYS)
+import star_counts as _star
+CACHE_KEY = "unused-qc" if QC_ONLY else (_star.cache_key(_ref_cfg) if STAR_ROUTE else _refcache.cache_key(_ref_cfg, SALMON_KMER, SALMON_DECOYS))
 if _ref_cache:
     REF = Path(os.path.expanduser(str(_ref_cache))) / CACHE_KEY
 else:
@@ -110,7 +132,7 @@ else:
 
 # Refuse an entry that is incomplete or was built from other parameters,
 # rather than reading whatever happens to sit at that path.
-if _ref_cache and REF.exists():
+if not QC_ONLY and not STAR_ROUTE and _ref_cache and REF.exists():
     _entry_issues = _refcache.verify_entry(REF, _ref_cfg, SALMON_KMER, SALMON_DECOYS)
     _fatal = [i for i in _entry_issues if not i.startswith(("missing ", "empty "))]
     if _fatal:
@@ -122,7 +144,10 @@ if _ref_cache and REF.exists():
         for i in _entry_issues:
             print(f"  {i}")
 
-for d in (OUT, REF, QUANT, METRICS, GATES):
+if STAR_ROUTE and (REF / "star_idx/reference.lock.json").is_file():
+    _star.verify_index(REF / "star_idx", REF / "genome.fa", REF / "annotation.gtf")
+
+for d in (OUT, QUANT, METRICS, GATES) + (() if QC_ONLY else (REF,)):
     d.mkdir(parents=True, exist_ok=True)
 
 _snapshot = json.dumps(config, sort_keys=True, indent=2) + "\n"
@@ -131,7 +156,12 @@ if not _snapshot_path.exists() or _snapshot_path.read_text() != _snapshot:
     _snapshot_path.write_text(_snapshot)
 _lock_path = REPO_DIR / "environments/linux-64.explicit.txt"
 RUNTIME_ID = hashlib.sha256(_lock_path.read_bytes()).hexdigest() if _lock_path.exists() else "unlocked"
+if STAR_ROUTE:
+    RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/star-linux-64.explicit.txt").read_bytes()).hexdigest()
 
+
+if SCREEN_POLICY["enabled"]:
+    RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/screen-linux-64.explicit.txt").read_bytes()).hexdigest()
 
 # --- Invalidate results a flag claims but the filesystem lacks ----------
 # R09 / master plan 11: "A done flag alone never proves a result exists."
@@ -150,15 +180,21 @@ include: "workflow/rules/common.smk"
 include: "workflow/rules/retrieve.smk"
 include: "workflow/rules/build_orgdb.smk"
 include: "workflow/rules/per_sample.smk"
+include: "workflow/rules/star.smk"
 include: "workflow/rules/qc_report.smk"
 include: "workflow/rules/aggregate.smk"
 
 # --- Conditional target helpers -----------------------------------------
 def all_targets():
     """Build the final target list. OrgDb is only required when enrichment runs."""
-    targets = [
+    early = [OUT / "preprocessing_report/multiqc_report.html",
+             *expand(str(QUANT / "{sample}/fastp.html"), sample=SAMPLES)]
+    early += expand(str(QUANT / "{sample}/screening/screening.{ext}"), sample=SAMPLES, ext=["json", "tsv", "html"])
+    if QC_ONLY:
+        return early
+    targets = early + [
         # Stage 1 — one quant.sf per sample
-        *expand(str(QUANT / "{sample}/quant.sf"), sample=SAMPLES),
+        *expand(str(QUANT / "{sample}" / QUANT_PRODUCT), sample=SAMPLES),
         *(expand(str(QUANT / "{sample}/read_preparation.json"), sample=SAMPLES) if CANONICAL_INPUTS is not None else []),
         # Stage 1b — comparative QC report (before/after-clean charts + MultiQC)
         OUT / "qc_report/qc_report.done",
@@ -168,15 +204,16 @@ def all_targets():
         OUT / "qc_report/multiqc/multiqc_report.html",
         # Stage 2 — aggregated counts
         OUT / "counts.tsv",
-        # Stage 3 — DE results
-        OUT / "de_done.flag",
-        # Stage 4 — enrichment
-        OUT / "enrichment_done.flag",
-        # Stage 5 — WGCNA (may be skipped; sentinel always emitted)
-        OUT / "wgcna_done.flag",
     ]
+    if STAR_ROUTE:
+        targets.extend(expand(str(QUANT / "{sample}/star/Aligned.sortedByCoord.out.bam{suffix}"),
+                              sample=SAMPLES, suffix=["", ".bai"]))
+    if requires_inference(config):
+        targets.extend([OUT / "de_done.flag", OUT / "enrichment_done.flag", OUT / "wgcna_done.flag"])
+    elif "coexpression" in config["analysis"]["objectives"]:
+        targets.append(OUT / "wgcna_done.flag")
     # Only ask for the OrgDb when GO enrichment will actually consume it.
-    if orgdb_required():
+    if requires_inference(config) and orgdb_required():
         targets.append(orgdb_sentinel())
     return targets
 

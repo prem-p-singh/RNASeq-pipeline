@@ -34,6 +34,7 @@ organism: {{common_name: grape, scientific_name: Vitis vinifera, tax_id: 29760,
 reference: {{accession: GCF_1.1, assembly_name: ASM1}}
 samples: {{sheet: config/samples.tsv, seq_type: {seq_type}}}
 model: {{fixed_effects: "{fixed}", random_effects: {random}, primary_factor: {primary}}}
+contrasts: [{{id: effect, type: pairwise, factor: treatment, reverse: true}}]
 downstream: {{run_go: true, run_kegg: true, run_wgcna: false}}
 orgdb: {{strategy: auto}}
 hpc: {{storage_budget_gb: 20, delete_fastq_after_quant: true, samples_in_flight: null}}
@@ -97,7 +98,18 @@ assert plan["resolved"]["count_treatment"] == "no", plan["resolved"]
 planned = {s["stage"] for s in plan["stages"] if s["planned"]}
 assert "differential_expression" in planned and "enrichment" in planned
 notplanned = {s["stage"]: s["reason"] for s in plan["stages"] if not s["planned"]}
-assert notplanned == {"wgcna": "downstream.run_wgcna is false"}, notplanned
+assert notplanned == {"wgcna": "downstream.run_wgcna is false",
+                      "screening": "not requested; an explicit not_performed report will be written"}, notplanned
+assert plan["screening"]["enabled"] is False
+
+# Optional screening fails preflight on malformed panels, before tool installation.
+expect("screen null", project("screen-null", BALANCED, extra="screening: null\n"),
+       rc=1, has=["CFG003"])
+expect("screen missing expected", project("screen-nohost", BALANCED,
+       extra="screening: {enabled: true}\n"), rc=1, has=["CFG003"])
+expect("screen missing index", project("screen-noindex", BALANCED,
+       extra="screening: {enabled: true, references: [{name: Host, role: expected, index: missing}]}\n"),
+       rc=1, has=["CFG003"])
 
 # --- 2. unknown and mistyped config keys ------------------------------
 expect("unknown key", project("badkey", BALANCED, extra="bogus_section: {a: 1}\n"),
