@@ -97,7 +97,7 @@ echo "deb [signed-by=/usr/share/keyrings/rnaseq-pipeline.gpg] $site ./" | sudo t
 sudo apt update && sudo apt install rnaseq-pipeline
 ```
 
-Without the repo, `sudo apt install ./rnaseq-pipeline_2.1.1_amd64.deb` also works.
+Without the repo, `sudo apt install ./rnaseq-pipeline_2.1.2_amd64.deb` also works.
 
 ```bash
 # Choose a shared path when using SLURM.

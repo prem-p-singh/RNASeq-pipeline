@@ -2,7 +2,11 @@
 
 ## Unreleased
 
-- Added a Debian package (`packaging/`, `.github/workflows/package.yml`) providing `rnaseq-pipeline` and `rnaseq-new-project` commands.
+Nothing yet.
+
+## 2.1.2 (2026-10-17)
+
+- Added a Debian package (`packaging/`, `.github/workflows/package.yml`) providing `rnaseq-pipeline` and `rnaseq-new-project` commands. No pipeline code changed.
 
 ## 2.1.1 (2026-10-08)
 
