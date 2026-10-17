@@ -4,6 +4,10 @@
 
 Nothing yet.
 
+## 2.1.2 (2026-10-17)
+
+- Added a Debian package (`packaging/`, `.github/workflows/package.yml`) providing `rnaseq-pipeline` and `rnaseq-new-project` commands. No pipeline code changed.
+
 ## 2.1.1 (2026-10-08)
 
 - Removed the n8n automation integration and its three checks. It was not part of the planned release. No pipeline code changed. All 35 checks passed with none skipped, with the public study run through both Salmon and STAR.

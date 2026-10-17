@@ -1,0 +1,4 @@
+#!/bin/sh
+# Miniforge was created by postinst, so dpkg does not track it.
+set -e
+case "$1" in remove|purge) rm -rf /opt/rnaseq-pipeline ;; esac

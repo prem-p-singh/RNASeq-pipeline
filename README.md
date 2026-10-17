@@ -87,6 +87,18 @@ Private repositories require GitHub authentication. Keep projects **outside the 
 
 Prerequisites: **Linux x86_64**, Bash, Conda, Git, `curl`, `gzip` and `flock`; internet access for initial installation and remote references. Supply Conda yourself or load your site's Conda module. macOS and ARM are not supported. A stock Ubuntu container passed installation and the Salmon route, but no container image is shipped; see [release qualification](docs/RELEASE.md#what-was-tested).
 
+**Debian/Ubuntu (amd64):** install the `.deb` from the release page and use `rnaseq-pipeline` in place of `submit.sh` and `rnaseq-new-project` in place of `scripts/new_project.sh`. It installs a pinned Miniforge under `/opt/rnaseq-pipeline`; the locked runtime below is still built on first run.
+
+```bash
+# One-time repo setup, then a normal install and upgrades through apt.
+site=https://prem-p-singh.github.io/RNASeq-pipeline
+curl -fsSL $site/rnaseq-pipeline.gpg | sudo tee /usr/share/keyrings/rnaseq-pipeline.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/rnaseq-pipeline.gpg] $site ./" | sudo tee /etc/apt/sources.list.d/rnaseq-pipeline.list
+sudo apt update && sudo apt install rnaseq-pipeline
+```
+
+Without the repo, `sudo apt install ./rnaseq-pipeline_2.1.2_amd64.deb` also works.
+
 ```bash
 # Choose a shared path when using SLURM.
 export RNASEQ_ENV_PREFIX="$HOME/rnaseq_runtime/v2"
