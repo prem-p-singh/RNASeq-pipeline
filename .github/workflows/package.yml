@@ -45,10 +45,31 @@ jobs:
         run: |
           echo "$APT_GPG_PRIVATE_KEY" | gpg --batch --import
           sudo apt-get install -y -qq apt-utils
-          git fetch origin gh-pages:gh-pages || git branch gh-pages $(git commit-tree -m init $(git hash-object -t tree /dev/null))
-          git worktree add ../site gh-pages
+          if git ls-remote --exit-code --heads origin gh-pages >/dev/null; then
+            git fetch origin gh-pages:gh-pages
+            git worktree add ../site gh-pages
+          else
+            git worktree add --detach ../site
+            git -C ../site checkout --orphan gh-pages
+            git -C ../site rm -rfq .
+          fi
           bash packaging/publish-apt.sh ../site "$DEB"
           cd ../site
           git add -A
           git -c user.name=github-actions -c user.email=actions@github.com commit -m "apt repository for ${{ github.event.release.tag_name }}"
           git push origin gh-pages
+
+  apt-repo:
+    # Installs from the published apt repository, exactly as the README says.
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Add the repository and install
+        run: |
+          site=https://prem-p-singh.github.io/RNASeq-pipeline
+          curl -fsSL $site/rnaseq-pipeline.gpg | sudo tee /usr/share/keyrings/rnaseq-pipeline.gpg >/dev/null
+          echo "deb [signed-by=/usr/share/keyrings/rnaseq-pipeline.gpg] $site ./" | sudo tee /etc/apt/sources.list.d/rnaseq-pipeline.list
+          sudo apt update && sudo apt install -y rnaseq-pipeline
+      - name: Run the installed launcher
+        run: |
+          rnaseq-pipeline --help | head -3
+          /opt/rnaseq-pipeline/conda/bin/conda --version
