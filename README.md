@@ -1,9 +1,9 @@
 <div align="center">
   <img src="assets/readme-banner.svg" alt="RNASeq pipeline v2: raw reads to traceable bulk RNA-seq results" width="100%" />
-  <h1>RNASeq pipeline · v2.1.1</h1>
+  <h1>RNASeq pipeline · v2.1.2</h1>
   <p><strong>Your study design. Your reads. A traceable analysis.</strong></p>
   <p>Excel-driven intake · Snakemake execution · Locked Linux runtime</p>
-  <a href="https://github.com/prem-p-singh/RNASeq-pipeline/releases/tag/v2.1.1">Release notes</a> ·
+  <a href="https://github.com/prem-p-singh/RNASeq-pipeline/releases/tag/v2.1.2">Release notes</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#how-the-workflow-runs">Workflow</a> ·
   <a href="INPUTS.md">Input guide</a> ·
@@ -22,7 +22,7 @@
 Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and differential-expression results. Fill an Excel intake or provide explicit TSV/YAML inputs, review the study configuration, and run locally on Linux or through SLURM. Every project has its own configuration, logs and results.
 
 > [!NOTE]
-> **v2.1.1 is the current release.** It covers bulk RNA-seq. Other assay types are in progress; see [Future scope](#future-scope).
+> **v2.1.2 is the current release.** It covers bulk RNA-seq. Other assay types are in progress; see [Future scope](#future-scope).
 
 ## What you can run
 
@@ -74,7 +74,7 @@ You choose the quantifier and the DE method in the workbook or the configuration
 <img src="assets/step-1.svg" alt="Step 1 of 5: Get the code and choose paths" width="100%" />
 
 ```bash
-git clone --branch v2.1.1 https://github.com/prem-p-singh/RNASeq-pipeline.git
+git clone --branch v2.1.2 https://github.com/prem-p-singh/RNASeq-pipeline.git
 cd RNASeq-pipeline
 export REPO="$(pwd)"
 export PROJECT="$HOME/rnaseq_projects/my_study"
@@ -292,7 +292,7 @@ New projects default to DESeq2 for 3 to 12 biological units in the smallest grou
 
 <img src="assets/section-validation.svg" alt="Validation" width="100%" />
 
-Every release must pass **35 checks with none skipped**, plus a six-sample public study run through both Salmon and STAR. v2.1.1 passed on a SLURM cluster and in the [hosted workflow](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml). To repeat it in an installed environment:
+Every release must pass **35 checks with none skipped**, plus a six-sample public study run through both Salmon and STAR. v2.1.2 passed in the [hosted workflow](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml). v2.1.1, which has the same pipeline code, also passed on a SLURM cluster. To repeat it in an installed environment:
 
 ```bash
 star_prefix=$(bash scripts/bootstrap.sh --module star)
@@ -334,6 +334,6 @@ Until those are released, this workflow handles bulk libraries without UMIs, wit
 
 <img src="assets/section-license.svg" alt="License and citation" width="100%" />
 
-Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.1.1**, references and tool versions in your methods.
+Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.1.2**, references and tool versions in your methods.
 
 Maintained by **Prem Pratap Singh**, Department of Plant Pathology, University of California, Davis.
