@@ -1,0 +1,19 @@
+Package: rnaseq-pipeline
+Architecture: amd64
+Version: 2.1.2
+Priority: optional
+Section: science
+Maintainer: Prem Pratap Singh <ppssingh@ucdavis.edu>
+Depends: bash, curl, ca-certificates, util-linux, gzip, git
+Filename: ./rnaseq-pipeline_2.1.2_amd64.deb
+Size: 262368
+MD5sum: 9fcbf377064515e36ec071ed4b1c04e1
+SHA1: cbf6561be0755301ddcd428d7b5144b8db00fe75
+SHA256: 9533b1666c74c58f88587dabb20c93827a622fe434b855596de3d3627f363531
+SHA512: 5901f53de63dcf3874dbc84b011573bba309a36592f578176604e67d57d77b92ddff403f1483208bcb37b3b872505b1d40217f74d9340fd5d1cef83284d1d82d
+Homepage: https://github.com/prem-p-singh/RNASeq-pipeline
+Description: Snakemake RNA-seq pipeline with a locked Conda runtime
+ Installs the workflow and the rnaseq-pipeline and rnaseq-new-project
+ commands. A pinned Miniforge is installed under /opt/rnaseq-pipeline/conda.
+ The 580-package analysis runtime is created per user on first run.
+
