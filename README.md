@@ -66,12 +66,33 @@ You choose the quantifier and the DE method in the workbook or the configuration
 
 <img src="assets/section-quickstart.svg" alt="Quick start" width="100%" />
 
-**[Get v2](#1-get-v2-and-choose-paths) → [Install](#2-install-and-verify-the-environment) → [Fill the intake](#3-fill-the-excel-intake) → [Review](#4-review-the-study-configuration) → [Run](#5-plan-run-and-resume)**
+**[Get the code](#1-get-v2-and-choose-paths) → [Install](#2-install-and-verify-the-environment) → [Fill the intake](#3-fill-the-excel-intake) → [Review](#4-review-the-study-configuration) → [Run](#5-plan-run-and-resume)**
+
+On Debian or Ubuntu you can install with apt instead of Git; see route A in step 1.
 
 <p align="center"><img src="assets/quickstart-terminal.svg" alt="Quick start in a terminal: clone the release, install the environment, set up from the Excel intake, then run with submit.sh" width="100%" /></p>
 
 <a id="1-get-v2-and-choose-paths"></a>
 <img src="assets/step-1.svg" alt="Step 1 of 5: Get the code and choose paths" width="100%" />
+
+Pick one route. Both set `REPO` and `PROJECT`, and every later step is the same.
+
+**A. Debian/Ubuntu (amd64), with apt.** Add the repository once; after that, `apt upgrade` brings new releases.
+
+```bash
+site=https://prem-p-singh.github.io/RNASeq-pipeline
+curl -fsSL $site/rnaseq-pipeline.gpg | sudo tee /usr/share/keyrings/rnaseq-pipeline.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/rnaseq-pipeline.gpg] $site ./" | sudo tee /etc/apt/sources.list.d/rnaseq-pipeline.list
+sudo apt update && sudo apt install rnaseq-pipeline
+
+export REPO=/usr/lib/rnaseq-pipeline
+export PATH="/opt/rnaseq-pipeline/conda/bin:$PATH"   # packaged Conda; skip if you use your own
+export PROJECT="$HOME/rnaseq_projects/my_study"
+```
+
+The package puts the workflow in `/usr/lib/rnaseq-pipeline` and a pinned Miniforge in `/opt/rnaseq-pipeline/conda`. It also adds two commands: `rnaseq-pipeline` runs `submit.sh` and `rnaseq-new-project` runs `scripts/new_project.sh`. Without the repository, `sudo apt install ./rnaseq-pipeline_2.1.2_amd64.deb` (from the release page) also works.
+
+**B. Any Linux x86_64, with Git.**
 
 ```bash
 git clone --branch v2.1.2 https://github.com/prem-p-singh/RNASeq-pipeline.git
@@ -80,24 +101,14 @@ export REPO="$(pwd)"
 export PROJECT="$HOME/rnaseq_projects/my_study"
 ```
 
-Private repositories require GitHub authentication. Keep projects **outside the source checkout**. For SLURM, choose absolute shared paths visible on every worker for the repository, project, environment, reads and reference cache.
+Keep projects **outside the source checkout**. For SLURM, choose absolute shared paths visible on every worker for the repository, project, environment, reads and reference cache. Route A needs the package installed on every compute node; otherwise use route B on a shared path.
 
 <a id="2-install-and-verify-the-environment"></a>
 <img src="assets/step-2.svg" alt="Step 2 of 5: Install the environment" width="100%" />
 
-Prerequisites: **Linux x86_64**, Bash, Conda, Git, `curl`, `gzip` and `flock`; internet access for initial installation and remote references. Supply Conda yourself or load your site's Conda module. macOS and ARM are not supported. A stock Ubuntu container passed installation and the Salmon route, but no container image is shipped; see [release qualification](docs/RELEASE.md#what-was-tested).
+Prerequisites: **Linux x86_64** and internet access for initial installation and remote references. Route A installs everything else, including Conda. Route B needs Bash, Conda, Git, `curl`, `gzip` and `flock`; supply Conda yourself or load your site's Conda module. macOS and ARM are not supported. A stock Ubuntu container passed installation and the Salmon route, but no container image is shipped; see [release qualification](docs/RELEASE.md#what-was-tested).
 
-**Debian/Ubuntu (amd64):** install the `.deb` from the release page and use `rnaseq-pipeline` in place of `submit.sh` and `rnaseq-new-project` in place of `scripts/new_project.sh`. It installs a pinned Miniforge under `/opt/rnaseq-pipeline`; the locked runtime below is still built on first run.
-
-```bash
-# One-time repo setup, then a normal install and upgrades through apt.
-site=https://prem-p-singh.github.io/RNASeq-pipeline
-curl -fsSL $site/rnaseq-pipeline.gpg | sudo tee /usr/share/keyrings/rnaseq-pipeline.gpg >/dev/null
-echo "deb [signed-by=/usr/share/keyrings/rnaseq-pipeline.gpg] $site ./" | sudo tee /etc/apt/sources.list.d/rnaseq-pipeline.list
-sudo apt update && sudo apt install rnaseq-pipeline
-```
-
-Without the repo, `sudo apt install ./rnaseq-pipeline_2.1.2_amd64.deb` also works.
+Both routes build the same locked runtime on first use:
 
 ```bash
 # Choose a shared path when using SLURM.
