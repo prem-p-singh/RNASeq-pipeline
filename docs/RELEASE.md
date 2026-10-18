@@ -1,10 +1,11 @@
 # Release qualification
 
-Current release: **v2.1.1** (2026-10-08). It runs on **Linux x86_64** and covers **bulk RNA-seq of annotated organisms, for libraries without UMIs**.
+Current release: **v2.1.2** (2026-10-17). It runs on **Linux x86_64** and covers **bulk RNA-seq of annotated organisms, for libraries without UMIs**.
 
 | Version | Date | What it is |
 |---|---|---|
-| 2.1.1 | 2026-10-08 | Current release. Same pipeline code as 2.1.0, without the n8n integration |
+| 2.1.2 | 2026-10-17 | Current release. Same pipeline code as 2.1.1, with a Debian package and apt repository |
+| 2.1.1 | 2026-10-08 | Same pipeline code as 2.1.0, without the n8n integration. Superseded by 2.1.2 |
 | 2.1.0 | 2026-10-08 | Added STAR, edgeR and DESeq2, read screening and the larger intake workbook. Superseded by 2.1.1 |
 | 2.0.0 | 2026-09-23 | First release: Salmon with limma-voom |
 
@@ -24,7 +25,9 @@ A version is released only after every required check passes with none skipped.
 | Two projects sharing one reference cache entry | Same job | Passed |
 | Stock Ubuntu container | SLURM cluster (job 39618728), on the 2.1.0 source | Core install and Salmon route passed |
 
-The last four rows ran on the 2.1.0 source and were not repeated for 2.1.1, which differs only by the removed n8n files, the test runner and documentation.
+The rows above record v2.1.1 unless a row names another version. The last four rows ran on the 2.1.0 source and were not repeated for 2.1.1, which differs only by the removed n8n files, the test runner and documentation.
+
+v2.1.2 changes no pipeline code; it adds the Debian package. The hosted workflow passed on its [tagged commit](https://github.com/prem-p-singh/RNASeq-pipeline/actions/runs/39074182797). The SLURM runs were not repeated for 2.1.2.
 
 The 35 checks cover input validation, read preparation, reference and cache safety, count agreement between routes, the direction of DE results, the three DE methods, paired designs, enrichment, WGCNA, storage planning and recovery after failures.
 
