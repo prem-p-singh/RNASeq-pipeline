@@ -10,7 +10,7 @@
   <a href="docs/RELEASE.md">Validation</a>
 </div>
 
-<p align="center"><img src="assets/release-overview.gif" alt="Animated overview of v2.1.1: 35 strict checks passed, the Excel intake with subjects and contrasts, the six stages with Salmon or STAR, and the 580-package locked runtime" width="100%" /></p>
+<p align="center"><img src="assets/release-overview.gif" alt="Animated overview of v2.1.2: the apt install command, the Excel intake, the six stages with Salmon or STAR, 35 strict checks passed, and the 580-package locked runtime" width="100%" /></p>
 
 <p align="center">
   <a href="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml"><img src="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml/badge.svg" alt="Scientific Linux checks" /></a>
