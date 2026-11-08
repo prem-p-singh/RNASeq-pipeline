@@ -14,18 +14,22 @@ A version is released only after every required check passes with none skipped.
 
 ## What was tested for 3.0.0
 
-Source: the commit tagged `v3.0.0`. Results are filled in only after each run finishes.
+The SLURM runs used source `12fec99` (`git archive` SHA256 `16ec5aa910424c9b67376150cf8e7b2dc71832687292d208ebe67c6176f86535`, checked on the cluster). The hosted run used `4a56555`, which changes only the two GitHub workflow files. Later commits up to the tag change only documentation and the README animation.
 
 | Check | Where | Result |
 |---|---|---|
-| Install all five locked environments from scratch and verify them | Hosted workflow; SLURM cluster | Pending |
-| 41 checks, none skipped | Hosted workflow; SLURM cluster | Pending |
-| Six-sample public study (GSE110004) through Salmon with read screening, and through STAR | Same runs | Pending |
-| Reuse of the installed environments without network access | SLURM cluster | Pending |
-| Launcher sending each step to SLURM as its own job; resume after an interrupted launch; two projects sharing one reference cache entry | SLURM cluster | Pending |
-| Stock Ubuntu container, core install and Salmon route | SLURM cluster | Pending |
+| Install all five locked environments from scratch and verify them | SLURM cluster (job 40546128); [hosted workflow](https://github.com/prem-p-singh/RNASeq-pipeline/actions/runs/42451991881) | Passed: core 580, STAR 37, screening 64, small RNA 89 and UMI 119 packages verified |
+| 41 checks, none skipped | Same two runs | 41 passed, 0 failed, 0 skipped |
+| Six-sample public study (GSE110004) through Salmon with read screening, and through STAR | Same two runs | Counts, DE tables and QC report produced on both routes |
+| Reuse of the installed environments without network access | SLURM cluster (job 40546128) | Passed for all five environments |
+| Launcher sending each step to SLURM as its own job | SLURM cluster (job 40546129, 1 h 36 min) | 27 rule jobs, each a separate SLURM job, all completed |
+| Resume after an interrupted launch | Same job | Interrupted at 16 of 28 steps; the second launch finished with 10 worker jobs, and the finished sample was not recomputed |
+| Two projects sharing one reference cache entry | Same job | One cache entry; 27 worker jobs per project; per-sample count totals differed by at most 1.28e-04 |
+| Stock Ubuntu container (`condaforge/miniforge3:26.7.2-0`, Ubuntu 24.04.5) | SLURM cluster (job 40546089) | Fresh core install, `check_end_to_end.sh` and the Salmon public study passed |
 
 The 41 checks are the 35 from 2.1 plus a unit check and a synthetic workflow check for each new route: small RNA, QuantSeq and host plus pathogen.
+
+Cluster logs, SHA256: `tests.log` `ae170f8c0000e8bf7d5dbe1a346f9c66f4e9834e5fde3857628810b9f8c4c637`, `public.log` `e550c617e636b3b69e9eb9156e36bc5fccaffc8e0318a55b43e57589bd4be942`, `public-star.log` `9792f80a49a4287e62b1f6b3654a3f62a74aabec907dbb14460ec3e757040d3e`, `distributed.log` `b8018c16e5ad01d1ce005e8778d7047f0bdb790919c8389e63aa73023e727ab9`, `container.log` `eefc6c5cbbe159036f59b48f39dca955076e9a4fc20f41b2c7ff03cf015cc04c`. The cluster jobs used Miniforge 26.7.2 and a separate home directory, so a personal `.condarc` could not add package caches or default packages to the clean installs.
 
 ### Public-data checks for the new routes
 

@@ -10,7 +10,7 @@
   <a href="docs/RELEASE.md">Validation</a>
 </div>
 
-<p align="center"><img src="assets/release-overview.gif" alt="Animated overview of v2.1.2: the apt install command, the Excel intake, the six stages with Salmon or STAR, 35 strict checks passed, and the 580-package locked runtime" width="100%" /></p>
+<p align="center"><img src="assets/release-overview.gif" alt="Animated overview of v3.0.0: the apt install command, the four library types, the Excel intake, the six stages with Salmon or STAR, 41 strict checks passed, and the locked runtimes" width="100%" /></p>
 
 <p align="center">
   <a href="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml"><img src="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml/badge.svg" alt="Scientific Linux checks" /></a>
@@ -306,7 +306,7 @@ New projects default to DESeq2 for 3 to 12 biological units in the smallest grou
 
 <img src="assets/section-validation.svg" alt="Validation" width="100%" />
 
-Every release must pass **41 checks with none skipped**, plus a six-sample public study run through both Salmon and STAR, in the [hosted workflow](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml) and on a SLURM cluster. The checks need all five locked runtimes. To repeat them in an installed environment:
+Every release must pass **41 checks with none skipped**, plus a six-sample public study run through both Salmon and STAR, in the [hosted workflow](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml) and on a SLURM cluster. v3.0.0 passed both, with all five locked runtimes installed fresh ([evidence](docs/RELEASE.md#what-was-tested-for-300)). To repeat the checks in an installed environment:
 
 ```bash
 star_prefix=$(bash scripts/bootstrap.sh --module star)
