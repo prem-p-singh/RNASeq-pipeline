@@ -40,6 +40,9 @@ jobs:
           export PATH="$star_prefix/bin:$PATH"
           cp "$star_prefix/environment_report.json" release-evidence/star_environment_report.json
           screen_prefix=$(bash scripts/bootstrap.sh --module screen)
+          # Core first again: activating a module replaces the active environment's PATH
+          # entry in place, so each module's own tools must not sit behind another module.
+          export PATH="$CONDA_PREFIX/bin:$screen_prefix/bin:$PATH"
           cp "$screen_prefix/environment_report.json" release-evidence/screen_environment_report.json
           srna_prefix=$(bash scripts/bootstrap.sh --module srna)
           cp "$srna_prefix/environment_report.json" release-evidence/srna_environment_report.json

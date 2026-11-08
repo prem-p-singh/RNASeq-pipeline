@@ -20,7 +20,8 @@ jobs:
           python-version: "3.12"
 
       - name: Install python dependencies
-        run: python3 -m pip install --quiet pyyaml openpyxl pandas
+        # Same versions as the locked core runtime (environments/linux-64.explicit.txt).
+        run: python3 -m pip install --quiet pyyaml==6.0.3 openpyxl==3.1.5 pandas==2.3.3
 
       - name: Install base R (preflight's estimability check shells out to it)
         run: |
