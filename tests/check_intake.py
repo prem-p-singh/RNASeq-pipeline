@@ -57,7 +57,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
                 row[2].value = answers[key]
     w.save(book)
     record = read_intake(book)
-    assert record["schema_version"] == 5
+    assert record["schema_version"] == 8
     inputs = setup_inputs(record)
     assert inputs["tax_id"] == 9606 and inputs["seq_type"] == "rnaseq_paired"
     assert inputs["expected_libtype"] == "ISR" and inputs["model_random_effects"] is None
@@ -66,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
     assert "platform" not in record["context_only"] and "library_kit" in record["context_only"]
     legacy=openpyxl.load_workbook(book)
     legacy['README']['B2']=3
-    legacy['Bulk RNA-seq'].delete_rows(30,10)
+    legacy['Bulk RNA-seq'].delete_rows(37,7)
     legacy.save(base/'schema3.xlsx')
     assert setup_inputs(read_intake(base/'schema3.xlsx'))['analysis']=={'quantifier':'auto','backend':'auto'}
 
@@ -194,6 +194,11 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
         for mate in (1, 2):
             (reads / f"{sid}_R{mate}.fastq.gz").write_bytes(b"fixture")
     (base / "samples.tsv").write_text("\n".join(rows) + "\n")
+    srna_reads = base / "srna_reads"
+    srna_reads.mkdir()
+    for i in range(1, 7):
+        sid = "NA" if i == 6 else f"00{i}"
+        (srna_reads / f"{sid}.fastq.gz").write_bytes(b"fixture")
     project = base / "project"
     org = dict(genus="Homo", species="sapiens", tax_id=9606, kegg_code="hsa", orgdb_package="org.Hs.eg.db")
     ref = dict(accession="fixture", assembly_name="fixture",
@@ -343,5 +348,273 @@ with tempfile.TemporaryDirectory(prefix="intake test ") as tmp:
         assert "no matching" in str(exc)
     else:
         raise AssertionError("Orphan read accepted")
+
+    # sRNA-seq tab: the workbook sheet launches animal/plant small-RNA routes.
+    sr = openpyxl.load_workbook(ROOT / "intake_template.xlsx")
+    s2 = sr["sRNA-seq"]
+    srna_tab = next(t for t in q["tabs"] if t["name"] == "sRNA-seq")
+    srna_labels = {item["text"]: item["id"] for item in q["common_questions"] + srna_tab["extra_questions"]}
+    srna_cells = {}
+    for row in s2.iter_rows(min_col=1, max_col=3):
+        key = srna_labels.get(row[1].value)
+        if key:
+            srna_cells[key] = row[2].coordinate
+    srna_answers = dict(answers)
+    srna_answers.update({
+        "read_config": "single-end", "adapter_kit": "TruSeq Small RNA",
+        "small_rna_profile": "plant", "mirbase_prefix": "ath",
+        "reference_genome": "genome.fa", "reference_gtf": "genes.gtf",
+        "fastq_path": "srna_reads",
+    })
+    for key, value in srna_answers.items():
+        if key in srna_cells:
+            s2[srna_cells[key]] = value
+    sr.save(base / "srna.xlsx")
+    srna_record = read_intake(base / "srna.xlsx", "sRNA-seq")
+    assert srna_record["schema_version"] == 8
+    srna_inputs = setup_inputs(srna_record)
+    assert srna_inputs["seq_type"] == "srnaseq"
+    assert srna_inputs["analysis"] == {"small_rna_profile": "plant", "small_rna_kit": "TruSeq Small RNA"}
+    assert srna_inputs["preprocessing"]["length_limit"] == 30
+    assert srna_inputs["reference_overrides"]["genome_fasta_url"] == (base / "genome.fa").as_uri()
+
+    def srna_rejected(key, value, message):
+        old = s2[srna_cells[key]].value
+        s2[srna_cells[key]] = value
+        sr.save(base / "srna_bad.xlsx")
+        try:
+            setup_inputs(read_intake(base / "srna_bad.xlsx", "sRNA-seq"))
+        except ValueError as exc:
+            assert message in str(exc), str(exc)
+        else:
+            raise AssertionError(f"accepted invalid srna {key}={value!r}")
+        s2[srna_cells[key]] = old
+
+    srna_rejected("adapter_kit", "QIAseq miRNA", "UMI")
+    srna_rejected("read_config", "paired-end", "single-end")
+    TABLES_REFUSED = "workbook tables are supported for Bulk RNA-seq only"
+    s2[srna_cells["metadata_source"]] = "workbook tables"
+    sr.save(base / "srna_tables.xlsx")
+    try:
+        read_intake(base / "srna_tables.xlsx", "sRNA-seq")
+    except ValueError as exc:
+        assert TABLES_REFUSED in str(exc), str(exc)
+    else:
+        raise AssertionError("sRNA-seq workbook tables accepted")
+    s2[srna_cells["metadata_source"]] = "external files"
+
+    # Mixed profile: a plant miRBase code with the animal profile is allowed, but flagged.
+    s2[srna_cells["small_rna_profile"]] = "animal"
+    s2[srna_cells["organism"]] = "Arabidopsis thaliana"
+    sr.save(base / "srna_mixed.xlsx")
+    mixed_record = read_intake(base / "srna_mixed.xlsx", "sRNA-seq")
+    mixed_inputs = setup_inputs(mixed_record)
+    assert mixed_inputs["tax_id"] == 3702
+    assert any("plant organism with the animal profile" in msg for msg in mixed_record["limitations"]), mixed_record["limitations"]
+    s2[srna_cells["small_rna_profile"]] = "plant"
+    s2[srna_cells["organism"]] = "human"
+    sr.save(base / "srna.xlsx")
+
+    # End-to-end: a workbook-launched sRNA project writes a config.yaml that
+    # recommend() accepts, for both profiles.
+    from recommend import recommend as recommend_cfg
+    plant_project = base / "srna plant project"
+    argv = ["setup.py", "--intake", str(base / "srna.xlsx"), "--intake-sheet", "sRNA-seq",
+            "--project-dir", str(plant_project), "--plan-only"]
+    with patch.object(sys, "argv", argv), patch.object(setup, "resolve_organism", return_value=org), \
+         patch.object(setup, "resolve_reference_urls", side_effect=AssertionError("srna plant used network reference lookup")):
+        setup.main()
+    plant_cfg = yaml.safe_load((plant_project / "config/config.yaml").read_text())
+    assert plant_cfg["samples"]["seq_type"] == "srnaseq"
+    assert plant_cfg["analysis"]["small_rna_profile"] == "plant"
+    assert plant_cfg["analysis"]["small_rna_kit"] == "TruSeq Small RNA"
+    assert plant_cfg["reference"]["genome_fasta_url"] == (base / "genome.fa").as_uri()
+    assert plant_cfg["preprocessing"]["length_limit"] == 30
+    plant_reco = recommend_cfg(plant_cfg)
+    assert plant_reco["status"] == "selected" and plant_reco["route"] == "small_rna_plant", plant_reco
+
+    # animal profile: mature_mirna_url + mirbase_prefix carried through; no genome needed.
+    s2[srna_cells["small_rna_profile"]] = "animal"
+    s2[srna_cells["mirbase_prefix"]] = "hsa"
+    s2[srna_cells["reference_genome"]] = None
+    s2[srna_cells["reference_gtf"]] = None
+    sr.save(base / "srna_animal.xlsx")
+    animal_project = base / "srna animal project"
+    argv = ["setup.py", "--intake", str(base / "srna_animal.xlsx"), "--intake-sheet", "sRNA-seq",
+            "--project-dir", str(animal_project), "--plan-only"]
+    with patch.object(sys, "argv", argv), patch.object(setup, "resolve_organism", return_value=org), \
+         patch.object(setup, "resolve_reference_urls", side_effect=AssertionError("srna animal used network reference lookup")):
+        setup.main()
+    animal_cfg = yaml.safe_load((animal_project / "config/config.yaml").read_text())
+    assert animal_cfg["analysis"]["small_rna_profile"] == "animal"
+    assert animal_cfg["organism"]["mirbase_prefix"] == "hsa"
+    assert animal_cfg["reference"]["mature_mirna_url"] == "https://mirbase.org/download/mature.fa"
+    assert animal_cfg["reference"]["genome_fasta_url"] is None
+    animal_reco = recommend_cfg(animal_cfg)
+    assert animal_reco["status"] == "selected" and animal_reco["route"] == "small_rna_animal", animal_reco
+    s2[srna_cells["small_rna_profile"]] = "plant"
+    s2[srna_cells["mirbase_prefix"]] = "ath"
+    s2[srna_cells["reference_genome"]] = "genome.fa"
+    s2[srna_cells["reference_gtf"]] = "genes.gtf"
+
+    # TAGseq tab: named QuantSeq kits launch the star_tagseq route.
+    tg = openpyxl.load_workbook(ROOT / "intake_template.xlsx")
+    s3 = tg["TAGseq"]
+    tagseq_tab = next(t for t in q["tabs"] if t["name"] == "TAGseq")
+    tagseq_labels = {item["text"]: item["id"] for item in q["common_questions"] + tagseq_tab["extra_questions"]}
+    tagseq_cells = {}
+    for row in s3.iter_rows(min_col=1, max_col=3):
+        key = tagseq_labels.get(row[1].value)
+        if key:
+            tagseq_cells[key] = row[2].coordinate
+    tagseq_answers = dict(answers)
+    tagseq_answers.update({
+        "read_config": "single-end", "kit": "QuantSeq REV",
+        "reference_genome": "genome.fa", "reference_gtf": "genes.gtf",
+        "fastq_path": "srna_reads",
+    })
+    for key, value in tagseq_answers.items():
+        if key in tagseq_cells:
+            s3[tagseq_cells[key]] = value
+    tg.save(base / "tagseq.xlsx")
+    tagseq_record = read_intake(base / "tagseq.xlsx", "TAGseq")
+    assert tagseq_record["schema_version"] == 8
+    tagseq_inputs = setup_inputs(tagseq_record)
+    assert tagseq_inputs["seq_type"] == "tagseq"
+    assert tagseq_inputs["analysis"] == {"quantifier": "star", "backend": "auto", "kit": "QuantSeq REV"}
+    assert tagseq_inputs["expected_libtype"] == "SR"
+    assert not any("non-bulk workbook execution" in msg for msg in tagseq_record["limitations"]), tagseq_record["limitations"]
+
+    def tagseq_rejected(key, value, message):
+        old = s3[tagseq_cells[key]].value
+        s3[tagseq_cells[key]] = value
+        tg.save(base / "tagseq_bad.xlsx")
+        try:
+            setup_inputs(read_intake(base / "tagseq_bad.xlsx", "TAGseq"))
+        except ValueError as exc:
+            assert message in str(exc), str(exc)
+        else:
+            raise AssertionError(f"accepted invalid tagseq {key}={value!r}")
+        s3[tagseq_cells[key]] = old
+
+    tagseq_rejected("kit", "don't know", "choose a listed QuantSeq kit")
+    tagseq_rejected("read_config", "paired-end", "single-end")
+    s3[tagseq_cells["metadata_source"]] = "workbook tables"
+    tg.save(base / "tagseq_tables.xlsx")
+    try:
+        read_intake(base / "tagseq_tables.xlsx", "TAGseq")
+    except ValueError as exc:
+        assert TABLES_REFUSED in str(exc), str(exc)
+    else:
+        raise AssertionError("TAGseq workbook tables accepted")
+    s3[tagseq_cells["metadata_source"]] = "external files"
+
+    # End-to-end: a workbook-launched TAGseq project writes a config.yaml that
+    # recommend() selects, on the star_tagseq route.
+    tagseq_project = base / "tagseq project"
+    argv = ["setup.py", "--intake", str(base / "tagseq.xlsx"), "--intake-sheet", "TAGseq",
+            "--project-dir", str(tagseq_project), "--plan-only"]
+    with patch.object(sys, "argv", argv), patch.object(setup, "resolve_organism", return_value=org), \
+         patch.object(setup, "resolve_reference_urls", side_effect=AssertionError("tagseq used network reference lookup")), \
+         patch.object(setup, "fetch_annotation_info", return_value=False):
+        setup.main()
+    tagseq_cfg = yaml.safe_load((tagseq_project / "config/config.yaml").read_text())
+    assert tagseq_cfg["samples"]["seq_type"] == "tagseq"
+    assert tagseq_cfg["analysis"]["kit"] == "QuantSeq REV" and tagseq_cfg["analysis"]["quantifier"] == "star"
+    assert tagseq_cfg["analysis"]["backend"] == "deseq2", "handbook default: 3-12 units per group"
+    assert tagseq_cfg["reference"]["genome_fasta_url"] == (base / "genome.fa").as_uri()
+    assert tagseq_cfg["reference"]["gtf_url"] == (base / "genes.gtf").as_uri()
+    tagseq_reco = recommend_cfg(tagseq_cfg)
+    assert tagseq_reco["status"] == "selected" and tagseq_reco["route"] == "star_tagseq", tagseq_reco
+
+    # Dual organism (Bulk tab only). Schema 7 workbooks and dual_organism=no give the same inputs.
+    dual_ids = {"dual_organism", "pathogen_label", "pathogen_genome", "pathogen_gtf",
+                "pathogen_transcriptome", "pathogen_objective", "pathogen_min_reads"}
+    for tab in q["tabs"]:
+        present = {x["id"] for x in tab["extra_questions"]} & dual_ids
+        assert present == (dual_ids if tab["name"] == "Bulk RNA-seq" else set()), tab["name"]
+    assert "dual_organism" not in inputs
+    v7 = openpyxl.load_workbook(book)
+    v7["README"]["B2"] = 7
+    first = min(s[cells[k]].row for k in dual_ids)
+    v7["Bulk RNA-seq"].delete_rows(first, len(dual_ids))
+    v7.save(base / "schema7.xlsx")
+    seven = read_intake(base / "schema7.xlsx")
+    assert seven["schema_version"] == 7 and not dual_ids & set(seven["answers"])
+    assert setup_inputs(seven) == inputs
+
+    w = openpyxl.load_workbook(book)
+    s = w["Bulk RNA-seq"]
+    dual_answers = dict(dual_organism="yes", pathogen_label="Botrytis", pathogen_genome="botrytis.fa",
+                        pathogen_gtf="botrytis.gtf", pathogen_transcriptome="botrytis_tx.fa",
+                        pathogen_objective="differential expression", pathogen_min_reads=500,
+                        reference_genome="genome.fa", reference_gtf="genes.gtf", reference_transcriptome="tx.fa",
+                        organism="Homo sapiens")
+    saved_dual = {key: s[cells[key]].value for key in dual_answers}
+    for key, value in dual_answers.items():
+        s[cells[key]] = value
+    w.save(base / "dual.xlsx")
+    dual_inputs = setup_inputs(read_intake(base / "dual.xlsx"))
+    block = dual_inputs["dual_organism"]
+    assert block["enabled"] is True
+    assert block["host"] == dict(label="Homo_sapiens", genome_fasta_url=(base / "genome.fa").as_uri(),
+                                 gtf_url=(base / "genes.gtf").as_uri(), transcriptome_fasta_url=(base / "tx.fa").as_uri(),
+                                 objectives=["gene_expression", "differential_expression"])
+    assert block["pathogen"] == dict(label="Botrytis", genome_fasta_url=(base / "botrytis.fa").as_uri(),
+                                     gtf_url=(base / "botrytis.gtf").as_uri(),
+                                     transcriptome_fasta_url=(base / "botrytis_tx.fa").as_uri(),
+                                     objectives=["gene_expression", "differential_expression"], min_assigned_reads=500)
+    import dual_organism
+    dual_organism.validate(dict(samples=dict(seq_type="rnaseq_paired"), analysis=dict(quantifier="auto"), dual_organism=block))
+
+    s[cells["organism"]] = "human"
+    dual_project = base / "dual project"
+    from recommend import recommend as recommend_cfg
+    w.save(base / "dual.xlsx")
+    with patch.object(sys, "argv", ["setup.py", "--intake", str(base / "dual.xlsx"), "--project-dir", str(dual_project), "--plan-only"]), \
+         patch.object(setup, "resolve_organism", return_value=org), \
+         patch.object(setup, "resolve_reference_urls", side_effect=AssertionError("dual used network reference lookup")):
+        setup.main()
+    dual_cfg = yaml.safe_load((dual_project / "config/config.yaml").read_text())
+    assert dual_cfg["dual_organism"]["enabled"] is True and dual_cfg["dual_organism"]["host"]["label"] == "human"
+    assert dual_cfg["dual_organism"]["pathogen"]["min_assigned_reads"] == 500
+    assert dual_cfg["dual_organism"]["multimap_limit"] == 20, "template defaults survive"
+    dual_reco = recommend_cfg(dual_cfg)
+    assert dual_reco["status"] == "selected" and dual_reco["route"] == "dual_assignment", dual_reco
+
+    def dual_rejected(key, value, message):
+        old = s[cells[key]].value
+        s[cells[key]] = value
+        w.save(base / "dual_bad.xlsx")
+        try:
+            setup_inputs(read_intake(base / "dual_bad.xlsx"))
+        except ValueError as exc:
+            assert message in str(exc), str(exc)
+        else:
+            raise AssertionError(f"accepted invalid dual {key}={value!r}")
+        s[cells[key]] = old
+
+    dual_rejected("pathogen_genome", None, "pathogen_genome is required")
+    dual_rejected("pathogen_label", None, "pathogen_label is required")
+    dual_rejected("pathogen_gtf", None, "pathogen_gtf is required")
+    dual_rejected("pathogen_transcriptome", None, "pathogen_transcriptome is required")
+    dual_rejected("pathogen_label", "a|b", "dual_organism.pathogen.label")
+    dual_rejected("pathogen_label", "human", "labels must differ")
+    dual_rejected("analysis_goal", "QC only", "needs quantification of both organisms")
+    dual_rejected("reference_gtf", None, "Incomplete custom reference")
+    for key in ("reference_genome", "reference_gtf", "reference_transcriptome"):
+        s[cells[key]] = None
+    dual_rejected("dual_organism", "yes", "host genome and GTF")
+    for key in ("reference_genome", "reference_gtf", "reference_transcriptome"):
+        s[cells[key]] = dual_answers[key]
+    # STAR needs no transcripts and asks for a declared strand (strandedness is reverse here).
+    for key in ("reference_transcriptome", "pathogen_transcriptome"):
+        s[cells[key]] = None
+    s[cells["analysis_quantifier"]] = "star"
+    w.save(base / "dual_star.xlsx")
+    assert setup_inputs(read_intake(base / "dual_star.xlsx"))["dual_organism"]["pathogen"]["transcriptome_fasta_url"] is None
+    s[cells["analysis_quantifier"]] = "auto"
+    for key, value in saved_dual.items():
+        s[cells[key]] = value
 
 print("check_intake.py: all assertions passed")

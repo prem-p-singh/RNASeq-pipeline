@@ -214,10 +214,22 @@ if ! python3 "$REPO/scripts/preflight.py" -d "$PROJDIR" -c "$CONFIG"; then
     exit 1
 fi
 echo "-----------------"
-if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(json.load(open("gates/recommendation.json"))["route"])' )" = star_counts ]; then
+if [ "$PLAN_ONLY" -eq 0 ] && python3 -c 'import json,sys;sys.exit(json.load(open("gates/recommendation.json"))["route"] not in ("star_counts", "star_tagseq", "dual_assignment"))'; then
     STAR_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module star)
     export PATH="$STAR_PREFIX/bin:$PATH"
     cp "$STAR_PREFIX/environment_report.json" gates/star_environment_report.json
+fi
+if [ "$PLAN_ONLY" -eq 0 ] && python3 -c 'import json,sys;sys.exit(not json.load(open("gates/recommendation.json"))["route"].startswith("small_rna_"))'; then
+    SRNA_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module srna)
+    # Core first so python3 keeps PyYAML and the helper imports; the srna lock adds bowtie and ShortStack.
+    export PATH="$ENV_PREFIX/bin:$SRNA_PREFIX/bin:$PATH"
+    cp "$SRNA_PREFIX/environment_report.json" gates/srna_environment_report.json
+fi
+if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(json.load(open("gates/recommendation.json"))["count_treatment"])')" = umi_gene_counts ]; then
+    UMI_PREFIX=$(bash "$REPO/scripts/bootstrap.sh" --module umi)
+    # Core first, then the STAR lock (star_quant's samtools), then umi_tools.
+    export PATH="$ENV_PREFIX/bin:$STAR_PREFIX/bin:$UMI_PREFIX/bin:$PATH"
+    cp "$UMI_PREFIX/environment_report.json" gates/umi_environment_report.json
 fi
 
 if [ "$PLAN_ONLY" -eq 0 ] && [ "$(python3 -c 'import json;print(str(json.load(open("gates/preflight_plan.json"))["screening"]["enabled"]).lower())')" = true ]; then
@@ -315,11 +327,33 @@ if [ "$EXECUTOR" = local ]; then
 else
     EXECUTION_ARGS=(--profile "$PROFILE")
 fi
-exec snakemake \
-    --snakefile "$REPO/Snakefile" \
-    "${EXECUTION_ARGS[@]}" \
-    --configfile "$CONFIG" \
-    --config repo_dir="$REPO" \
-    --jobs "$MAX_CONC" \
-    $DRY_RUN \
-    ${PASSTHRU[@]+"${PASSTHRU[@]}"}
+launch() {  # $1 = config file, relative to the current directory; $2 = exec, to replace this shell
+    ${2:-} snakemake \
+        --snakefile "$REPO/Snakefile" \
+        "${EXECUTION_ARGS[@]}" \
+        --configfile "$1" \
+        --config repo_dir="$REPO" \
+        --jobs "$MAX_CONC" \
+        $DRY_RUN \
+        ${PASSTHRU[@]+"${PASSTHRU[@]}"}
+}
+ROUTE=$(python3 -c 'import json;print(json.load(open("gates/recommendation.json"))["route"])')
+if [ "$ROUTE" != dual_assignment ] || [ -n "$DRY_RUN" ]; then
+    launch "$CONFIG" exec
+fi
+
+# --- Host and pathogen in one library ---------------------------------
+# The first run assigns and splits the reads. Each organism is then an ordinary
+# single-organism project under dual/<role>, writing to results/<role>. set -e
+# stops at the first failure, so no child starts after a failed parent and a
+# failed host project ends the launch with its exit status. A dry run shows the
+# parent only: the children are generated from results the parent has not made yet.
+launch "$CONFIG"
+python3 "$REPO/scripts/dual_organism.py" children --project "$PROJDIR" --configfile "$CONFIG"
+for role in host pathogen; do
+    child="$PROJDIR/dual/$role"
+    [ -f "$child/config/config.yaml" ] || continue
+    echo "--- $role project: $child ---"
+    python3 "$REPO/scripts/preflight.py" -d "$child"
+    ( cd "$child" && launch config/config.yaml )
+done

@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "status": "selected_not_qualified",
+  "organism": "Arabidopsis thaliana",
+  "mirbase_prefix": "ath",
+  "count_unit": "read",
+  "biological_inference_eligible": false,
+  "runs": [
+    {
+      "accession": "SRR3222443"
+    },
+    {
+      "accession": "SRR3222444"
+    },
+    {
+      "accession": "SRR3222445"
+    }
+  ],
+  "ena_filereport_url_template": "https://www.ebi.ac.uk/ena/portal/api/filereport?accession={0}&result=read_run&fields=fastq_ftp,fastq_md5,fastq_bytes",
+  "genome_source": {
+    "url": "https://ftp.ensemblgenomes.ebi.ac.uk/pub/plants/release-63/fasta/arabidopsis_thaliana/dna/Arabidopsis_thaliana.TAIR10.dna.toplevel.fa.gz",
+    "note": "TAIR10 genome from Ensembl Plants release 63 (gzip, 36462703 bytes). Replaces plantsmallrnagenes.science.psu.edu, whose TLS certificate failed verification on FARM (curl 60, job 39025251); verification is not disabled. SHA256 recorded into download_manifest.json on first download."
+  },
+  "mature_mirna_source": {
+    "url": "https://mirbase.org/download/mature.fa",
+    "prefix": "ath",
+    "note": "Full miRBase mature.fa; SHA256 unknown at authoring time, recorded on first download. Filtered to the ath prefix by scripts/small_rna.py:mature_reference."
+  },
+  "acceptance_plan": [
+    "Resolve each run's FASTQ URL from the ENA filereport API at prepare time; verify ENA md5 and byte size before analysis.",
+    "Record genome and mature-miRNA source checksums on first download; pin them thereafter.",
+    "21 and 24 nt must be the two most common trimmed read lengths (computed from the trimmed FASTQ; replaced the original 90% 20-24 nt floor, see size_criterion_change).",
+    "ShortStack loci must include both DicerCall 21 and DicerCall 24 among the cohort.",
+    "ath-miR156, ath-miR166 and ath-miR319 families must overlap at least one locus in ShortStack's Results.txt known_miRNAs column.",
+    "A repeat run on the same inputs must give an identical count matrix.",
+    "Do not treat these technical runs as independent biological replicates or qualify biological DE."
+  ],
+  "acceptance_thresholds": {
+    "required_dicer_calls": [
+      "21",
+      "24"
+    ],
+    "known_mirna_families": [
+      "ath-miR156",
+      "ath-miR166",
+      "ath-miR319"
+    ],
+    "repeat_run_identical_counts": true,
+    "top_two_read_lengths": [
+      21,
+      24
+    ],
+    "size_criterion_change": "Replaced after the first complete run: the original >= 0.90 fraction of trimmed reads at 20-24 nt was an unsourced value and measured 0.763 (12169023/15952490, FARM job 39025686). New criterion: 21 and 24 nt are the two most common trimmed read lengths, the characteristic plant small-RNA signature (Axtell 2013, Annu Rev Plant Biol 64:137). Decision recorded 2026-09-28."
+  }
+}

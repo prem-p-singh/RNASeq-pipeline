@@ -13,8 +13,10 @@ rule aggregate_counts:
         star_lengths = expand(str(QUANT / "{sample}/star/gene_lengths.tsv"), sample=SAMPLES) if STAR_ROUTE else [],
         # Per-sample QC drives the inclusion decision, so declare it: a changed
         # metrics.json must re-run aggregation, not be silently ignored.
-        sample_metrics = expand(str(QUANT / "{sample}" / ("star/metrics.json" if STAR_ROUTE else "metrics.json")), sample=SAMPLES),
-        gtf = REF / "annotation.gtf",
+        sample_metrics = expand(str(QUANT / "{sample}" / ("star/metrics.json" if STAR_ROUTE else
+                                  "small_rna/metrics.json" if SMALL_RNA_ROUTE else "metrics.json")), sample=SAMPLES),
+        gtf = [] if SMALL_RNA_ROUTE else REF / "annotation.gtf",
+        small_rna_matrix = OUT / "small_rna_counts.tsv" if PLANT_SRNA_ROUTE else [],
         sheet = config["samples"]["sheet"],
         design_helper = REPO_DIR / "workflow/scripts/_design.R",
     output:
@@ -22,11 +24,12 @@ rule aggregate_counts:
         metrics = METRICS / "aggregate.json",
         disposition = OUT / "sample_disposition.tsv",
         provenance = OUT / "counts_provenance.json",
-        lengths = OUT / "gene_lengths.tsv",
+        lengths = [] if SMALL_RNA_ROUTE else OUT / "gene_lengths.tsv",
         imported = OUT / "gene_import.rds",
     params:
         runtime_identity = RUNTIME_ID,
-        count_source = "star" if STAR_ROUTE else "salmon",
+        count_source = ("star_umi" if UMI_ROUTE else "star" if STAR_ROUTE else "small_rna_matrix" if PLANT_SRNA_ROUTE
+                        else "small_rna" if SMALL_RNA_ROUTE else "salmon"),
         # Shared study-design helpers, so this stage, preflight and Stage 3
         # cannot disagree about replicate counts or estimability.
         design_lib = lambda wc: str(REPO_DIR / "workflow" / "scripts" / "_design.R"),

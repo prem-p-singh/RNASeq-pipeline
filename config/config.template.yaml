@@ -13,9 +13,16 @@ analysis:
   objectives: [gene_expression, differential_expression]
   backend: auto
   quantifier: auto  # auto: Salmon for gene expression, STAR for alignment objectives
+  # Salmon position-bias correction (--posBias), on by default. Set to false for a very small
+  # transcript set: Salmon 1.10.3 can crash in this correction when a length class has no reads.
+  salmon_position_bias: true
   umi: false
+  small_rna_profile: null                       # with samples.seq_type srnaseq: "animal" (Bowtie to species mature miRNAs) or "plant" (ShortStack loci on the genome)
+  small_rna_kit: null                            # kit name in config/small_rna_kits.yaml, e.g. "TruSeq Small RNA"
+  kit: null                                      # TAG-seq: a name from config/tagseq_kits.yaml
 
 preprocessing:
+  passthrough: false                              # skip trimming/filtering for already-processed reads
   # fastp instrument-header detection; explicitly set on/off for known chemistry.
   poly_g: auto
   adapter_r1: ""
@@ -23,6 +30,11 @@ preprocessing:
   minimum_length: 15
   qualified_quality_phred: 15
   unqualified_percent_limit: 40
+  length_limit: 0                               # max read length after trimming; 0 = no limit
+  trim_front: 0                                  # TAG-seq: bases to hard-trim from read 1 start (after UMI+spacer)
+  umi_len: 0                                     # TAG-seq: UMI length in bases; 0 = no UMI extraction
+  umi_skip: 0                                    # TAG-seq: spacer bases after the UMI to discard
+  poly_x: false                                  # TAG-seq: trim poly-A/T/G/C tails (fastp --trim_poly_x)
 
 # Optional diagnostic screening; never removes reads. Each reference gives a
 # prebuilt Bowtie2 `index`, or a `fasta` (path, URL, `transcriptome` or `genome`)
@@ -41,6 +53,7 @@ organism:
   common_name: "grape"                          # free text, for reports
   scientific_name: "Vitis vinifera"
   tax_id: 29760                                 # NCBI taxID (for make_orgdb.R)
+  mirbase_prefix: null                          # miRBase species code for small-RNA routes, e.g. "hsa"
   kegg_code: "vvi"                              # KEGG 3-letter code, or null to skip KEGG
   orgdb_package: "org.Vvinifera.eg.db"          # Bioconductor name or local-built name
 
@@ -82,7 +95,8 @@ reference:
   cache_dir: "~/rnaseq_reference_cache"
   # URLs must be concrete filenames. A '*' here is a guaranteed Stage 0 failure:
   # curl does not expand globs. setup.py refuses to finish if one slips through.
-  genome_fasta_url: null  # required when decoys: genome
+  genome_fasta_url: null  # required when decoys: genome, and for the small-RNA plant route
+  mature_mirna_url: null  # miRBase mature.fa (small-RNA animal route; optional known miRNAs for plant)
   transcriptome_fasta_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_rna.fna.gz"
   gtf_url: "https://ftp.ncbi.nlm.nih.gov/.../GCF_030704535.1_ASM3070453v1_genomic.gtf.gz"
   annotation_tsv:                               # NCBI/Ensembl-style gene-info table
@@ -93,6 +107,30 @@ reference:
   # organism, so the file it produced was labelled with your species but
   # contained another one's identifiers. Nothing in the pipeline read it.
   # A species-correct map can be reintroduced when something actually needs it.
+
+# -----------------------------------------------------------------------------
+# Host and pathogen in one library (validated)
+# -----------------------------------------------------------------------------
+# One STAR alignment to the combined genome labels each read host, pathogen,
+# ambiguous or unassigned; ambiguous and unassigned reads enter neither organism.
+# Not available for TAG-seq or small RNA.
+dual_organism:
+  enabled: false
+  multimap_limit: 20                            # best alignments allowed per read; more counts as unassigned
+  ambiguous_warn_fraction: 0.05                 # warn in results/assignment.tsv above this ambiguous fraction
+  host:
+    label: null                                 # letters, digits, _ . - ; prefixed to contig names
+    genome_fasta_url: null
+    gtf_url: null
+    transcriptome_fasta_url: null               # Salmon route
+    objectives: null                            # null: the project's analysis.objectives
+  pathogen:
+    label: null
+    genome_fasta_url: null
+    gtf_url: null                               # required: the pathogen is counted against its own annotation
+    transcriptome_fasta_url: null
+    objectives: null                            # null: gene_expression
+    min_assigned_reads: 500
 
 # -----------------------------------------------------------------------------
 # Samples

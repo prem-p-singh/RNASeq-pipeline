@@ -16,6 +16,21 @@ routes:
     rule_ids: [AS02, UP04, CT03]
     handbook_ids: [H18, H35]
     count_treatment: 'no'
+small_rna_routes:  # srnaseq, keyed by analysis.small_rna_profile
+  animal:
+    route: small_rna_animal
+    rule_ids: []
+    handbook_ids: []
+    count_treatment: raw_small_rna_counts
+  plant:
+    route: small_rna_plant
+    rule_ids: []
+    handbook_ids: []
+    count_treatment: raw_small_rna_counts
+dual_route:  # dual_organism.enabled: reads are assigned to host or pathogen before any per-organism route
+  route: dual_assignment
+  rule_ids: []
+  handbook_ids: []
 objectives: [alignment, qc, gene_expression, differential_expression, enrichment, coexpression]
 backends:
   fixed: {name: limma_voom, rule_ids: [ST01, ST02]}
@@ -23,5 +38,6 @@ backends:
 fixed_backends: [limma_voom, edger_ql, deseq2]
 alternatives:
   - {route: star_counts, status: experimental, reason: 'Explicit non-UMI bulk genomic alignment; requires known strand and a matching genome/GTF.'}
+  - {route: star_tagseq, status: experimental, reason: 'Named QuantSeq kit; strand, trimming and UMI handling from config/tagseq_kits.yaml.'}
   - {route: deseq2, status: experimental, reason: 'Explicit fixed-effect Wald adapter; see development qualification.'}
   - {route: edger_ql, status: experimental, reason: 'Explicit fixed-effect QL adapter; see development qualification.'}

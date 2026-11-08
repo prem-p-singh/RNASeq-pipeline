@@ -10,8 +10,9 @@ import subprocess
 
 from prepare_reads import records
 
-DEFAULTS = dict(poly_g="auto", adapter_r1="", adapter_r2="", minimum_length=15,
-                qualified_quality_phred=15, unqualified_percent_limit=40)
+DEFAULTS = dict(passthrough=False, poly_g="auto", adapter_r1="", adapter_r2="", minimum_length=15,
+                qualified_quality_phred=15, unqualified_percent_limit=40, length_limit=0,
+                trim_front=0, umi_len=0, umi_skip=0, poly_x=False)
 
 
 def policy_args(policy, paired):
@@ -19,6 +20,13 @@ def policy_args(policy, paired):
     if unknown:
         raise ValueError(f"Unknown preprocessing settings: {sorted(unknown)}")
     p = DEFAULTS | policy
+    if p["passthrough"] is not False:
+        if p["passthrough"] is not True:
+            raise ValueError("preprocessing.passthrough must be true or false")
+        changed = sorted(k for k in p if k != "passthrough" and p[k] != DEFAULTS[k])
+        if changed:
+            raise ValueError(f"preprocessing.passthrough cannot be combined with {changed}")
+        return p, ["-A", "-Q", "-L", "-G"]
     if p["poly_g"] not in ("auto", "on", "off"):
         raise ValueError("preprocessing.poly_g must be auto, on or off")
     for name, low, high in (("minimum_length", 1, 10000),
@@ -26,15 +34,28 @@ def policy_args(policy, paired):
                             ("unqualified_percent_limit", 0, 100)):
         if type(p[name]) is not int or not low <= p[name] <= high:
             raise ValueError(f"preprocessing.{name} must be an integer in {low}..{high}")
+    if type(p["length_limit"]) is not int or not (p["length_limit"] == 0 or p["length_limit"] >= p["minimum_length"]):
+        raise ValueError("preprocessing.length_limit must be 0 (no limit) or >= minimum_length")
     for name in ("adapter_r1", "adapter_r2"):
         if not isinstance(p[name], str) or set(p[name].upper()) - set("ACGT"):
             raise ValueError(f"preprocessing.{name} must be an A/C/G/T sequence or empty")
     if p["adapter_r2"] and (not paired or not p["adapter_r1"]):
         raise ValueError("adapter_r2 requires paired input and an explicit adapter_r1")
+    for name, high in (("trim_front", 100), ("umi_len", 16), ("umi_skip", 20)):
+        if type(p[name]) is not int or not 0 <= p[name] <= high:
+            raise ValueError(f"preprocessing.{name} must be an integer in 0..{high}")
+    if type(p["poly_x"]) is not bool:
+        raise ValueError("preprocessing.poly_x must be true or false")
+    if (p["umi_len"] or p["trim_front"] or p["poly_x"]) and paired:
+        raise ValueError("TAG-seq kit processing is single-end Read 1 only")
+    if p["umi_skip"] and not p["umi_len"]:
+        raise ValueError("preprocessing.umi_skip requires umi_len")
     args = ["--length_required", str(p["minimum_length"]),
             "--qualified_quality_phred", str(p["qualified_quality_phred"]),
             "--unqualified_percent_limit", str(p["unqualified_percent_limit"]),
             "--overrepresentation_analysis"]
+    if p["length_limit"]:
+        args.extend(["--length_limit", str(p["length_limit"])])
     if p["poly_g"] != "auto":
         args.append("--trim_poly_g" if p["poly_g"] == "on" else "--disable_trim_poly_g")
     if p["adapter_r1"]:
@@ -43,7 +64,20 @@ def policy_args(policy, paired):
             args.extend(["--adapter_sequence_r2", p["adapter_r2"] or p["adapter_r1"]])
     elif paired:
         args.append("--detect_adapter_for_pe")
+    if p["umi_len"]:
+        # fastp moves the UMI into the read name (":" separator), then skips the spacer.
+        args += ["--umi", "--umi_loc", "read1", "--umi_len", str(p["umi_len"]),
+                 "--umi_skip", str(p["umi_skip"])]
+    if p["trim_front"]:
+        args += ["--trim_front1", str(p["trim_front"])]
+    if p["poly_x"]:
+        args.append("--trim_poly_x")
     return p, args
+
+
+def loss_summary(data):
+    fr = data.get("filtering_result", {})
+    return dict(filtering_result=dict(fr), size_selection=dict(too_short_reads=fr.get("too_short_reads", 0), too_long_reads=fr.get("too_long_reads", 0), mean_length_after=data["summary"]["after_filtering"].get("read1_mean_length")))
 
 
 def process(r1, r2, outdir, sample, threads, policy):
@@ -100,7 +134,7 @@ def process(r1, r2, outdir, sample, threads, policy):
                   fastp_version=version, policy=p, command=cmd, input_files=inputs,
                   fragments_before=fragments, fragments_after=after // mates,
                   reads_before=before, reads_after=after, fraction_lost=loss,
-                  filtering_result=data.get("filtering_result", {}),
+                  **loss_summary(data),
                   warnings=["More than 10% of reads lost: review preprocessing and library quality"] if loss > 0.10 else [],
                   contamination_screening="not_performed")
     (out / "preprocessing.json").write_text(json.dumps(ledger, indent=2) + "\n")

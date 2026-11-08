@@ -37,6 +37,7 @@ import metadata as metadata_tables
 from recommend import recommend, requires_inference
 from preprocessing import policy_args
 from screen_reads import validate as validate_screen, index_files
+from dual_organism import validate as validate_dual
 
 ROOT = Path(__file__).resolve().parent.parent
 SPEC = ROOT / "config" / "spec.yaml"
@@ -106,6 +107,12 @@ def check_config(cfg: dict, repo_root, iss: Issues) -> dict:
     except (ValueError, TypeError) as exc:
         iss.add("CFG003", "screening", str(exc))
 
+    if (resolved.get("dual_organism") or {}).get("enabled"):
+        try:
+            validate_dual(resolved)
+        except (ValueError, TypeError) as exc:
+            iss.add("CFG003", "dual_organism", str(exc))
+
     ref = resolved.get("reference") or {}
     if type(ref.get("star_overhang")) is not int or ref["star_overhang"] < 1:
         iss.add("CFG003", "reference", "star_overhang must be a positive integer")
@@ -164,11 +171,16 @@ def check_scope(cfg: dict, spec: dict, iss: Issues) -> dict:
                 f"{assay!r}; supported: {', '.join(sorted(scope['assays']))}")
     elif not a.get("supported"):
         iss.add("SCP001", "scope", f"{assay!r}: {a.get('reason', 'not supported')}")
-    elif assay == "tagseq" and not a.get("validated_kits"):
-        iss.add("SCP004", "scope",
-                "tagseq: scope.assays.tagseq.validated_kits is empty, so the "
-                "count treatment is unverified for your kit")
+    elif assay in ("tagseq", "srnaseq"):
+        kit = (cfg.get("analysis") or {}).get("kit" if assay == "tagseq" else "small_rna_kit")
+        if kit not in (a.get("validated_kits") or []):
+            iss.add("SCP004", "scope",
+                    f"{assay}: kit {kit!r} is not in scope.assays.{assay}.validated_kits, so the "
+                    "count treatment is unverified for your kit")
 
+    if recommend(cfg)["route"] == "dual_assignment":
+        # Backend and count treatment belong to the per-organism routes, not to read assignment.
+        return {"assay": assay, "design": design, "backend": None, "count_treatment": None}
     if not requires_inference(cfg):
         return {"assay": assay, "design": "not_requested", "backend": None,
                 "count_treatment": recommend(cfg)["count_treatment"]}

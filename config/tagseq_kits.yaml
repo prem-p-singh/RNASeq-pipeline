@@ -1,0 +1,39 @@
+# Lexogen QuantSeq single-end Read 1 profiles. Facts and sources:
+#  FWD: Read 1 is sense; first 12 nt carry random-priming errors (trim or soft-clip);
+#       poly(A) + adapter A{18}AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC.
+#       https://faqs.lexogen.com/faq/what-sequences-should-be-trimmed
+#  REV: "Reads 1 reflect the cDNA sequence"; Read 1 starts at the 3' end (custom primer).
+#       https://faqs.lexogen.com/faq/what-are-the-differences-between-quantseq-rev-and-
+#  FWD-UMI: 6 nt UMI (cycles 1-6) then TATA spacer (cycles 7-10) before the insert.
+#       https://faqs.lexogen.com/faq/do-my-quantseq-fwd-umi-reads-look-okay
+# status becomes validated only after the kit's own public-data check passes. Validated 2026-09-28:
+# FWD FARM job 39025685 (PRJNA631146), REV 39023623 (PRJNA1494475), FWD-UMI 39023624 (PRJEB107189).
+kits:
+  QuantSeq FWD:
+    strandedness: forward
+    umi_len: 0
+    umi_skip: 0
+    trim_front: 12
+    adapter_r1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+    poly_x: true
+    status: validated
+    sources: [https://faqs.lexogen.com/faq/what-sequences-should-be-trimmed]
+  QuantSeq REV:
+    strandedness: reverse
+    umi_len: 0
+    umi_skip: 0
+    trim_front: 0
+    adapter_r1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+    poly_x: true
+    status: validated
+    sources: [https://faqs.lexogen.com/faq/what-are-the-differences-between-quantseq-rev-and-]
+  QuantSeq FWD-UMI:
+    strandedness: forward
+    umi_len: 6
+    umi_skip: 4
+    trim_front: 12
+    adapter_r1: AGATCGGAAGAGCACACGTCTGAACTCCAGTCAC
+    poly_x: true
+    status: validated
+    sources: [https://faqs.lexogen.com/faq/do-my-quantseq-fwd-umi-reads-look-okay,
+              https://faqs.lexogen.com/faq/what-sequences-should-be-trimmed]

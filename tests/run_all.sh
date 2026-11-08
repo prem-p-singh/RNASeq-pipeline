@@ -82,6 +82,18 @@ else
     skip check_setup_helpers.py "needs pyyaml"
 fi
 
+if have_py_mods yaml; then
+    run check_small_rna.py "python3 tests/check_small_rna.py"
+else
+    skip check_small_rna.py "needs pyyaml"
+fi
+
+if have_py_mods yaml; then
+    run check_dual.py "python3 tests/check_dual.py"
+else
+    skip check_dual.py "needs pyyaml"
+fi
+
 run check_qc_report.py       "python3 tests/check_qc_report.py"
 run check_reference_lock.py  "python3 tests/check_reference_lock.py"
 run check_config_resolve.py  "python3 tests/check_config_resolve.py"
@@ -99,6 +111,11 @@ else
 fi
 run check_resources.py       "python3 tests/check_resources.py"
 run check_recommend.py       "python3 tests/check_recommend.py"
+if have_py_mods yaml; then
+    run check_tagseq_kits.py "python3 tests/check_tagseq_kits.py"
+else
+    skip check_tagseq_kits.py "needs pyyaml"
+fi
 if have_py_mods openpyxl pandas yaml; then
     run check_intake.py "python3 tests/check_intake.py"
 else
@@ -129,6 +146,9 @@ run check_screen_real        "python3 tests/check_screen.py --real"
 run check_screen_workflow    "bash tests/check_screen_workflow.sh"
 run check_star.py            "python3 tests/check_star.py"
 run check_star_workflow.sh   "bash tests/check_star_workflow.sh"
+run check_tagseq_workflow.sh "bash tests/check_tagseq_workflow.sh"
+run check_dual_workflow.sh   "bash tests/check_dual_workflow.sh"
+run check_small_rna_workflow.sh "bash tests/check_small_rna_workflow.sh"
 if command -v Rscript >/dev/null 2>&1; then
     run check_enrichment.R "Rscript tests/check_enrichment.R"
 else
@@ -146,6 +166,7 @@ if have_py_mods yaml && command -v Rscript >/dev/null 2>&1 \
 else
     skip check_project_isolation.sh "needs pyyaml, Rscript and jsonlite (submit.sh runs preflight)"
 fi
+
 
 echo
 echo "  $pass passed, $fail failed, $skip skipped"

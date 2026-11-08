@@ -14,7 +14,7 @@ TASK_EVIDENCE="$TASK_REPO/docs/evidence/slurm-$SLURM_JOB_ID"
 mkdir -p "$TASK_EVIDENCE"
 printf 'Worker: %s\nJob: %s\nUTC: %s\n' "$(hostname)" "$SLURM_JOB_ID" "$(date -u +%FT%TZ)" > "$TASK_EVIDENCE/worker.txt"
 export TMPDIR="$TASK_WORK" CONDA_PKGS_DIRS="$TASK_WORK/pkgs"
-export RNASEQ_ENV_PREFIX="$TASK_WORK/runtime"
+export RNASEQ_ENV_PREFIX="${RNASEQ_ENV_PREFIX:-$TASK_WORK/runtime}"
 export OMP_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1
 prefix=$(bash "$TASK_REPO/scripts/bootstrap.sh")
 source "$(conda info --base)/etc/profile.d/conda.sh"
@@ -22,14 +22,22 @@ conda activate "$prefix"
 export PYTHONNOUSERSITE=1 R_ENVIRON_USER=/dev/null R_PROFILE_USER=/dev/null
 export R_LIBS_USER="$prefix/lib/R/library" R_LIBS_SITE="$prefix/lib/R/library"
 cp "$prefix/environment_report.json" "$TASK_EVIDENCE/"
-export RNASEQ_STAR_ENV_PREFIX="$TASK_WORK/star-runtime"
+export RNASEQ_STAR_ENV_PREFIX="${RNASEQ_STAR_ENV_PREFIX:-$TASK_WORK/star-runtime}"
 star_prefix=$(bash "$TASK_REPO/scripts/bootstrap.sh" --module star)
 export PATH="$star_prefix/bin:$PATH"
 cp "$star_prefix/environment_report.json" "$TASK_EVIDENCE/star_environment_report.json"
-export RNASEQ_SCREEN_ENV_PREFIX="$TASK_WORK/screen-runtime"
+export RNASEQ_SCREEN_ENV_PREFIX="${RNASEQ_SCREEN_ENV_PREFIX:-$TASK_WORK/screen-runtime}"
 screen_prefix=$(bash "$TASK_REPO/scripts/bootstrap.sh" --module screen)
 export PATH="$prefix/bin:$screen_prefix/bin:$PATH"
 cp "$screen_prefix/environment_report.json" "$TASK_EVIDENCE/screen_environment_report.json"
+export RNASEQ_SRNA_ENV_PREFIX="${RNASEQ_SRNA_ENV_PREFIX:-$TASK_WORK/srna-runtime}"
+srna_prefix=$(bash "$TASK_REPO/scripts/bootstrap.sh" --module srna)
+export RNASEQ_UMI_ENV_PREFIX="${RNASEQ_UMI_ENV_PREFIX:-$TASK_WORK/umi-runtime}"
+umi_prefix=$(bash "$TASK_REPO/scripts/bootstrap.sh" --module umi)
+# Core first (its Python/R), then STAR (star_quant samtools), screening, small RNA and UMI tools.
+export PATH="$prefix/bin:$star_prefix/bin:$screen_prefix/bin:$srna_prefix/bin:$umi_prefix/bin:$PATH"
+cp "$srna_prefix/environment_report.json" "$TASK_EVIDENCE/srna_environment_report.json"
+cp "$umi_prefix/environment_report.json" "$TASK_EVIDENCE/umi_environment_report.json"
 cd "$TASK_REPO"
 set -o pipefail
 bash tests/run_all.sh --strict 2>&1 | tee "$TASK_EVIDENCE/tests.log"
@@ -39,4 +47,6 @@ RNASEQ_PUBLIC_PROJECT="$TASK_WORK/public-star" bash tests/check_public.sh --star
 CONDA_OFFLINE=true bash scripts/bootstrap.sh > "$TASK_EVIDENCE/offline-reuse.txt"
 CONDA_OFFLINE=true bash scripts/bootstrap.sh --module star > "$TASK_EVIDENCE/star-offline-reuse.txt"
 CONDA_OFFLINE=true bash scripts/bootstrap.sh --module screen > "$TASK_EVIDENCE/screen-offline-reuse.txt"
+CONDA_OFFLINE=true bash scripts/bootstrap.sh --module srna > "$TASK_EVIDENCE/srna-offline-reuse.txt"
+CONDA_OFFLINE=true bash scripts/bootstrap.sh --module umi > "$TASK_EVIDENCE/umi-offline-reuse.txt"
 printf 'Temporary runtime and public project retained at %s\n' "$TASK_WORK"

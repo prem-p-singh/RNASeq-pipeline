@@ -1,0 +1,17 @@
+# 3' adapters for non-UMI small-RNA kits. Source for TruSeq:
+# https://support-docs.illumina.com/SHARE/AdapterSequences/Content/TruSeq-SmallRNA.htm
+# (also pinned in tests/fixtures/small_rna_public.json). Size window 18-30 nt covers
+# animal miRNA and plant 21/22/24 nt classes; reads outside it are counted as lost.
+kits:
+  TruSeq Small RNA:
+    adapter_r1: TGGAATTCTCGGGTGCCAAGG
+    minimum_length: 18
+    length_limit: 30
+    status: validated  # animal GSE94585 and plant SRR3222443-5 public checks, FARM job 39055140
+    sources: [https://support-docs.illumina.com/SHARE/AdapterSequences/Content/TruSeq-SmallRNA.htm]
+blocked:
+  QIAseq miRNA: UMI small-RNA kits need UMI-aware counting, which is not implemented.
+# miRBase species codes for plants. No local organism preset carries a
+# kingdom/lineage field, so the animal/plant mismatch check compares the
+# chosen mirbase_prefix against this list instead.
+plant_mirbase_prefixes: [ath, osa, zma, gma, vvi, sly, mtr, ptc, bdi, sbi]

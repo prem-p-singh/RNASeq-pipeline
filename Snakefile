@@ -52,10 +52,25 @@ if _cfg_blocking:
 from recommend import recommend as _recommend, requires_inference
 from preprocessing import policy_args
 from screen_reads import validate as validate_screen, index_files
-policy_args(config["preprocessing"], config["samples"]["seq_type"] == "rnaseq_paired")
+from small_rna import load_kit, kit_policy
+import tagseq as _tagseq
 RECOMMENDATION = _recommend(config)
 if RECOMMENDATION["issues"]:
     raise RuntimeError("Unsupported analysis: " + "; ".join(RECOMMENDATION["issues"]))
+# Host and pathogen in one library: None unless dual_organism.enabled.
+import dual_organism as _dual
+DUAL = _dual.validate(config) if (config.get("dual_organism") or {}).get("enabled") else None
+# Small-RNA and named TAG-seq kits fix adapter, trimming and UMI settings; the kit table wins
+# over the generic policy, and a config that sets a kit key to another value is refused.
+TAGSEQ_KIT = _tagseq.load_kit(config["analysis"]["kit"]) if RECOMMENDATION["route"] == "star_tagseq" else None
+UMI_ROUTE = RECOMMENDATION["count_treatment"] == "umi_gene_counts"
+PREPROCESSING = config["preprocessing"]
+if config["samples"]["seq_type"] == "srnaseq":
+    PREPROCESSING = _tagseq.merge_policy(PREPROCESSING, load_kit(config["analysis"]["small_rna_kit"]),
+                                         kit_policy, "small-RNA kit", "analysis.small_rna_kit")
+if TAGSEQ_KIT:
+    PREPROCESSING = _tagseq.merge_policy(PREPROCESSING, TAGSEQ_KIT)
+policy_args(PREPROCESSING, config["samples"]["seq_type"] == "rnaseq_paired")
 
 SCREEN_POLICY = validate_screen(config["screening"])
 # FASTA panel members (transcriptome, genome, path or URL) are indexed in the
@@ -68,13 +83,21 @@ SCREEN_RUN_POLICY = dict(SCREEN_POLICY, references=[
     if "fasta" in r else r for r in SCREEN_POLICY["references"]])
 
 QC_ONLY = set(config["analysis"]["objectives"]) == {"qc"}
-STAR_ROUTE = RECOMMENDATION["route"] == "star_counts"
-QUANT_PRODUCT = "star/gene_counts.tsv" if STAR_ROUTE else "quant.sf"
+STAR_ROUTE = RECOMMENDATION["route"] in ("star_counts", "star_tagseq")
+SMALL_RNA_ROUTE = RECOMMENDATION["route"] in ("small_rna_animal", "small_rna_plant")
+PLANT_SRNA_ROUTE = RECOMMENDATION["route"] == "small_rna_plant"
+# Plant counts are one cohort matrix (ShortStack clusters loci jointly); the per-sample product is its QC record.
+QUANT_PRODUCT = ("umi/gene_counts.tsv" if UMI_ROUTE else "star/gene_counts.tsv" if STAR_ROUTE else "small_rna/metrics.json" if PLANT_SRNA_ROUTE
+                 else "small_rna/counts.tsv" if SMALL_RNA_ROUTE else "quant.sf")
 
 # --- Load sample sheet ---------------------------------------------------
 import metadata as _metadata
 CANONICAL_INPUTS = _metadata.execution_inputs(Path.cwd(), config)
-if STAR_ROUTE and CANONICAL_INPUTS is not None:
+if TAGSEQ_KIT:
+    # The kit fixes the strand; a declared strand that disagrees is an error, not overridden.
+    _tagseq.check_strand(TAGSEQ_KIT, {k: v["expected_libtype"] for k, v in CANONICAL_INPUTS.items()}
+                         if CANONICAL_INPUTS is not None else {"samples.expected_libtype": config["samples"].get("expected_libtype")})
+if STAR_ROUTE and not TAGSEQ_KIT and CANONICAL_INPUTS is not None:
     for sample_id, library in CANONICAL_INPUTS.items():
         if library['expected_libtype'] not in ('U', 'SF', 'SR', 'IU', 'ISF', 'ISR'):
             raise ValueError(f'STAR requires known strandedness for {sample_id}')
@@ -125,7 +148,21 @@ SALMON_DECOYS = _ref_cfg.get("decoys") or None
 # in annotation release, k-mer or decoy status shared one directory and
 # consumed each other's index. The digest below covers all of them.
 import star_counts as _star
-CACHE_KEY = "unused-qc" if QC_ONLY else (_star.cache_key(_ref_cfg) if STAR_ROUTE else _refcache.cache_key(_ref_cfg, SALMON_KMER, SALMON_DECOYS))
+if DUAL:
+    CACHE_KEY = "dual-" + hashlib.sha256(json.dumps({
+        "organisms": {role: {k: DUAL[role].get(k) for k in ("label", "genome_fasta_url", "gtf_url")} for role in _dual.ROLES},
+        "star_overhang": _ref_cfg.get("star_overhang")}, sort_keys=True).encode()).hexdigest()[:16]
+elif QC_ONLY:
+    CACHE_KEY = "unused-qc"
+elif STAR_ROUTE:
+    CACHE_KEY = _star.cache_key(_ref_cfg)
+elif SMALL_RNA_ROUTE:
+    CACHE_KEY = "srna-" + hashlib.sha256(json.dumps({
+        "mature_mirna_url": _ref_cfg.get("mature_mirna_url"),
+        "genome_fasta_url": _ref_cfg.get("genome_fasta_url"),
+        "mirbase_prefix": config["organism"].get("mirbase_prefix")}, sort_keys=True).encode()).hexdigest()[:16]
+else:
+    CACHE_KEY = _refcache.cache_key(_ref_cfg, SALMON_KMER, SALMON_DECOYS)
 if _ref_cache:
     REF = Path(os.path.expanduser(str(_ref_cache))) / CACHE_KEY
 else:
@@ -133,7 +170,7 @@ else:
 
 # Refuse an entry that is incomplete or was built from other parameters,
 # rather than reading whatever happens to sit at that path.
-if not QC_ONLY and not STAR_ROUTE and _ref_cache and REF.exists():
+if not DUAL and not QC_ONLY and not STAR_ROUTE and not SMALL_RNA_ROUTE and _ref_cache and REF.exists():
     _entry_issues = _refcache.verify_entry(REF, _ref_cfg, SALMON_KMER, SALMON_DECOYS)
     _fatal = [i for i in _entry_issues if not i.startswith(("missing ", "empty "))]
     if _fatal:
@@ -157,8 +194,12 @@ if not _snapshot_path.exists() or _snapshot_path.read_text() != _snapshot:
     _snapshot_path.write_text(_snapshot)
 _lock_path = REPO_DIR / "environments/linux-64.explicit.txt"
 RUNTIME_ID = hashlib.sha256(_lock_path.read_bytes()).hexdigest() if _lock_path.exists() else "unlocked"
-if STAR_ROUTE:
+if STAR_ROUTE or DUAL:
     RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/star-linux-64.explicit.txt").read_bytes()).hexdigest()
+if SMALL_RNA_ROUTE:
+    RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/srna-linux-64.explicit.txt").read_bytes()).hexdigest()
+if UMI_ROUTE:
+    RUNTIME_ID += hashlib.sha256((REPO_DIR / "environments/umi-linux-64.explicit.txt").read_bytes()).hexdigest()
 
 
 if SCREEN_POLICY["enabled"]:
@@ -177,13 +218,21 @@ if _stale:
     print(_artifacts.format_report(_stale))
 
 # --- Rule modules --------------------------------------------------------
+# Sample IDs never contain "/". Without this, {sample}/metrics.json also matches
+# route subfolders such as <id>/small_rna/metrics.json and rules become ambiguous.
+wildcard_constraints:
+    sample=r"[^/]+"
+
 include: "workflow/rules/common.smk"
 include: "workflow/rules/retrieve.smk"
 include: "workflow/rules/build_orgdb.smk"
 include: "workflow/rules/per_sample.smk"
 include: "workflow/rules/star.smk"
+include: "workflow/rules/small_rna.smk"
 include: "workflow/rules/qc_report.smk"
 include: "workflow/rules/aggregate.smk"
+if DUAL:
+    include: "workflow/rules/dual.smk"
 
 # --- Conditional target helpers -----------------------------------------
 def all_targets():
@@ -191,21 +240,26 @@ def all_targets():
     early = [OUT / "preprocessing_report/multiqc_report.html",
              *expand(str(QUANT / "{sample}/fastp.html"), sample=SAMPLES)]
     early += expand(str(QUANT / "{sample}/screening/screening.{ext}"), sample=SAMPLES, ext=["json", "tsv", "html"])
+    if DUAL:
+        return early + [OUT / "assignment.tsv", *expand(DUAL_SPLIT, sample=SAMPLES)]
     if QC_ONLY:
         return early
     targets = early + [
         # Stage 1 — one quant.sf per sample
         *expand(str(QUANT / "{sample}" / QUANT_PRODUCT), sample=SAMPLES),
         *(expand(str(QUANT / "{sample}/read_preparation.json"), sample=SAMPLES) if CANONICAL_INPUTS is not None else []),
-        # Stage 1b — comparative QC report (before/after-clean charts + MultiQC)
-        OUT / "qc_report/qc_report.done",
-        OUT / "qc_report/qc_charts.html",
-        OUT / "qc_report/comparative_charts.png",
-        OUT / "qc_report/alignment_summary.tsv",
-        OUT / "qc_report/multiqc/multiqc_report.html",
         # Stage 2 — aggregated counts
         OUT / "counts.tsv",
     ]
+    # Stage 1b — comparative QC report (before/after-clean charts + MultiQC).
+    # ponytail: the report reads Salmon/STAR logs only; small-RNA runs rely on
+    # the preprocessing report and small_rna/metrics.json until it learns Bowtie.
+    if not SMALL_RNA_ROUTE:
+        targets += [OUT / "qc_report/qc_report.done",
+                    OUT / "qc_report/qc_charts.html",
+                    OUT / "qc_report/comparative_charts.png",
+                    OUT / "qc_report/alignment_summary.tsv",
+                    OUT / "qc_report/multiqc/multiqc_report.html"]
     if STAR_ROUTE:
         targets.extend(expand(str(QUANT / "{sample}/star/Aligned.sortedByCoord.out.bam{suffix}"),
                               sample=SAMPLES, suffix=["", ".bai"]))

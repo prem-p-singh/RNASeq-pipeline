@@ -1,16 +1,16 @@
 <div align="center">
-  <img src="assets/readme-banner.svg" alt="RNASeq pipeline v2: raw reads to traceable bulk RNA-seq results" width="100%" />
-  <h1>RNASeq pipeline · v2.1.2</h1>
+  <img src="assets/readme-banner.svg" alt="RNASeq pipeline v3: raw reads to traceable RNA-seq results" width="100%" />
+  <h1>RNASeq pipeline · v3.0.0</h1>
   <p><strong>Your study design. Your reads. A traceable analysis.</strong></p>
   <p>Excel-driven intake · Snakemake execution · Locked Linux runtime</p>
-  <a href="https://github.com/prem-p-singh/RNASeq-pipeline/releases/tag/v2.1.2">Release notes</a> ·
+  <a href="https://github.com/prem-p-singh/RNASeq-pipeline/releases/tag/v3.0.0">Release notes</a> ·
   <a href="#quick-start">Quick start</a> ·
   <a href="#how-the-workflow-runs">Workflow</a> ·
   <a href="INPUTS.md">Input guide</a> ·
   <a href="docs/RELEASE.md">Validation</a>
 </div>
 
-<p align="center"><img src="assets/release-overview.gif" alt="Animated overview of v2.1.2: the apt install command, the Excel intake, the six stages with Salmon or STAR, 35 strict checks passed, and the 580-package locked runtime" width="100%" /></p>
+<p align="center"><img src="assets/release-overview.gif" alt="Animated overview of v3.0.0: the apt install command, the four library types, the Excel intake, the six stages with Salmon or STAR, 41 strict checks passed, and the locked runtimes" width="100%" /></p>
 
 <p align="center">
   <a href="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml"><img src="https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml/badge.svg" alt="Scientific Linux checks" /></a>
@@ -19,10 +19,10 @@
   <img src="https://img.shields.io/badge/runtime-Linux_x86__64-46567D" alt="Linux x86_64" />
 </p>
 
-Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and differential-expression results. Fill an Excel intake or provide explicit TSV/YAML inputs, review the study configuration, and run locally on Linux or through SLURM. Every project has its own configuration, logs and results.
+Turn **raw RNA-seq FASTQs** into quality reports, gene counts and differential-expression results: bulk libraries, small RNA, Lexogen QuantSeq 3′ end-tag libraries, or a host and a pathogen sequenced together. Fill an Excel intake or provide explicit TSV/YAML inputs, review the study configuration, and run locally on Linux or through SLURM. Every project has its own configuration, logs and results.
 
 > [!NOTE]
-> **v2.1.2 is the current release.** It covers bulk RNA-seq. Other assay types are in progress; see [Future scope](#future-scope).
+> **v3.0.0 is the current release.** It covers bulk RNA-seq, small RNA (animal and plant), Lexogen QuantSeq 3′ end-tag libraries and host plus pathogen in the same libraries. See [Future scope](#future-scope) for what is planned.
 
 ## What you can run
 
@@ -42,8 +42,11 @@ Turn **raw, non-UMI bulk RNA-seq FASTQs** into quality reports, gene counts and 
 | GO enrichment | 🔵 **Fixture-tested** | Needs a compatible OrgDb and gene-ID mapping |
 | WGCNA | 🔵 **Fixture-tested** | Needs an eligible cohort; not sized for very large cohorts |
 | KEGG enrichment | 🟠 **Conditional** | Needs network access and organism mapping |
+| Small RNA, animal and plant | 🟢 **Tested** | Animal: mature miRNAs; plant: ShortStack loci. TruSeq Small RNA kit; reads counted, not molecules |
+| QuantSeq 3′ end-tag: FWD, REV and FWD-UMI | 🟢 **Tested** | STAR and featureCounts with the kit's strand; FWD-UMI also counts molecules |
+| Host and pathogen in the same libraries | 🟢 **Tested** | Bulk libraries, Salmon or STAR; each read goes to one organism or to neither |
 
-**Tested** means the route passed synthetic checks and a six-sample public study. **Fixture-tested** means it passed synthetic checks only.
+**Tested** means the route passed synthetic checks and a public study. **Fixture-tested** means it passed synthetic checks only. [docs/RELEASE.md](docs/RELEASE.md) names the study and job for each route.
 
 You choose the quantifier and the DE method in the workbook or the configuration; the [recommendation rules](config/recommendation_rules.yaml) record the choice and reject unsupported ones. Sample count never changes the model silently. PCA may flag a batch association, but it does **not** add model terms.
 
@@ -90,12 +93,12 @@ export PATH="/opt/rnaseq-pipeline/conda/bin:$PATH"   # packaged Conda; skip if y
 export PROJECT="$HOME/rnaseq_projects/my_study"
 ```
 
-The package puts the workflow in `/usr/lib/rnaseq-pipeline` and a pinned Miniforge in `/opt/rnaseq-pipeline/conda`. It also adds two commands: `rnaseq-pipeline` runs `submit.sh` and `rnaseq-new-project` runs `scripts/new_project.sh`. Without the repository, `sudo apt install ./rnaseq-pipeline_2.1.2_amd64.deb` (from the release page) also works.
+The package puts the workflow in `/usr/lib/rnaseq-pipeline` and a pinned Miniforge in `/opt/rnaseq-pipeline/conda`. It also adds two commands: `rnaseq-pipeline` runs `submit.sh` and `rnaseq-new-project` runs `scripts/new_project.sh`. Without the repository, `sudo apt install ./rnaseq-pipeline_3.0.0_amd64.deb` (from the release page) also works.
 
 **B. Any Linux x86_64, with Git.**
 
 ```bash
-git clone --branch v2.1.2 https://github.com/prem-p-singh/RNASeq-pipeline.git
+git clone --branch v3.0.0 https://github.com/prem-p-singh/RNASeq-pipeline.git
 cd RNASeq-pipeline
 export REPO="$(pwd)"
 export PROJECT="$HOME/rnaseq_projects/my_study"
@@ -303,18 +306,20 @@ New projects default to DESeq2 for 3 to 12 biological units in the smallest grou
 
 <img src="assets/section-validation.svg" alt="Validation" width="100%" />
 
-Every release must pass **35 checks with none skipped**, plus a six-sample public study run through both Salmon and STAR. v2.1.2 passed in the [hosted workflow](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml). v2.1.1, which has the same pipeline code, also passed on a SLURM cluster. To repeat it in an installed environment:
+Every release must pass **41 checks with none skipped**, plus a six-sample public study run through both Salmon and STAR, in the [hosted workflow](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml) and on a SLURM cluster. v3.0.0 passed both, with all five locked runtimes installed fresh ([evidence](docs/RELEASE.md#what-was-tested-for-300)). To repeat the checks in an installed environment:
 
 ```bash
 star_prefix=$(bash scripts/bootstrap.sh --module star)
 screen_prefix=$(bash scripts/bootstrap.sh --module screen)
-export PATH="$CONDA_PREFIX/bin:$star_prefix/bin:$screen_prefix/bin:$PATH"
+srna_prefix=$(bash scripts/bootstrap.sh --module srna)
+umi_prefix=$(bash scripts/bootstrap.sh --module umi)
+export PATH="$CONDA_PREFIX/bin:$star_prefix/bin:$screen_prefix/bin:$srna_prefix/bin:$umi_prefix/bin:$PATH"
 bash tests/run_all.sh --strict
 bash tests/check_public.sh --screen
 bash tests/check_public.sh --star
 ```
 
-These checks use synthetic data and one downsampled public study, so they do not prove correctness for every organism or design. Job records and known limits are in [docs/RELEASE.md](docs/RELEASE.md); changes are in the [changelog](CHANGELOG.md).
+These checks use synthetic data and one downsampled public study; the small RNA, QuantSeq and host-pathogen public checks are separate scripts listed in [docs/RELEASE.md](docs/RELEASE.md). None of this proves correctness for every organism or design. Job records and known limits are in [docs/RELEASE.md](docs/RELEASE.md); changes are in the [changelog](CHANGELOG.md).
 
 <details>
 <summary><strong>Optional remote setup helper</strong></summary>
@@ -331,20 +336,14 @@ The remote checkout defaults to `RNASeq_pipeline` under the remote home director
 
 ## Future scope
 
-Work under way for later releases:
+Planned for later releases: single-cell and single-nucleus, spatial, long-read and specialized RNA assays.
 
-- **3′ end-tag libraries** (Lexogen QuantSeq FWD, REV and FWD-UMI), including UMI counting
-- **Small RNA** for animals and plants
-- **Host and pathogen in the same libraries** (dual-organism analysis)
-
-Planned after that: single-cell and single-nucleus, spatial, long-read and specialized RNA assays.
-
-Until those are released, this workflow handles bulk libraries without UMIs, with one library per sample. Splicing, fusion and variant analysis, and import of ready-made count matrices, are outside its scope.
+Splicing, fusion and variant analysis, and import of ready-made count matrices, are outside the current scope. Bulk and end-tag routes handle one library per sample.
 
 ## License and citation
 
 <img src="assets/section-license.svg" alt="License and citation" width="100%" />
 
-Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v2.1.2**, references and tool versions in your methods.
+Source is [MIT licensed](LICENSE). External tools, annotations and datasets retain their licenses. The handbook PDF and private planning/evidence files are not redistributed. Use [CITATION.cff](CITATION.cff); record **v3.0.0**, references and tool versions in your methods.
 
 Maintained by **Prem Pratap Singh**, Department of Plant Pathology, University of California, Davis.

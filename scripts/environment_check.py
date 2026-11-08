@@ -56,10 +56,18 @@ def verify(prefix, lock, module="core"):
     probes = {name: "--version" for name in ("python3", "Rscript", "snakemake", "salmon", "fastp", "multiqc")} if module == "core" else {"STAR": "--version", "featureCounts": "-v", "samtools": "--version"}
     if module == "screen":
         probes = {"fastq_screen": "--version", "bowtie2": "--version", "bowtie2-build": "--version"}
+    if module == "srna":
+        # ShortStack: presence only until its version flag is confirmed on the linux-64 lock.
+        probes = {"bowtie": "--version", "bowtie-build": "--version", "ShortStack": None}
+    if module == "umi":
+        probes = {"umi_tools": "--version", "samtools": "--version"}
     for tool, flag in probes.items():
         path = shutil.which(tool)
         if not path or not Path(path).resolve().is_relative_to(prefix):
             issues.append(f"Executable absent or outside environment: {tool}")
+            continue
+        if flag is None:
+            versions[tool] = "present"
             continue
         run = subprocess.run([path, flag], capture_output=True, text=True)
         versions[tool] = (run.stdout + run.stderr).strip()
@@ -90,7 +98,7 @@ def verify(prefix, lock, module="core"):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--module", choices=["core", "star", "screen"], default="core")
+    parser.add_argument("--module", choices=["core", "star", "screen", "srna", "umi"], default="core")
     parser.add_argument("--prefix", default=sys.prefix)
     parser.add_argument("--lock", type=Path, default=ROOT / "environments/linux-64.explicit.txt")
     parser.add_argument("--out", type=Path)

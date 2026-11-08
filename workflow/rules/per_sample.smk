@@ -30,7 +30,7 @@ rule preprocess_sample:
         url2 = lambda wc: shlex.quote(str(get_fastq_url_r2(wc))),
         reads_json = lambda wc: shlex.quote(json.dumps(CANONICAL_INPUTS[wc.sample]) if CANONICAL_INPUTS is not None else ""),
         delete_intermediates = str(config["hpc"].get("delete_fastq_after_quant", True)).lower(),
-        policy = lambda wc: shlex.quote(json.dumps(config["preprocessing"], sort_keys=True)),
+        policy = lambda wc: shlex.quote(json.dumps(PREPROCESSING, sort_keys=True)),
         seq_type = config["samples"]["seq_type"],
         outdir = lambda wc: str(QUANT / wc.sample),
     threads: 4
@@ -68,6 +68,8 @@ rule qc_quant_sample:
         min_map_rate = config["thresholds"]["sample_qc"]["mapping_rate_min"],
         expected_libtype = lambda wc: shlex.quote(CANONICAL_INPUTS[wc.sample]["expected_libtype"]
             if CANONICAL_INPUTS is not None else config["samples"].get("expected_libtype", "") or ""),
+        # Empty by default, so the command is the released one unless the correction is switched off.
+        position_bias = "" if config["analysis"]["salmon_position_bias"] else " --position-bias false",
     threads: 4
     resources:
         mem_mb = 16000,
@@ -82,7 +84,7 @@ rule qc_quant_sample:
             --index {input.idx:q} --outdir {params.sample_dir:q} \
             --threads {threads} --min-map-rate {params.min_map_rate} \
             --expected-libtype {params.expected_libtype} \
-            --delete-intermediates false > {log:q} 2>&1
+            --delete-intermediates false{params.position_bias} > {log:q} 2>&1
         """
 
 rule fetch_screen_fasta:

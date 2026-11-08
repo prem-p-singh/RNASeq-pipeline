@@ -22,9 +22,15 @@ out_metrics <- snakemake@output$metrics
 out_disposition <- snakemake@output$disposition
 
 cfg <- snakemake@config
-star_route <- identical(snakemake@params$count_source, "star")
+umi_route <- identical(snakemake@params$count_source, "star_umi")  # umi_tools molecules per gene, STAR gene set
+star_route <- umi_route || identical(snakemake@params$count_source, "star")
+small_rna_matrix <- identical(snakemake@params$count_source, "small_rna_matrix")  # plant: one ShortStack cohort matrix
+small_rna_route <- small_rna_matrix || identical(snakemake@params$count_source, "small_rna")
+table_route <- star_route || small_rna_route  # per-sample gene_id/count tables in a subfolder
+# STAR lengths and metrics sit in {sample}/star; UMI molecule tables in {sample}/umi.
+star_dir <- function(p) if (umi_route) file.path(dirname(dirname(p)), "star") else dirname(p)
 
-if (!star_route) {
+if (!table_route) {
 # --- Build tx2gene from GTF --------------------------------------------
 # makeTxDbFromGFF moved from GenomicFeatures to txdbmaker in Bioconductor 3.19.
 # Pick whichever the installed release provides so this works on both.
@@ -53,7 +59,7 @@ stopifnot("sample_id" %in% names(sheet))
 
 # --- Match quant files to samples --------------------------------------
 # quant_files come as "results/.../quant/{sample}/quant.sf"
-sample_ids <- if (star_route) basename(dirname(dirname(quant_files))) else basename(dirname(quant_files))
+sample_ids <- if (table_route) basename(dirname(dirname(quant_files))) else basename(dirname(quant_files))
 names(quant_files) <- sample_ids
 quant_files <- quant_files[match(sheet$sample_id, names(quant_files))]
 quant_files <- quant_files[!is.na(quant_files)]
@@ -68,28 +74,35 @@ if (length(quant_files) == 0) stop("No quant files matched sample sheet")
 # and do not scale with transcript length, so applying the correction would
 # distort them.
 seq_type <- cfg$samples$seq_type
-counts_from_abundance <- if (star_route || identical(seq_type, "tagseq")) "no" else "lengthScaledTPM"
+counts_from_abundance <- if (table_route || identical(seq_type, "tagseq")) "no" else "lengthScaledTPM"
 
-message("Importing ", length(quant_files), if (star_route) " gene-count tables " else " quant.sf files ",
+message("Importing ", length(quant_files), if (table_route) " gene-count tables " else " quant.sf files ",
         "(seq_type=", seq_type, ", countsFromAbundance=",
         counts_from_abundance, ")")
-if (star_route) {
-  tables <- lapply(quant_files, function(p) read_tsv(p, col_types = cols(gene_id = col_character(), .default = col_double())))
-  genes <- tables[[1]]$gene_id
+if (table_route) {
+  tables <- if (small_rna_matrix) {
+    m <- read_tsv(snakemake@input$small_rna_matrix, col_types = cols(gene_id = col_character(), .default = col_double()))
+    missing <- setdiff(names(quant_files), names(m))
+    if (length(missing)) stop("ShortStack matrix has no column for: ", paste(missing, collapse = ", "))
+    lapply(names(quant_files), function(s) data.frame(gene_id = m$gene_id, count = m[[s]]))
+  } else lapply(quant_files, function(p) read_tsv(p, col_types = cols(gene_id = col_character(), .default = col_double())))
+  # Small-RNA tables list only observed miRNAs; STAR tables list every annotated gene.
+  genes <- if (star_route) tables[[1]]$gene_id else sort(unique(unlist(lapply(tables, function(x) x$gene_id))))
   if (!length(genes) || anyNA(genes) || any(!nzchar(genes)) ||
-      any(!vapply(tables, function(x) !anyDuplicated(x$gene_id) && setequal(x$gene_id, genes), logical(1))))
-    stop("STAR gene sets differ across libraries")
+      any(!vapply(tables, function(x) !anyDuplicated(x$gene_id) && (small_rna_route || setequal(x$gene_id, genes)), logical(1))))
+    stop(snakemake@params$count_source, " gene sets differ across libraries")
   raw_counts <- do.call(cbind, lapply(tables, function(x) x$count[match(genes, x$gene_id)]))
+  if (small_rna_route) raw_counts[is.na(raw_counts)] <- 0  # absent miRNA = zero reads
   dimnames(raw_counts) <- list(genes, names(quant_files))
-  lengths <- do.call(cbind, lapply(quant_files, function(p) {
-    x <- read_tsv(file.path(dirname(p), "gene_lengths.tsv"), col_types = cols(gene_id = col_character(), .default = col_double()))
+  lengths <- if (star_route) do.call(cbind, lapply(quant_files, function(p) {
+    x <- read_tsv(file.path(star_dir(p), "gene_lengths.tsv"), col_types = cols(gene_id = col_character(), .default = col_double()))
     if (anyDuplicated(x$gene_id) || !setequal(x$gene_id, genes)) stop("STAR length gene IDs differ from counts")
     x$exonic_bases[match(genes, x$gene_id)]
   }))
-  dimnames(lengths) <- dimnames(raw_counts)
+  if (star_route) dimnames(lengths) <- dimnames(raw_counts)
   if (any(!is.finite(raw_counts)) || any(raw_counts < 0) || any(raw_counts != round(raw_counts)) ||
-      any(!is.finite(lengths)) || any(lengths <= 0))
-    stop("Invalid STAR count/length matrices")
+      (star_route && (any(!is.finite(lengths)) || any(lengths <= 0))))
+    stop("Invalid ", snakemake@params$count_source, " count/length matrices")
   txi <- list(counts = raw_counts, length = lengths, abundance = NULL, countsFromAbundance = "no")
 } else {
   txi <- tximport(quant_files, type = "salmon", tx2gene = tx2gene,
@@ -126,6 +139,18 @@ if (star_route) {
   count_provenance$count_unit <- if (identical(seq_type, "rnaseq_paired")) "fragments" else "reads"
   count_provenance$length_definition <- "union of annotated exons; not effective transcript length"
   count_provenance$rationale <- "Raw gene-assigned genomic counts; no transcript-length scaling or additional offset"
+}
+if (umi_route) {
+  count_provenance$quantifier <- "STAR_featureCounts_umi_tools"
+  count_provenance$count_unit <- "molecules"
+  count_provenance$rationale <- "UMI-deduplicated molecules per gene (umi_tools count --per-gene); no length scaling"
+}
+if (small_rna_route) {
+  count_provenance$quantifier <- if (small_rna_matrix) "shortstack_loci" else "bowtie_mature_mirna"
+  count_provenance$count_unit <- "reads"
+  count_provenance$rationale <- if (small_rna_matrix)
+      "Raw ShortStack small-RNA locus read counts; multi-mapping reads placed by ShortStack; no length scaling"
+    else "Raw unique-hit mature miRNA read counts; multi-mapping reads excluded; no length scaling"
 }
 
 # --- Optional gene-info merge -----------------------------------------
@@ -187,7 +212,7 @@ sample_disposition <- function(qc, min_map, min_reads, policy_on) {
 }
 
 qc_rows <- lapply(quant_files, function(q) {
-  p <- file.path(dirname(q), "metrics.json")
+  p <- file.path(star_dir(q), "metrics.json")
   if (!file.exists(p)) return(NULL)
   m <- fromJSON(p)
   data.frame(sample_id       = m$sample,
@@ -201,6 +226,8 @@ if (is.null(qc)) stop("no per-sample metrics.json found beside the quant files")
 
 min_reads <- if (identical(seq_type, "tagseq")) {
   cfg$thresholds$sample_qc$min_reads_on_genes_tagseq
+} else if (identical(seq_type, "srnaseq")) {
+  cfg$thresholds$sample_qc$min_reads_on_genes_srnaseq
 } else {
   cfg$thresholds$sample_qc$min_reads_on_genes_rnaseq
 }
@@ -223,7 +250,10 @@ if (length(no_metrics) > 0) {
 
 policy_on <- isTRUE(cfg$sample_policy$exclude_failing_qc)
 disposition <- sample_disposition(qc,
-                                  cfg$thresholds$sample_qc$mapping_rate_min,
+                                  if (identical(seq_type, "srnaseq")) cfg$thresholds$sample_qc$mapping_rate_min_srnaseq
+                                  else if (identical(seq_type, "tagseq") && !is.null(cfg$analysis$kit))
+                                    cfg$thresholds$sample_qc$mapping_rate_min_tagseq_kit
+                                  else cfg$thresholds$sample_qc$mapping_rate_min,
                                   min_reads,
                                   policy_on)
 write_tsv(disposition, out_disposition)

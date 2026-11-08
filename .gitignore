@@ -48,6 +48,10 @@ docs/archive/
 # Generated source release archives.
 /dist/
 
+# Private implementation plans (superpowers workflow).
+docs/superpowers/
+.superpowers/
+
 # Local media and notes in the checkout root.
 /*.png
 /*.mp4

@@ -4,6 +4,28 @@
 
 Nothing yet.
 
+## 3.0.0 (2026-11-07)
+
+Adds three library types beside bulk RNA-seq.
+
+### Added
+
+- Small RNA for animals (Bowtie 1 to the species' mature miRNAs, unique hits counted) and plants (ShortStack 4.1.0 loci on the genome, with DicerCall size classes). Start it from the workbook's sRNA-seq tab or the project configuration. Reads are counted, not molecules: no UMI deduplication, isomiR resolution or phased-siRNA calling. Named kits are in `config/small_rna_kits.yaml`; TruSeq Small RNA is validated and UMI small-RNA kits are refused.
+- 3′ end-tag libraries for Lexogen QuantSeq FWD, REV and FWD-UMI (`config/tagseq_kits.yaml`), from the workbook's TAGseq tab or `analysis.kit`. The kit sets trimming and the STAR/featureCounts strand. FWD-UMI checks the TATA spacer, moves the UMI into the read name and reports umi_tools molecules per gene beside read counts. All three kits are validated.
+- Host and pathogen in the same bulk libraries (dual organism), from `dual_organism` in the project configuration or the Bulk RNA-seq tab (workbook schema 8). STAR aligns each read to a combined genome and labels it host, pathogen, ambiguous or unassigned; `results/assignment.tsv` reports all four per sample. Salmon or STAR then runs once per organism into `results/host/` and `results/pathogen/`. Samples with fewer than `min_assigned_reads` pathogen reads (default 500) are listed in `results/pathogen/samples_not_quantified.tsv`. Both routes are validated.
+- `analysis.salmon_position_bias` (default `true`) turns Salmon's `--posBias` off when `false`. Salmon 1.10.3 crashed intermittently in this correction when a transcript length class had no reads. The pathogen project of a dual-organism run always has it off.
+- Two more locked runtimes: small RNA (`environments/srna-linux-64.explicit.txt`) and UMI (`environments/umi-linux-64.explicit.txt`). They are installed only when a project needs them.
+
+### Checks
+
+- The release gate has 41 checks: the 35 from 2.1 plus unit and workflow checks for small RNA, QuantSeq and dual organism.
+- Public-data checks: `tests/check_small_rna_public.sh --animal|--plant`, `tests/check_tagseq_public.sh --fwd|--rev|--umi` and `tests/check_dual_public.sh --virus|--cellular`, each with acceptance criteria written into its fixture before any run.
+- The hosted release-validation workflow builds all five runtimes.
+
+### Changed
+
+- Projects started before this version recompute from preprocessing on relaunch, because the preprocessing record and the quantification script changed. Results are unchanged.
+
 ## 2.1.2 (2026-10-17)
 
 - Added a Debian package (`packaging/`, `.github/workflows/package.yml`) providing `rnaseq-pipeline` and `rnaseq-new-project` commands. No pipeline code changed.
