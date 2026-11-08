@@ -17,3 +17,22 @@ Description: Snakemake RNA-seq pipeline with a locked Conda runtime
  commands. A pinned Miniforge is installed under /opt/rnaseq-pipeline/conda.
  The 580-package analysis runtime is created per user on first run.
 
+Package: rnaseq-pipeline
+Architecture: amd64
+Version: 3.0.0
+Priority: optional
+Section: science
+Maintainer: Prem Pratap Singh <ppssingh@ucdavis.edu>
+Depends: bash, curl, ca-certificates, util-linux, gzip, git
+Filename: ./rnaseq-pipeline_3.0.0_amd64.deb
+Size: 330592
+MD5sum: 9d9268ce3ade85d37ec0616bb546c4d0
+SHA1: b8674ff2ea5c38c60a8bac1e3ae26bcd90ce64c1
+SHA256: 7c6950067960069f5f0fedf7effb760574f02980dae3c279a3b3625bf44eb41f
+SHA512: f2e93388ed8609fc37615c90f382581777f9de9ae2e899e5cfa6b1177c8b38a5d08844f3216f7e292618f2ef97e43cc0c47ada284080ee947ae05ddf78f02f57
+Homepage: https://github.com/prem-p-singh/RNASeq-pipeline
+Description: Snakemake RNA-seq pipeline with a locked Conda runtime
+ Installs the workflow and the rnaseq-pipeline and rnaseq-new-project
+ commands. A pinned Miniforge is installed under /opt/rnaseq-pipeline/conda.
+ The 580-package analysis runtime is created per user on first run.
+
