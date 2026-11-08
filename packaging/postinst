@@ -1,0 +1,15 @@
+#!/bin/sh
+# Install a pinned Miniforge; the workflow's own bootstrap builds the locked
+# runtime from it on first run.
+set -e
+[ "$1" = configure ] || exit 0
+CONDA=/opt/rnaseq-pipeline/conda
+[ -x "$CONDA/bin/conda" ] && exit 0
+VER=26.7.2-0
+SHA=281b0ac7d550802efc81af633225a5e6116d29ae72f3ab4eae7168c3931a4c05
+URL=https://github.com/conda-forge/miniforge/releases/download/$VER/Miniforge3-$VER-Linux-x86_64.sh
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+curl -fsSL -o "$tmp/miniforge.sh" "$URL" || { echo "rnaseq-pipeline: could not download $URL" >&2; exit 1; }
+echo "$SHA  $tmp/miniforge.sh" | sha256sum -c - >/dev/null || { echo "rnaseq-pipeline: Miniforge checksum mismatch" >&2; exit 1; }
+bash "$tmp/miniforge.sh" -b -p "$CONDA" >/dev/null

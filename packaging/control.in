@@ -1,0 +1,12 @@
+Package: rnaseq-pipeline
+Version: @VERSION@
+Architecture: amd64
+Maintainer: Prem Pratap Singh <ppssingh@ucdavis.edu>
+Depends: bash, curl, ca-certificates, util-linux, gzip, git
+Section: science
+Priority: optional
+Homepage: https://github.com/prem-p-singh/RNASeq-pipeline
+Description: Snakemake RNA-seq pipeline with a locked Conda runtime
+ Installs the workflow and the rnaseq-pipeline and rnaseq-new-project
+ commands. A pinned Miniforge is installed under /opt/rnaseq-pipeline/conda.
+ The 580-package analysis runtime is created per user on first run.

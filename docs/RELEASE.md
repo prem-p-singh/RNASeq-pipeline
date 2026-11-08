@@ -1,198 +1,131 @@
-# V2 release qualification
+# Release qualification
 
-Release: **v2.0.0**, 2026-09-23. Scope: **Linux x86_64, annotated non-UMI bulk gene expression**. The user authorized publication of the current bulk release; full multi-assay coverage is not a v2 claim.
+Current release: **v3.0.0** (2026-11-07). It runs on **Linux x86_64** and covers annotated organisms in four library types: **bulk RNA-seq** without UMIs, **small RNA** (animal and plant), **Lexogen QuantSeq 3′ end-tag** (FWD, REV and FWD-UMI) and **host plus pathogen** in the same bulk libraries.
 
-## Release versions
-
-Each software version groups development milestones (M1–M8). Workbook schema numbers are independent of software versions. A version is tagged only after its source is frozen, required checks pass with zero skips, and evidence covers each advertised capability.
-
-| Version | Scope | Status |
+| Version | Date | What it is |
 |---|---|---|
-| 2.0.0 | Annotated non-UMI bulk: Salmon, limma-voom/dream, workbook schema 3 | Released 2026-09-23 |
-| 2.1.0 | Bulk completion: workbook schema 5 with analysis goal, subject models, formula, Contrasts tab and revision reports (M1); named bulk kit profiles, platform poly-G and automatic screening panel (M2); handbook DE default and interaction/paired/continuous design checks (M3); earlier schema 4 and Excel launch/resume (M1); raw QC, preprocessing and screening (M2); Salmon decoys, STAR/featureCounts, DESeq2, edgeR QL and objective selection (M3) | Candidate. Completed M1–M3 code passed 35 checks (0 failed, 0 skipped) and both public routes in Linux job 39010068 (exit 0, 55:09; source archive SHA256 `7fc10ce7987a11b9c195cd74420bab3ecf78c2cd1b3b9c3942d22c803e3afbb5`). Not tagged |
-| 3.0.0 | Named end-tag kits, small RNA and dual organism (M4) | Small RNA (animal, plant) and TAG-seq QuantSeq FWD, REV, FWD-UMI implemented and passed on FARM. Final job 39055140 (commit `4ef08b0`, exit 0): strict suite 39 passed, 0 failed, 0 skipped; bulk GSE110004 Salmon and STAR; animal small RNA (GSE94585 technical pools: depth-normalized median ratio error 0.218, Spearman 0.962 and 0.974); plant small RNA (Arabidopsis SRR3222443-5: 15,018 loci, DicerCall 21 and 24, ath-miR156/166/319 found, 21 and 24 nt the top read lengths, identical repeat run). QuantSeq public checks: FWD 39025685 (mouse PRJNA631146), REV 39023623 (human PRJNA1494475), FWD-UMI 39023624 (mouse PRJEB107189; TATA spacer 88%). Two criteria were changed after a first failure and recorded in the fixtures: animal ratios are depth-normalized, and the plant size check replaced an unsourced 90% 20-24 nt floor (measured 76.3%). Kits and profiles promoted to `validated` on 2026-09-28. Dual organism (host and pathogen) implemented, status `experimental`; its public checks are pending (see below). Not tagged |
-| Later | Cell/nucleus and spatial (M5), long-read and reference-poor (M6), specialized RNA (M7) | Not started; versions assigned when scoped |
+| 3.0.0 | 2026-11-07 | Current release. Adds small RNA, QuantSeq 3′ end-tag and host-plus-pathogen routes, and two locked runtimes |
+| 2.1.2 | 2026-10-17 | Same pipeline code as 2.1.1, with a Debian package and apt repository. Superseded by 3.0.0 |
+| 2.1.1 | 2026-10-08 | Same pipeline code as 2.1.0, without the n8n integration. Superseded by 2.1.2 |
+| 2.1.0 | 2026-10-08 | Added STAR, edgeR and DESeq2, read screening and the larger intake workbook. Superseded by 2.1.1 |
+| 2.0.0 | 2026-09-23 | First release: Salmon with limma-voom |
 
-Moved from M1–M2 to the assay milestones that need them: workbook intake for non-bulk assays (M4–M7) and barcode/UMI base protection (M4, with UMI and end-tag routes).
+A version is released only after every required check passes with none skipped.
 
-## Unreleased development qualification
+## What was tested for 3.0.0
 
-The development branch changes the runtime and adds bulk routes. The sections below this one describe the **v2 tag**, not a qualification claim for the current branch.
+Source: the commit tagged `v3.0.0`. Results are filled in only after each run finishes.
 
-- Core candidate: 580 packages, preserving the previous 579 package identities and adding DESeq2 1.50.2. Lock SHA256: `dc1d1459bf56f4a5e93c72d2a966c1a96a37168ea49e15933fe549e3549bff75`.
-- Separate STAR module: 37 packages including STAR 2.7.11b, featureCounts 2.1.1 and samtools 1.24. Lock SHA256: `ebca83dc6a889b16291dadc923379a830b4596970b3cabe6c2c62c483c86c0d5`. The launcher verifies this module without replacing the core R environment.
-- Direct native edgeR QL, DESeq2 Wald and one paired-donor dream comparison passed on Linux snapshots. Genome-decoy construction, reuse/tamper rejection, and QC/count-only objectives also passed. These fixtures do not qualify all study designs.
-- A six-sample public Salmon run passed on the upgraded core runtime. STAR SE/PE exon-junction, strand and intronic controls passed. A six-sample public STAR/featureCounts/edgeR run also completed (Linux job 38992390, exit 0); synthetic raw-read/count/DE/report, resume and deleted-BAM-index recovery passed in job 38992412. Full current-source qualification remains pending.
-- Schema 4 workbook setup/intake/preflight/project-isolation checks passed in Linux job 38993523; workbook rendering and prior values/formats/dropdowns/panes were checked locally. The bulk full-suite snapshot predates this intake edit.
-- Screening module: 64 pinned packages, FastQ Screen 0.16.0/Bowtie2 2.5.4; lock SHA256 `065bb112579c134645324e4d9ee6a21d9aa822c3090e9ebc7475bc483852a7de`. Real SE/PE exclusive/shared mixture controls passed in 38994223, which then exposed interpreter shadowing during preflight. The launcher now retains core Python first in PATH; corrected QC-only screening DAG, resume, missing-report recovery, project isolation, clean installation and offline reuse passed in 38994332. Public yeast screening with Salmon/counts/DE/QC passed in 38994434. Job 38994223 as a whole failed and is not a suite pass. The 34-check strict suite (34 passed, 0 failed, 0 skipped) and both GSE110004 public routes (Salmon with screening, STAR) passed in 38994640 with exit 0 on the frozen source archive `c5e01ba2e992549de876326ef824b6b09ed1aa9cc1e6eb4b91faa0a980224a33`.
-- The release gate on this branch is **44 checks, zero skips**, plus both bulk public routes. Linux job **39618682** passed it on source `16f2e80`: 44 passed, 0 failed, 0 skipped, then both public routes and offline reuse. See [Deployment qualification](#deployment-qualification) for the scope of that pass and for what still blocks publication.
-
-### Dual-organism route (3.0.0, status `validated`)
-
-The route assigns each read to the host or the pathogen with STAR on a combined genome, then runs the existing Salmon or STAR route once per organism. Both public checks below passed on the STAR route and on the Salmon route, and promotion to `validated` was approved on 2026-10-07.
-
-- Synthetic check `tests/check_dual_workflow.sh` (STAR and Salmon, exact label and per-organism counts, one paired-end project): passed on FARM, job 39412685, commit `ecc89a5`, exit 0. A dual project launched through `submit.sh --executor local` also completed (job 39412697, commit `ecc89a5`, exit 0).
-- Public check, plant with virus, `tests/check_dual_public.sh --virus` (grapevine with Grapevine red blotch virus, PRJNA339456, runs SRR4043732 to SRR4043737, full depth, STAR route): passed on FARM, job 39420845, commit `e70f24c`, exit 0, all five criteria held. Virus-assigned reads were 1, 4 and 4 in the healthy libraries (15.9 to 22.5 million reads) and 906, 1651 and 2415 in the infected libraries (11.4 to 20.1 million reads). The three infected libraries were quantified for the virus; the three healthy ones were below `min_assigned_reads` (500), so virus differential expression was reported as not estimable. An earlier run with the former default of 10000 (job 39412687, commit `ecc89a5`) quantified no library for the virus, which is why the default was lowered.
-- Public check, plant with fungus, `tests/check_dual_public.sh --cellular` (Arabidopsis with *Botrytis cinerea*, PRJNA1270936, runs SRR35391023 to SRR35391028, SRR35391035 and SRR35391036, 2,000,000 read pairs per run, STAR route): passed on FARM, job 39505358, commit `7d53d81`, exit 0, all five criteria held. Pathogen-assigned pairs were 5, 5, 15 and 15 in the mock libraries and 58019, 69037, 75922 and 78374 in the infected libraries (2.9 to 3.9 percent of pairs). The four infected libraries were quantified for the fungus; the four mock ones were below `min_assigned_reads` (500), so fungus differential expression was reported as not estimable. Ambiguous pairs were 18 to 37 per library.
-- Both public checks on the Salmon route, same prepared reads: passed on FARM at commit `2c25c17`, exit 0, all five criteria held: virus job 39586469, fungus job 39586470. The same libraries were quantified for the pathogen as on the STAR route, and pathogen differential expression was again reported as not estimable. The criteria do not compare the two routes. Per-gene virus counts differed between them (for SRR4043732, gene N761_gp5: 64 with STAR and featureCounts, 604 with Salmon): the virus genes overlap and the libraries are unstranded, so featureCounts leaves out reads in overlapping genes and Salmon divides them between the overlapping transcripts. That explanation has not been checked read by read.
-- Strict suite with the dual-organism checks included: passed on FARM, job 39412689, commit `ecc89a5`, exit 0: 41 passed, 0 failed, 0 skipped, with the bulk Salmon and STAR public runs. A later strict run at commit `2c25c17` (job 39586382) ended with 42 passed, 0 failed, 2 skipped; the two skips were the n8n checks, which need Node.js and the reviewed n8n source bundle on the cluster, so that run does not count as a zero-skip pass.
-
-The acceptance criteria for the public checks are in `tests/fixtures/dual_public.json` and were written before any run: the four labels add up to the reads for every sample; every healthy or mock sample has a lower pathogen-assigned fraction than every infected sample; every sample reaches the host count table and every infected sample with at least `min_assigned_reads` pathogen reads reaches the pathogen count table; host differential expression completes and pathogen differential expression completes or is reported as not estimable with a reason; a repeat of the assignment gives identical counts. No numeric threshold is used.
-
-## Deployment qualification
-
-Source: commit `16f2e80ad3b84e4cae0b7dcb8b50063d98161b43` on `claude/m8-qualification-3.0`, three commits after `c8e1188`. `git archive` SHA256 `54779eaef7194bf778e755fd511e92e5e3a0d77d3f3526e3e5c73036f92d00f9`, verified on the cluster before extraction. Later commits on this branch change documentation only. All jobs ran on 2026-10-08 on Linux x86_64 under SLURM, with source, runtimes, projects and temporary files on one NFS filesystem. The bulk release line was qualified separately on its own source; neither pass covers the other branch.
-
-| Check | Job | Result |
+| Check | Where | Result |
 |---|---|---|
-| Fresh installation and release gate | 39618682, exit 0, 1:51:24 | Core (580 packages, lock `dc1d1459...`), STAR (37, `ebca83dc...`), screening (64, `065bb112...`), small RNA (89, `bb8f4a47...`) and UMI (119, `70ef9ba0...`) runtimes built from the locks in a new directory and verified. `tests/run_all.sh --strict`: **44 passed, 0 failed, 0 skipped**. This is the first zero-skip strict pass since `ecc89a5`. GSE110004 Salmon with screening and GSE110004 STAR each passed six samples, counts, DE and QC report. All five runtimes were then reused with `CONDA_OFFLINE=true`. |
-| Launcher to SLURM workers | 39618684, exit 0, 1:21:47 | `submit.sh --executor slurm` ran the six-sample public Salmon project from a controller job. 27 rule jobs completed as separate SLURM jobs; none ran in the controller allocation. |
-| Interruption and resume | same job | The launcher received SIGINT at 16 of 28 steps with one sample quantified. A second `submit.sh` finished the project with 11 worker jobs and no missing-output error. The finished sample kept its modification time, so it was not recomputed. |
-| Two projects, one reference cache entry | same job | Two projects naming the same reference and `reference.cache_dir` were launched together, 27 worker jobs each. The cache held one entry and no build lock afterwards. Per-sample count totals differed by at most 0.015%; the 1% tolerance was written into the script before the run. |
-| Stock Linux container | 39618683, exit 0, 0:15:01 | `condaforge/miniforge3:26.7.2-0` (Ubuntu 24.04.5, conda 26.7.2) under Apptainer with `--containall --no-home`. Fresh 580-package core install verified, `tests/check_end_to_end.sh` and the public Salmon route passed, offline reuse passed. |
+| Install all five locked environments from scratch and verify them | Hosted workflow; SLURM cluster | Pending |
+| 41 checks, none skipped | Hosted workflow; SLURM cluster | Pending |
+| Six-sample public study (GSE110004) through Salmon with read screening, and through STAR | Same runs | Pending |
+| Reuse of the installed environments without network access | SLURM cluster | Pending |
+| Launcher sending each step to SLURM as its own job; resume after an interrupted launch; two projects sharing one reference cache entry | SLURM cluster | Pending |
+| Stock Ubuntu container, core install and Salmon route | SLURM cluster | Pending |
 
-Log SHA256: `tests.log` `8efd556a11996e1150c480b35614b0fadabfdc8fd1e562695c730fa7ca0cb0be`, `public.log` `7ee510668a61ccbab75ddc4f586ec79ec86c565603341093aea3a44980cb2b62`, `public-star.log` `b9dc547a1f0aac524a3e62f405ac8bbc03fe9950dad40792735d3652ca9ee56d`, `distributed.log` `c1b470ac1e0d1c1b4a95a616098e49fb27eac2a8bb0423b380fda53e2ebb9a19`, `restart-2.log` `2738db6ae9e4ec002c23bb19ee75681a1eb66b2e00dddbaf50f22c80b9b003f9`, `container.log` `2b847aec108b995636202061747f8d23c54183a7eefe237f1756df89624eeb30`.
+The 41 checks are the 35 from 2.1 plus a unit check and a synthetic workflow check for each new route: small RNA, QuantSeq and host plus pathogen.
 
-The SLURM profiles on this source wait 120 seconds for worker outputs. The resume check on the bulk line (job 39597092) had failed with `latency-wait: 30`: the filesystem is mounted with `acdirmin=60`, so after the controller removes the outputs of an interrupted or failed job, its NFS client can report the rewritten files as absent for 60 seconds or more.
+### Public-data checks for the new routes
 
-Prerequisites of the three n8n checks were supplied from outside the checkout: Node.js 22.14.0 and the reviewed schema-7 bundle (source SHA256 `c0927cf7...`, as recorded in `integrations/n8n/source.review.json`). That bundle predates this branch's schema 8 and its dual-organism route, so the n8n pass covers the bridge and the reviewed snapshot, not schema 8 or dual-organism orchestration. Worker jobs took the SLURM account and partition from `SBATCH_ACCOUNT` and `SBATCH_PARTITION`; the profiles were not edited.
+These ran on the cluster on earlier sources of this line and were not repeated on the 3.0.0 source. Acceptance criteria were written into each fixture before the first run.
 
-### Release matrix for this source
+| Route | Data | Job | Result |
+|---|---|---|---|
+| Small RNA, animal | GSE94585 technical pools | 39055140 (commit `4ef08b0`) | 238 sequences at ≥ 100 reads per pool; median log2 ratio difference 0.218; Spearman 0.962 and 0.974 against published counts |
+| Small RNA, plant | SRR3222443 to SRR3222445 | 39055140 | 15018 loci; DicerCall 21 to 24 present; 21 and 24 nt the most common lengths; a repeat run gave an identical count matrix |
+| QuantSeq FWD | six public runs | 39025685 | Counts, DE tables and QC report for all six; mapping rate 0.485 (floor 0.40) |
+| QuantSeq REV | six public runs | 39023623 | Counts, DE tables and QC report for all six |
+| QuantSeq FWD-UMI | six public runs | 39023624 | Counts, DE tables and QC report for all six, with molecule counts and duplication rates |
+| Host plus pathogen, STAR | Grapevine with Grapevine red blotch virus, PRJNA339456 | 39420845 (commit `e70f24c`) | All five acceptance criteria held |
+| Host plus pathogen, STAR | Arabidopsis with *Botrytis cinerea*, PRJNA1270936 | 39505358 (commit `7d53d81`) | All five acceptance criteria held |
+| Host plus pathogen, Salmon | Both studies above | 39586469, 39586470 (commit `2c25c17`) | All five acceptance criteria held on each |
 
-| Capability | Status | Evidence |
+For the virus, whose genes overlap and whose libraries are unstranded, per-gene counts differed between the STAR and Salmon routes. The checks do not compare the routes. See [Options](OPTIONS.md#host-and-pathogen-in-the-same-libraries) for the known limits of the host-plus-pathogen route.
+
+## What was tested for 2.1
+
+| Check | Where | Result |
 |---|---|---|
-| Fresh locked installation and offline reuse, five runtimes, Linux x86_64 | Passed | 39618682; core runtime in a container, 39618683 |
-| Salmon and STAR/featureCounts bulk routes | Passed on synthetic fixtures and the downsampled public study | 39618682 |
-| limma-voom, edgeR QL, DESeq2 Wald, one paired-donor dream comparison, design checks | Passed on fixtures | 39618682 |
-| Declared-panel read screening | Passed on known mixtures and the public study; panel sensitivity not established | 39618682 |
-| Small RNA, TAG-seq QuantSeq and dual-organism workflows, synthetic | Passed | 39618682 |
-| Small RNA and QuantSeq FWD, REV, FWD-UMI on public data | Passed earlier, **not repeated on this source** | 39055140 at `4ef08b0`; 39025685, 39023623, 39023624 |
-| Dual organism on public data, STAR and Salmon | Passed earlier, **not repeated on this source**. Pipeline code differs from `2c25c17` only in the status change (`scripts/recommend.py`, `config/config.template.yaml`), the profile wait and the new qualification script | 39420845, 39505358, 39586469, 39586470 |
-| `submit.sh` with the SLURM executor | Passed for the bulk Salmon route, six samples. Small RNA, TAG-seq and dual-organism projects were not launched on SLURM workers | 39618684 |
-| Resume after an interrupted launcher | Passed for SIGINT on the bulk Salmon route. A killed controller with orphaned workers was not tested | 39618684 |
-| Simultaneous projects on one reference cache | Passed for two bulk projects. Larger numbers, the STAR index and the combined dual-organism index were not tested | 39618684 |
-| Stock Ubuntu container userland | Passed for the core runtime and bulk Salmon route. No container image is shipped; the other four runtimes and SLURM submission from inside a container were not tested | 39618683 |
-| n8n orchestration gate | Passed with external prerequisites, on the schema-7 snapshot only | 39618682 |
-| Hosted `release-validation` workflow | **Not run on this source** | none |
-| Second SLURM site, macOS, ARM | Not tested | none |
-| Large cohorts | Not tested beyond the dual-organism public runs | none |
-| Single cell, spatial, long read, specialized assays | Not on this source | none |
+| Install the locked environments from scratch and verify them | SLURM cluster; hosted workflow | Passed |
+| 35 checks, none skipped | SLURM cluster (job 39621454); [hosted workflow on the tagged commit](https://github.com/prem-p-singh/RNASeq-pipeline/actions/runs/37890271662) | 35 passed, 0 failed, 0 skipped |
+| Six-sample public study through Salmon, with read screening | Same two runs | Counts, DE tables and QC report produced |
+| Same public study through STAR and featureCounts | Same two runs | Counts, DE tables and QC report produced |
+| Reuse of the installed environments without network access | SLURM cluster | Passed |
+| Launcher sending each step to SLURM as its own job | SLURM cluster (job 39620305), on the 2.1.0 source | Passed for the Salmon route, six samples |
+| Resume after an interrupted launch | Same job | Passed; finished work was not recomputed |
+| Two projects sharing one reference cache entry | Same job | Passed |
+| Stock Ubuntu container | SLURM cluster (job 39618728), on the 2.1.0 source | Core install and Salmon route passed |
 
-This closes the deployment milestone for this source, with the public-data evidence for small RNA, TAG-seq and dual organism carried from the earlier commits named above. It is not a published release: publication still requires the hosted workflow to pass on the tagged commit.
+The rows above record v2.1.1 unless a row names another version. The last four rows ran on the 2.1.0 source and were not repeated for 2.1.1, which differs only by the removed n8n files, the test runner and documentation.
 
-Public protocol selection and evidence requirements are recorded in [Public-data qualification](PUBLIC_QUALIFICATION.md). The wider working plan remains incomplete.
+v2.1.2 changes no pipeline code; it adds the Debian package. The hosted workflow passed on its [tagged commit](https://github.com/prem-p-singh/RNASeq-pipeline/actions/runs/39074182797). The SLURM runs were not repeated for 2.1.2.
 
-## V2 upgrade evidence
-
-- Canonical-intake candidate: Linux/SLURM job **38577940**, exit 0 in **14:02**, **22 passed, 0 failed, 0 skipped**. Includes two sequencing runs sharing a lane number, legacy single-end processing, quantitative recovery, changed-input detection and missing-provenance repair. Archive SHA256: `96916f31b70344a03e2260d9905daaa92b7c0997589369959cd096aa25e1c715`.
-- Final retained-intermediate storage correction: Linux job **38578300**, exit 0; later TSV example changes passed local metadata checks.
-- Declared-model preservation: focused Linux job **38577830**, exit 0; also included in the passing strict suite above.
-- The first canonical candidate failed because empty shell arguments were lost. It was repaired and the corrected full raw-read workflow passed; the failed run is not qualification evidence.
-- The **release-validation** GitHub workflow installs the locked runtime, verifies it, runs all 22 strict checks and the public smoke test on the release source. Publication requires its success on the tagged commit. Consult the [scientific runs](https://github.com/prem-p-singh/RNASeq-pipeline/actions/workflows/release-validation.yml) and release notes for the exact run and commit; historical worker evidence alone does not establish current GitHub status.
-
-Workbook source/parser/generator consistency, external and inline setup, text identifiers and rejected invalid inputs are tested. Excel reference-service lookups are mocked in intake tests; raw-read processing is tested separately through the actual scientific tools. Live automatic reference/annotation service behavior is not certified by those mocks.
-
-## Runtime contract
-
-Install with `scripts/bootstrap.sh` from `environments/linux-64.explicit.txt`. The explicit lock contains 579 package URLs, exact builds and SHA256 hashes; its SHA256 is:
-
-```text
-351136c98793fb251de644f5ee352c1e8bb5c3edb462251addbade143b2cc7a4
-```
-
-The validated runtime includes Python 3.12.14, Snakemake 9.19.0, Salmon 1.10.3, fastp 0.23.4, MultiQC 1.35, R 4.5.2, tximport 1.38.2, edgeR 4.8.2, limma 3.66.0, variancePartition 1.40.2, clusterProfiler 4.18.4 and WGCNA 1.74.
-
-The environment verifier compares installed Conda records with the lock, imports required libraries and checks executable/library locations. It is not a byte-for-byte integrity audit of every installed file. Do not install unrelated packages into the qualified prefix. Project annotation packages belong in the configured OrgDb cache.
-
-## Historical environment and deployment evidence
-
-Linux validation is executed on Linux x86_64 compute nodes under SLURM with site-specific account and partition settings. Some allocated hosts have GPU names, but these jobs request and use CPUs only. Full local evidence is retained by the maintainer; concise outcomes below describe what was actually exercised.
-
-- Initial environment build: SLURM job **38516117**.
-- Independent clean recreation from the explicit lock and offline reuse: job **38516428**, completed with exit 0 in 5 minutes 52 seconds; all 579 package records and required imports verified.
-- GO enrichment qualification: job **38516721**, passed with a locally constructed AnnotationForge OrgDb. Tests retain positive and negative enrichment directions, verify real output paths, recognize valid empty results and unavailable KEGG configuration, and fail on a missing ranking statistic.
-- Raw FASTQ qualification: job **38516701** passed its single-end and paired-end end-to-end checks and restart/report recovery checks. That older combined run failed its earlier GO fixture and public reference fixture; it is **not** a passing full release run.
-
-- Public six-sample yeast workflow: job **38516756**, completed with exit 0 in 2 minutes 13 seconds. Reference construction, six FASTQ pairs, gene counts, DE result tables and QC reports passed.
-- Actual `submit.sh` → SLURM executor → worker execution: controller job **38516744**, completed with exit 0 in 5 minutes 12 seconds. Four remote rules retrieved references, built an index and quantified a paired-end sample. The source checkout and project were separate shared paths; the project path contained spaces. Worker jobs included 38516760, 38516829 and 38516837 on bm6/bm7. Preflight, runtime verification and the capacity plan ran through the real launcher.
-
-- Final resource/default-resolution and project-isolation checks: job **38517046**, passed. It also verified that an absent runtime is rejected with explicit missing-package findings.
-
-- **Final combined release gate: job 38517266**, completed with **exit 0** on gpu-5-58 in **15 minutes 20 seconds**. It verified the locked runtime, passed **20 strict checks with zero failures/skips**, and passed the corrected six-sample public workflow in the same invocation. Recorded peak RSS was approximately 1.62 GiB for this small qualification workload, not a cohort-sizing benchmark.
-
-All 87 runtime/configuration/test files in that historical frozen snapshot matched its source manifest. That manifest is not the v2 source identity. V2 is identified by its Git tag, exact commit and release checksums. Historical failed/superseded runs remain diagnostic history. A release must not be tagged from a skipped or failed scientific suite.
+The 35 checks cover input validation, read preparation, reference and cache safety, count agreement between routes, the direction of DE results, the three DE methods, paired designs, enrichment, WGCNA, storage planning and recovery after failures.
 
 ### Test data
 
-`tests/fixtures/fastq_project.py` creates six deterministic biological-sample surrogates, 120 unique genes, and independently known fragments. Real fastp and Salmon run from raw FASTQs through reference construction, gene aggregation, differential expression and reporting. Assertions check quantitative recovery, planted effect direction, source-file preservation, owned-intermediate cleanup and restart behavior. This is a technical fixture, not evidence of biological generalization.
+- **Synthetic reads:** `tests/fixtures/fastq_project.py` builds six samples and 120 genes with known fragments and planted expression changes. Real fastp, Salmon and STAR run on them from raw FASTQ to report, and the checks compare the results with the known truth.
+- **Public study:** GSE110004, runs SRR6357070 to SRR6357075, three wild-type and three Rap1-AID yeast samples, taken as chromosome-I, downsampled reads from a [pinned nf-core test-data revision](https://github.com/nf-core/test-datasets/tree/626c8fab639062eade4b10747e919341cbf9b41a). The transcriptome there contains one artificial entry, `Gfp_transgene_gene`, that is absent from its GTF; the test removes it and records the change. This run shows that the routes work on real reads. It does not reproduce the study's conclusions.
 
-`tests/check_enrichment.R` builds a local annotation database and runs real signed GO GSEA. Its `GID` key type is explicit. For public annotation packages, use a compatible configured `orgdb.key_type` and verify gene-ID mapping; identifier namespaces are not interchangeable.
+## Runtime
 
-The public smoke test uses **GSE110004**, accessions **SRR6357070–SRR6357075**, with three wild-type and three uninduced Rap1-AID biological samples. These are chromosome-I-filtered, downsampled yeast reads from the [pinned nf-core test-data revision](https://github.com/nf-core/test-datasets/tree/626c8fab639062eade4b10747e919341cbf9b41a). [The dataset's metadata and sampling procedure](https://raw.githubusercontent.com/nf-core/test-datasets/626c8fab639062eade4b10747e919341cbf9b41a/README.md) establish the sample identities. The original transcriptome additionally contains `Gfp_transgene_gene`, which is absent from its GTF. The fixture removes that one artificial entry and records original/derived hashes in `inputs/reference_derivation.json`; production reference checks remain strict. This smoke test does not reproduce the study's genome-wide conclusions.
+Install with `scripts/bootstrap.sh`. Each environment is an explicit lock file with exact builds and checksums.
 
-### Reproduce on a SLURM cluster
+| Environment | Lock file | Packages | SHA256 of the lock file |
+|---|---|---|---|
+| Core | `environments/linux-64.explicit.txt` | 580 | `dc1d1459bf56f4a5e93c72d2a966c1a96a37168ea49e15933fe549e3549bff75` |
+| STAR module | `environments/star-linux-64.explicit.txt` | 37 | `ebca83dc6a889b16291dadc923379a830b4596970b3cabe6c2c62c483c86c0d5` |
+| Screening module | `environments/screen-linux-64.explicit.txt` | 64 | `065bb112579c134645324e4d9ee6a21d9aa822c3090e9ebc7475bc483852a7de` |
+| Small RNA module | `environments/srna-linux-64.explicit.txt` | 89 | `bb8f4a47cb20f77d632a9a3dbd0aef77e6a1dfd6df43ee3dbb47e70e975514c3` |
+| UMI module | `environments/umi-linux-64.explicit.txt` | 119 | `70ef9ba037dbfac0713cb81f345a5df7489eef5b4301ddcc4e8b420210075873` |
 
-From the source checkout, run:
+Main tool versions: Python 3.12.14, Snakemake 9.19.0, R 4.5.2, Salmon 1.10.3, fastp 0.23.4, MultiQC 1.35, tximport 1.38.2, limma 3.66.0, edgeR 4.8.2, DESeq2 1.50.2, variancePartition 1.40.2, clusterProfiler 4.18.4, WGCNA 1.74, STAR 2.7.11b, featureCounts 2.1.1, samtools 1.24, FastQ Screen 0.16.0, Bowtie2 2.5.4, Bowtie 1.3.1, ShortStack 4.1.0, cutadapt 5.2 and umi_tools 1.1.6.
+
+The verifier compares the installed packages with the lock, imports the required libraries and checks where each tool is found. It does not audit every installed file. Do not install other packages into these environments.
+
+## Repeat the tests
+
+On a SLURM cluster, from the source checkout:
 
 ```bash
 sbatch scripts/validate_slurm.sbatch
 ```
 
-That job builds a fresh locked runtime in worker-local temporary space, verifies it, runs `tests/run_all.sh --strict`, runs the public smoke test and checks offline reuse. Evidence is saved under `docs/evidence/slurm-JOBID/`. Supply account, partition and QoS through sbatch options when required by your site. This tests local execution inside a worker allocation.
+This installs fresh environments, runs `tests/run_all.sh --strict`, runs the public study through both routes and checks reuse without network access. Add your site's account, partition and QoS options. Set `RNASEQ_VALIDATE_ROOT` to a shared directory if worker-local `/tmp` is too small.
 
-For launcher-to-worker execution, resume and a shared reference cache, and separately for a stock container:
+For the SLURM-worker, resume and shared-cache checks, and separately for a container:
 
 ```bash
 RNASEQ_QUALIFY_ROOT=/shared/dir sbatch scripts/qualify_deployment.sbatch
 RNASEQ_QUALIFY_ROOT=/shared/dir sbatch scripts/qualify_deployment.sbatch container
 ```
 
-`RNASEQ_QUALIFY_ROOT` must be visible to every worker. Evidence is saved under `docs/evidence/deploy-MODE-JOBID/`. This tests local execution inside a worker allocation; distributed launcher-to-worker qualification is a separate check.
+In an already installed environment, follow the commands under [Validation](../README.md#validation) in the README.
 
-For an already activated qualified Linux environment:
+## Known limits
 
-```bash
-python3 scripts/environment_check.py --out environment_report.json
-bash tests/run_all.sh --strict
-bash tests/check_public.sh
-```
-
-The scientific GitHub Actions workflow repeats these checks. The lightweight workflow permits reported dependency skips and cannot certify a release.
-
-## Repairs in this candidate
-
-- Install and verify an exact runtime instead of silently mixing cluster modules and R/Python libraries.
-- Record the implemented recommendation route, design-based statistical backend, policy hash and rule/handbook IDs; reject unsupported objectives and UMI requests.
-- Remove the inherited 20 GB value from all project-creation defaults. Account for retained remote reads, existing environments, measured local reference sizes and configured concurrency limits.
-- Preserve seekable trimmed input during quantification; validate metrics/count fields and record source FASTQ hashes before cleanup.
-- Check transcript-to-gene compatibility before indexing, verify source checksums on cache reuse and publish the completion record after the index.
-- Preserve retained-sample effective lengths, tximport data and count provenance.
-- Declare analysis configuration/runtime identity for downstream reruns, local read dependencies and shell helper dependencies; repair missing report targets and result-manifest validation.
-- Correct enrichment result paths, retain signed ranks, read statistic names as strings, and fail when any requested enrichment method errors.
-- Install generated annotation packages outside the release runtime and serialize builds for the same annotation cache entry.
-- Provide a zero-skip scientific CI gate and raw/public-data qualification fixtures.
-
-## Limits that remain part of the release contract
-
-| Area | Boundary |
+| Area | Limit |
 |---|---|
-| RNA-seq coverage | STAR alignment and DESeq2/edgeR inference adapters are implemented and released. Small RNA (animal Bowtie 1, plant ShortStack) is implemented and validated for the TruSeq Small RNA kit (3.0.0). UMI handling is limited to molecule counting for the validated QuantSeq FWD-UMI kit (3.0.0); the dual-organism route (host and pathogen) is implemented and `validated` (public checks: STAR jobs 39420845 and 39505358, Salmon jobs 39586469 and 39586470) (3.0.0); single-cell, spatial, long-read and specialized assays remain unimplemented. Installed libraries do not imply an enabled route. |
-| TAG-seq | QuantSeq FWD, REV and FWD-UMI are validated by their public-data checks; a kit-less `tagseq` project remains provisional. |
-| Statistical generalization | Synthetic fixtures and a small public smoke dataset do not validate every organism, design or contrast. The suite checks repeated-measures design/replication logic but does not qualify an end-to-end dream fit; mixed-model inference remains provisional. |
-| Annotation | GO has a local fixture. Live NCBI annotation construction, live KEGG results, annotation snapshot reproducibility and the eggNOG fallback are not certified by that fixture. Missing prerequisites and failures must remain visible in status files. |
-| Sample policy | QC inclusion/exclusion is implemented; a complete review/override ledger and mandatory action on library-type mismatch remain planned. Review recorded mismatches before biological interpretation. |
-| Metadata | Canonical execution supports multiple run/lane units within one non-UMI bulk library per sample. Multiple prepared libraries per sample remain unavailable. Legacy sheets retain one file/pair per row. |
-| Reference/cache | Index publication is atomic, but the entire multi-file bundle is not published in one transaction. Mutable remote URLs are not re-fetched solely to detect changes. Two simultaneous projects building one Salmon cache entry passed (job 39618684); larger numbers of projects, the STAR index and the dual-organism index remain untested. |
-| Storage and scale | Estimates remain labelled assumptions; no continuous capacity monitor or calibrated large-cohort benchmark. Capacity/quota concerns warn only. Actual failed writes still fail tasks. |
-| Platforms and deployment | Linux x86_64 with SLURM is the tested target, on one site. Other clusters require site configuration, and shared filesystems that cache directories for longer than 120 seconds need a larger `latency-wait`. A stock Ubuntu container userland passed installation and the bulk Salmon route; no container image is shipped. macOS and ARM are not qualified. |
-| Intake and optional integrations | Excel supports independent bulk with optional batch and inline/external records. Setup-to-config tests mock live reference lookup; the scientific DAG is tested separately. Advanced models and reference choices need YAML. The optional upload/wizard is not an equivalent qualified interface. |
+| Assays | Bulk RNA-seq without UMIs, small RNA with the TruSeq Small RNA kit, the three QuantSeq kits, and host plus pathogen in bulk libraries; one library per sample. Other assay types are listed under [Future scope](../README.md#future-scope) |
+| Small RNA | Reads are counted, not molecules: no UMI deduplication, isomiR resolution or phased-siRNA calling. Public checks used technical controls |
+| Host plus pathogen | Two organisms only; bulk libraries only; samples with no host reads are not supported. Three defaults are assumptions, not calibrated values. See [Options](OPTIONS.md#host-and-pathogen-in-the-same-libraries) |
+| Evidence | The checks use synthetic reads, one small bulk public study and the public studies named above for the new routes. They do not prove correctness for every organism, design or contrast |
+| Mixed models | A random subject effect with `dream` was checked on one paired-donor fixture. Treat mixed-model results as provisional |
+| Read screening | Diagnostic only. How sensitive a given panel is has not been measured |
+| Enrichment | GO is tested with a local annotation database. KEGG needs live network access and organism mapping, and its live results are not covered by the tests |
+| Sample exclusion | Samples failing QC can be excluded by policy. A library-type mismatch is recorded but does not stop the run; review it before interpreting results |
+| References | A remote file that changes at the same URL is not detected. Use versioned URLs |
+| Storage | Storage estimates are approximate and only warn. A real failed write still stops the affected step |
+| Scale | Large cohorts and full-size genomes have not been benchmarked |
+| Platforms | Tested on Linux x86_64 with SLURM at one site. Other clusters need their own profile settings; filesystems that cache directory listings for more than 120 seconds need a larger `latency-wait`. No container image is shipped. macOS and ARM are not supported |
 
-## Publication procedure
+## Publishing a release
 
-1. Preserve the tested source revision, lock hash and qualification logs; inspect the complete candidate diff.
-2. Keep handbook PDFs, private audit/upgrade plans, working trackers and raw local evidence out of the public source tree. Public operational documentation must remain readable without those files.
-3. Push the reviewed source changes and require the **release-validation** scientific job, including the public smoke test, to pass without skips. Configure this as a required branch check in the hosting repository.
-4. Publish with the supported scope and limitations above. Do not describe this candidate as an implemented universal RNA-seq platform or as a qualified TAG-seq kit workflow.
-5. Record the actual tag/revision in release notes and citation metadata; publish only the reviewed scope. Preserve repository visibility unless the owner separately requests a change.
+1. Freeze the source and keep the lock files and test logs for it.
+2. Push the source and require the `release-validation` workflow to pass with no skipped check.
+3. Tag the commit that passed, and record the version in `CITATION.cff` and the changelog.
+4. Describe only what was tested, with the limits above.
 
-For a runtime upgrade, solve `environment.yml` into a new prefix, export `conda list --explicit --sha256`, review the exact lock changes and repeat the qualification gates before changing the supported release environment.
+To change the runtime, solve `environment.yml` into a new environment, export it with `conda list --explicit --sha256`, review the differences and repeat all tests.

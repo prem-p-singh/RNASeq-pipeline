@@ -51,3 +51,16 @@ docs/archive/
 # Private implementation plans (superpowers workflow).
 docs/superpowers/
 .superpowers/
+
+# Local media and notes in the checkout root.
+/*.png
+/*.mp4
+/*_env_setup.md
+
+# Working records and generated visuals; not release documentation.
+docs/QUALIFICATION_HISTORY.md
+docs/INTAKE_TEMPLATE_AUDIT.md
+docs/PUBLIC_QUALIFICATION.md
+brag-output*/
+diagram-output/
+visuals-*/

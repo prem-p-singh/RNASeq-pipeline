@@ -1,14 +1,14 @@
 cff-version: 1.2.0
 title: "RNASeq-pipeline: Excel-driven, reproducible bulk RNA-seq analysis"
-version: "2.0.0"
-date-released: "2026-09-23"
+version: "3.0.0"
+date-released: "2026-11-07"
 message: "If this workflow contributes to published work, please cite it as below."
 type: software
 authors:
   - family-names: Singh
     given-names: Prem Pratap
     orcid: "https://orcid.org/0000-0001-7921-9379"
-    affiliation: "Department of Viticulture and Enology, University of California, Davis"
+    affiliation: "Department of Plant Pathology, University of California, Davis"
 repository-code: "https://github.com/prem-p-singh/RNASeq-pipeline"
 url: "https://github.com/prem-p-singh/RNASeq-pipeline"
 license: MIT

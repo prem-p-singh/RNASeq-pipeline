@@ -11,7 +11,7 @@ permissions:
 jobs:
   scientific-linux:
     runs-on: ubuntu-24.04
-    timeout-minutes: 120
+    timeout-minutes: 240
     defaults:
       run:
         shell: bash -el {0}
@@ -40,8 +40,13 @@ jobs:
           export PATH="$star_prefix/bin:$PATH"
           cp "$star_prefix/environment_report.json" release-evidence/star_environment_report.json
           screen_prefix=$(bash scripts/bootstrap.sh --module screen)
-          export PATH="$CONDA_PREFIX/bin:$screen_prefix/bin:$PATH"
           cp "$screen_prefix/environment_report.json" release-evidence/screen_environment_report.json
+          srna_prefix=$(bash scripts/bootstrap.sh --module srna)
+          cp "$srna_prefix/environment_report.json" release-evidence/srna_environment_report.json
+          umi_prefix=$(bash scripts/bootstrap.sh --module umi)
+          cp "$umi_prefix/environment_report.json" release-evidence/umi_environment_report.json
+          # Core first (its Python/R), then STAR (star_quant samtools), screening, small RNA and UMI tools.
+          export PATH="$CONDA_PREFIX/bin:$star_prefix/bin:$screen_prefix/bin:$srna_prefix/bin:$umi_prefix/bin:$PATH"
           set -o pipefail
           bash tests/run_all.sh --strict 2>&1 | tee release-evidence/tests.log
           bash tests/check_public.sh --screen 2>&1 | tee release-evidence/public.log
