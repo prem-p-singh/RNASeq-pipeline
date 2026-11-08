@@ -78,12 +78,13 @@ if STAR_ROUTE and CANONICAL_INPUTS is not None:
     for sample_id, library in CANONICAL_INPUTS.items():
         if library['expected_libtype'] not in ('U', 'SF', 'SR', 'IU', 'ISF', 'ISR'):
             raise ValueError(f'STAR requires known strandedness for {sample_id}')
-samples = pd.read_csv(
-    config["samples"]["sheet"],
-    sep="\t",
-    comment="#",
-    converters={"sample_id": str},
-).set_index("sample_id", drop=False)
+# Sample IDs are re-read with NA parsing off so an ID like "NA" stays text on
+# every pandas version; other columns keep the default NA handling.
+_sheet_args = dict(sep="\t", comment="#")
+samples = pd.read_csv(config["samples"]["sheet"], **_sheet_args)
+samples["sample_id"] = pd.read_csv(config["samples"]["sheet"], usecols=["sample_id"], dtype=str,
+                                   keep_default_na=False, **_sheet_args)["sample_id"]
+samples = samples.set_index("sample_id", drop=False)
 
 SAMPLES = samples.index.tolist()
 N_SAMPLES = len(SAMPLES)

@@ -405,6 +405,22 @@ def files_for_sample(sid: str, fastqs: list) -> list:
     return [f for f in fastqs if pat.search(os.path.basename(f))]
 
 
+def read_sheet(path, id_col, **kwargs):
+    """Read a CSV/TSV sheet, keeping the sample-ID column as literal text.
+
+    The ID column is read a second time with NA parsing off, so IDs such as
+    "NA" or "001" survive on every pandas version (pandas 3 ignores
+    `converters` for NA detection). Other columns keep the default NA handling.
+    """
+    import pandas as pd
+
+    df = pd.read_csv(path, **kwargs)
+    if id_col in df.columns:
+        ids = pd.read_csv(path, usecols=[id_col], dtype=str, keep_default_na=False, **kwargs)
+        df[id_col] = ids[id_col]
+    return df
+
+
 def build_samples_tsv(inputs: dict, out_path: Path):
     log("SAMPLES", f"scanning {inputs['fastq_source']}")
     fastqs = list_fastqs(inputs["fastq_source"])
@@ -426,9 +442,9 @@ def build_samples_tsv(inputs: dict, out_path: Path):
             if column != inputs["sample_id_column"]:
                 mdf[column] = mdf[column].replace({"": None, "NA": None})
     elif suffix in {".tsv", ".tab", ".txt"}:
-        mdf = pd.read_csv(mpath, sep="\t", converters={inputs["sample_id_column"]: str})
+        mdf = read_sheet(mpath, inputs["sample_id_column"], sep="\t")
     else:
-        mdf = pd.read_csv(mpath, converters={inputs["sample_id_column"]: str})
+        mdf = read_sheet(mpath, inputs["sample_id_column"])
 
     sid_col = inputs["sample_id_column"]
     if sid_col not in mdf.columns:
@@ -533,9 +549,7 @@ def build_contrast_specs(inputs: dict, sheet_path: Path) -> list:
     against the generated sample sheet, and anything missing stops setup here
     rather than failing inside the DE job.
     """
-    import pandas as pd
-
-    sheet = pd.read_csv(sheet_path, sep="\t", comment="#", converters={"sample_id": str})
+    sheet = read_sheet(sheet_path, "sample_id", sep="\t", comment="#")
     cols = set(sheet.columns)
     primary = inputs["primary_factor"]
     fixed = inputs["model_fixed_effects"]
@@ -662,9 +676,8 @@ def render_config(inputs: dict, org: dict, ref: dict, out_path: Path):
     # existing config keeps its release meaning (no silent model change).
     if cfg["analysis"].get("backend", "auto") == "auto" and not inputs.get("model_random_effects") \
             and "differential_expression" in cfg["analysis"]["objectives"]:
-        import pandas as pd
         from recommend import handbook_backend
-        sheet = pd.read_csv(PROJECT / cfg["samples"]["sheet"], sep="\t", comment="#", converters={"sample_id": str})
+        sheet = read_sheet(PROJECT / cfg["samples"]["sheet"], "sample_id", sep="\t", comment="#")
         units = smallest_group(sheet, inputs["primary_factor"], inputs.get("subject_column"))
         backend = handbook_backend(units)
         if backend is None:
