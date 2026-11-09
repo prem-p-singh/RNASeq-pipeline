@@ -26,6 +26,10 @@ Adds three library types beside bulk RNA-seq.
 
 - Projects started before this version recompute from preprocessing on relaunch, because the preprocessing record and the quantification script changed. Results are unchanged.
 
+### Fixed
+
+- Sample IDs are read as literal text on every pandas version, so an ID such as `NA` or `001` is no longer turned into a missing value or a number under pandas 3.
+
 ## 2.1.2 (2026-10-17)
 
 - Added a Debian package (`packaging/`, `.github/workflows/package.yml`) providing `rnaseq-pipeline` and `rnaseq-new-project` commands. No pipeline code changed.
