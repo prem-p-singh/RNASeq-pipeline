@@ -58,6 +58,10 @@ skip() {
     skip=$((skip + 1))
 }
 
+run_yaml() {  # $1 = label, $2 = command; for checks that need only pyyaml
+    if have_py_mods yaml; then run "$1" "$2"; else skip "$1" "needs pyyaml"; fi
+}
+
 echo "Self-checks"
 
 if command -v Rscript >/dev/null 2>&1; then
@@ -96,11 +100,11 @@ fi
 
 run check_qc_report.py       "python3 tests/check_qc_report.py"
 run check_reference_lock.py  "python3 tests/check_reference_lock.py"
-run check_config_resolve.py  "python3 tests/check_config_resolve.py"
+run_yaml check_config_resolve.py "python3 tests/check_config_resolve.py"
 run check_artifacts.py       "python3 tests/check_artifacts.py"
 run check_decoys.py          "python3 tests/check_decoys.py"
 run check_reference_cache.py "python3 tests/check_reference_cache.py"
-run check_metadata.py        "python3 tests/check_metadata.py"
+run_yaml check_metadata.py "python3 tests/check_metadata.py"
 run check_read_units.py      "python3 tests/check_read_units.py"
 if have_py_mods yaml; then
     run check_raw_qc.py "python3 tests/check_raw_qc.py"
@@ -109,8 +113,8 @@ else
     skip check_raw_qc.py "needs pyyaml"
     skip check_raw_qc_real "needs pyyaml and fastp"
 fi
-run check_resources.py       "python3 tests/check_resources.py"
-run check_recommend.py       "python3 tests/check_recommend.py"
+run_yaml check_resources.py "python3 tests/check_resources.py"
+run_yaml check_recommend.py "python3 tests/check_recommend.py"
 if have_py_mods yaml; then
     run check_tagseq_kits.py "python3 tests/check_tagseq_kits.py"
 else
